@@ -3,9 +3,18 @@ name = "meli-cli"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "meli"
+path = "src/main.rs"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+chrono = "0.4.24"
 clap = { version = "4.2.5", features = ["derive"] }
 git2 = "0.17.1"
+regex = "1.8.1"
+semver = "1.0.17"
+serde = "1.0.162"
 serde_json = "1.0.96"
+toml = "0.7.3"
