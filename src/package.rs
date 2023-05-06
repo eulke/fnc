@@ -39,22 +39,33 @@ fn increment_version_rust(version: &str) {
 }
 
 fn increment_version_changelog(version: &str) {
+    let config = Config::open_default().expect("Failed to open git config");
+    let author_name = config.get_string("user.name").unwrap_or_else(|_| {
+        eprintln!("Warning: Git user.name not found, using default value");
+        String::from("Unknown")
+    });
+    let author_email = config.get_string("user.email").unwrap_or_else(|_| {
+        eprintln!("Warning: Git user.email not found, using default value");
+        String::from("unknown@example.com")
+    });
+
+    let date = Local::now().format("%Y-%m-%d").to_string();
+
     let changelog_path = "Changelog.md";
     let changelog_content =
         fs::read_to_string(changelog_path).expect("Failed to read Changelog.md");
 
-    let unreleased_regex = Regex::new(r"(?i)unrelease").expect("Failed to compile regex");
-    let updated_content = unreleased_regex.replace(&changelog_content, version);
+    let unreleased_regex =
+        Regex::new(r"(?i)\[?(unrelease[d]?)\]?").expect("Failed to compile regex");
+    let updated_content = unreleased_regex
+        .replace(
+            &changelog_content,
+            format!(
+                "[{}] {} _{} ({})_",
+                version, date, author_name, author_email
+            ),
+        )
+        .to_string();
 
-    let config = Config::open_default().expect("Failed to open git config");
-    let author_name = config.get_string("user.name").unwrap_or_default();
-    let author_email = config.get_string("user.email").unwrap_or_default();
-
-    let date = Local::now().format("%Y-%m-%d").to_string();
-
-    let final_content = format!(
-        "{} - {} - _{} ({})_",
-        updated_content, date, author_name, author_email
-    );
-    fs::write(changelog_path, final_content).expect("Failed to write Changelog.md");
+    fs::write(changelog_path, updated_content).expect("Failed to write Changelog.md");
 }
