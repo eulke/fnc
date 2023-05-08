@@ -1,7 +1,6 @@
-use crate::ports::PackageOperations;
+use crate::ports::{AuthorInfo, PackageOperations};
 use crate::semver::Language;
 use chrono::prelude::*;
-use git2::Config;
 use regex::Regex;
 use std::fs;
 use std::process::Command;
@@ -9,10 +8,13 @@ use std::process::Command;
 pub struct Adapter;
 
 impl PackageOperations for Adapter {
-    fn increment_version(&self, version: &str, language: &Language) {
+    fn increment_version(&self, version: &str, language: &Language, author: &AuthorInfo) {
         match language {
-            Language::JavaScript => increment_version_js(version),
-            Language::Go | Language::Java => increment_version_changelog(version),
+            Language::JavaScript => {
+                increment_version_js(version);
+                increment_version_changelog(version, author);
+            }
+            Language::Go | Language::Java => increment_version_changelog(version, author),
             Language::Rust => increment_version_rust(version),
         }
     }
@@ -25,8 +27,6 @@ fn increment_version_js(version: &str) {
         .output()
         .expect("Failed to run npm version");
 
-    increment_version_changelog(version);
-
     if output.status.success() {
         println!("Updated package.json version to: {}", version);
     } else {
@@ -38,17 +38,7 @@ fn increment_version_rust(version: &str) {
     println!("{}", version)
 }
 
-fn increment_version_changelog(version: &str) {
-    let config = Config::open_default().expect("Failed to open git config");
-    let author_name = config.get_string("user.name").unwrap_or_else(|_| {
-        eprintln!("Warning: Git user.name not found, using default value");
-        String::from("Unknown")
-    });
-    let author_email = config.get_string("user.email").unwrap_or_else(|_| {
-        eprintln!("Warning: Git user.email not found, using default value");
-        String::from("unknown@example.com")
-    });
-
+fn increment_version_changelog(version: &str, author: &AuthorInfo) {
     let date = Local::now().format("%Y-%m-%d").to_string();
 
     let changelog_path = "Changelog.md";
@@ -62,7 +52,7 @@ fn increment_version_changelog(version: &str) {
             &changelog_content,
             format!(
                 "[{}] {} _{} ({})_",
-                version, date, author_name, author_email
+                version, date, author.name, author.email
             ),
         )
         .to_string();

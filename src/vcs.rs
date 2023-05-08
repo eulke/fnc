@@ -1,11 +1,11 @@
 use std::error::Error;
 
-use crate::ports::VCSOperations;
-use git2::{BranchType, Repository};
+use crate::ports::{AuthorInfo, VCSOperations};
+use git2::{BranchType, Config, Repository};
 
-pub struct Adapter;
+pub struct GitAdapter;
 
-impl VCSOperations for Adapter {
+impl VCSOperations for GitAdapter {
     fn create_branch(&self, branch_name: &str) {
         let repo = get_current_repository();
 
@@ -37,6 +37,13 @@ impl VCSOperations for Adapter {
         repo.set_head(&("refs/heads/".to_owned() + branch_name))?;
 
         Ok(())
+    }
+
+    fn read_config(&self) -> Result<AuthorInfo, Box<dyn Error>> {
+        let config = Config::open_default()?;
+        let name = config.get_string("user.name")?;
+        let email = config.get_string("user.email")?;
+        Ok(AuthorInfo { name, email })
     }
 }
 

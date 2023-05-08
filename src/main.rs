@@ -6,7 +6,7 @@ mod vcs;
 
 use clap::Parser;
 use cli::{Cli, Commands};
-use ports::{PackageOperations, VCSOperations};
+use ports::{AuthorInfo, PackageOperations, VCSOperations};
 
 fn handle_new<T: VCSOperations, U: PackageOperations>(
     vcs: &T,
@@ -36,12 +36,24 @@ fn handle_new<T: VCSOperations, U: PackageOperations>(
 
     vcs.create_branch(&branch_name);
     vcs.checkout_branch(&branch_name).unwrap();
-    package.increment_version(&incremented_semver, &language);
+
+    let author = match vcs.read_config() {
+        Ok(author) => author,
+        Err(_) => {
+            println!("Failed to get author info, add manually");
+            AuthorInfo {
+                name: String::from(""),
+                email: String::from(""),
+            }
+        }
+    };
+
+    package.increment_version(&incremented_semver, &language, &author);
 }
 
 fn main() {
     let cli = Cli::parse();
-    let vcs = vcs::Adapter;
+    let vcs = vcs::GitAdapter;
     let package = package::Adapter;
 
     match cli.command {
