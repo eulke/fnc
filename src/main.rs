@@ -1,16 +1,19 @@
 mod cli;
-mod package;
+mod git;
+mod language;
 mod ports;
 mod semver;
-mod vcs;
+
+use std::process;
 
 use clap::Parser;
 use cli::{Cli, Commands};
+use language::Language;
 use ports::{AuthorInfo, PackageOperations, VCSOperations};
 
-fn handle_new<T: VCSOperations, U: PackageOperations>(
+fn handle_new<T: VCSOperations>(
     vcs: &T,
-    package: &U,
+    language: &dyn PackageOperations,
     name: String,
     version: Option<String>,
 ) {
@@ -22,11 +25,7 @@ fn handle_new<T: VCSOperations, U: PackageOperations>(
         }
     };
 
-    let language = match semver::detect_language() {
-        Some(lang) => lang,
-        None => panic!("Unable to detect language"),
-    };
-    let current_semver = semver::get_current(&language);
+    let current_semver = language.current_pkg_version();
     let incremented_semver = semver::increment(&current_semver, &version);
     let branch_name = match name.as_str() {
         "release" => format!("release/{}", &incremented_semver),
@@ -34,8 +33,15 @@ fn handle_new<T: VCSOperations, U: PackageOperations>(
         _ => panic!("Invalid name. Only 'release' and 'hotfix' are allowed."),
     };
 
-    vcs.create_branch(&branch_name);
-    vcs.checkout_branch(&branch_name).unwrap();
+    vcs.create_branch(&branch_name).unwrap_or_else(|_| {
+        println!("Error crating the branch. Process finished");
+        process::exit(1);
+    });
+
+    vcs.checkout_branch(&branch_name).unwrap_or_else(|_| {
+        println!("Cannot checkout to the newly created branch.");
+        process::exit(1);
+    });
 
     let author = match vcs.read_config() {
         Ok(author) => author,
@@ -48,17 +54,27 @@ fn handle_new<T: VCSOperations, U: PackageOperations>(
         }
     };
 
-    package.increment_version(&incremented_semver, &language, &author);
+    match language.increment_pkg_version(&incremented_semver, &author) {
+        Ok(_) => println!("Version incremented successfully."),
+        Err(_) => {
+            println!("Error encountered incrementing version");
+            process::exit(1);
+        }
+    }
 }
 
 fn main() {
     let cli = Cli::parse();
-    let vcs = vcs::GitAdapter;
-    let package = package::Adapter;
+    let vcs = git::Adapter;
+
+    let language = match Language::detect() {
+        Some(lang) => lang,
+        None => panic!("Unable to detect language"),
+    };
 
     match cli.command {
         Commands::New { name, version } => {
-            handle_new(&vcs, &package, name, version);
+            handle_new(&vcs, &(*language), name, version);
         }
     }
 }

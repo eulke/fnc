@@ -3,11 +3,11 @@ use std::error::Error;
 use crate::ports::{AuthorInfo, VCSOperations};
 use git2::{BranchType, Config, Repository};
 
-pub struct GitAdapter;
+pub struct Adapter;
 
-impl VCSOperations for GitAdapter {
-    fn create_branch(&self, branch_name: &str) {
-        let repo = get_current_repository();
+impl VCSOperations for Adapter {
+    fn create_branch(&self, branch_name: &str) -> Result<(), Box<dyn Error>> {
+        let repo = get_current_repository()?;
 
         let head = repo.head().expect("Failed to get head reference");
         let head_commit = head
@@ -26,11 +26,11 @@ impl VCSOperations for GitAdapter {
             .set_upstream(Some(branch_ref.name().unwrap().unwrap()))
             .expect("Failed to set upstream");
 
-        println!("Created branch: {}", branch_name);
+        Ok(())
     }
 
     fn checkout_branch(&self, branch_name: &str) -> Result<(), Box<dyn Error>> {
-        let repo = get_current_repository();
+        let repo = get_current_repository()?;
         let obj = repo.revparse_single(&("refs/heads/".to_owned() + branch_name))?;
 
         repo.checkout_tree(&obj, None)?;
@@ -43,12 +43,13 @@ impl VCSOperations for GitAdapter {
         let config = Config::open_default()?;
         let name = config.get_string("user.name")?;
         let email = config.get_string("user.email")?;
+
         Ok(AuthorInfo { name, email })
     }
 }
 
-fn get_current_repository() -> Repository {
-    let repo = Repository::discover(".").expect("Failed to discover current repository");
-    println!("Opened repository: {}", repo.path().display());
-    repo
+fn get_current_repository() -> Result<Repository, Box<dyn Error>> {
+    let repo = Repository::discover(".")?;
+
+    Ok(repo)
 }
