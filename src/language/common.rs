@@ -13,8 +13,9 @@ pub trait ChangelogWriter {
         let changelog_content = fs::read_to_string(changelog_path)?;
 
         let unreleased_regex = Regex::new(r"(?i)\[?(unrelease[d]?)\]?")?;
+
         let updated_content = unreleased_regex
-            .replace(
+            .replace_all(
                 &changelog_content,
                 format!(
                     "[{}] {} _{} ({})_",
