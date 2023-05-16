@@ -1,18 +1,17 @@
-use crate::ports::{AuthorInfo, PackageOperations};
+use crate::ports::{AuthorInfo, ChangelogOperations, PackageOperations};
 use std::{error::Error, fs};
 use toml::Value;
 
-use super::common::ChangelogWriter;
+use super::common::Changelog;
 
 pub struct Rust;
-impl ChangelogWriter for Rust {}
 impl PackageOperations for Rust {
     fn increment_pkg_version(
         &self,
         version: &str,
         author: &AuthorInfo,
     ) -> Result<(), Box<dyn Error>> {
-        Rust::increment_version(version, author)
+        Changelog::write_version(version, author)
     }
 
     fn current_pkg_version(&self) -> String {

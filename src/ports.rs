@@ -20,3 +20,8 @@ pub trait PackageOperations {
 
     fn current_pkg_version(&self) -> String;
 }
+
+pub trait ChangelogOperations {
+    fn write_version(version: &str, author: &AuthorInfo) -> Result<(), Box<dyn Error>>;
+    fn read_version() -> String;
+}

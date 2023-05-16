@@ -1,14 +1,13 @@
-use crate::ports::{AuthorInfo, PackageOperations};
+use crate::ports::{AuthorInfo, ChangelogOperations, PackageOperations};
 use serde_json::Value;
 use std::error::Error;
 use std::fs;
 use std::process::Command;
 
-use super::common::ChangelogWriter;
+use super::common::Changelog;
 
 pub struct Javascript;
 
-impl ChangelogWriter for Javascript {}
 impl PackageOperations for Javascript {
     fn increment_pkg_version(
         &self,
@@ -16,7 +15,7 @@ impl PackageOperations for Javascript {
         author: &AuthorInfo,
     ) -> Result<(), Box<dyn Error>> {
         npm_version(version)?;
-        Javascript::increment_version(version, author)?;
+        Changelog::write_version(version, author)?;
         Ok(())
     }
 
