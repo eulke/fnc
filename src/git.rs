@@ -1,6 +1,6 @@
 use std::error::Error;
 use crate::ports::{AuthorInfo, VCSOperations};
-use git2::{AnnotatedCommit, AutotagOption, BranchType, build, Config, Direction, FetchOptions, Reference, RemoteCallbacks, Repository, StatusOptions};
+use git2::{AnnotatedCommit, AutotagOption, BranchType, build, Config, FetchOptions, Reference, RemoteCallbacks, Repository, StatusOptions};
 
 pub struct Adapter {
     pub repo: Repository,
@@ -57,24 +57,19 @@ impl VCSOperations for Adapter {
     }
 
     fn get_default_branch(&self) -> Result<String, Box<dyn Error>> {
-        let remotes = self.repo.remotes()?;
-        let remote_name = remotes.get(0).ok_or("No remote found")?;
+        let repo = &self.repo;
 
-        let remote = self.repo.find_remote(remote_name)?;
-        let remote_url = remote.url().ok_or("Remote URL not found")?;
+        let branch = repo.find_branch("develop", BranchType::Local).unwrap_or_else(|_| {
+            repo.find_branch("master", BranchType::Local).unwrap_or_else(|_| {
+                repo.find_branch("main", BranchType::Local).unwrap_or_else(|_| {
+                    panic!("No default branch found")
+                })
+            })
+        });
 
-        let mut remote = self.repo.remote_anonymous(remote_url)?;
-        remote.connect(Direction::Fetch)?;
-        let default_branch = remote.default_branch()?;
+        let branch_name = branch.name()?.unwrap().to_string();
 
-        let default_branch_name = default_branch
-            .as_str()
-            .ok_or("Failed to convert Buf to str")?;
-        let reference = self.repo.find_reference(default_branch_name)?;
-
-        let branch_name = reference.shorthand().ok_or("Branch not found")?;
-
-        Ok(branch_name.to_string())
+        Ok(branch_name)
     }
 
     fn pull(&self) -> Result<(), Box<dyn Error>> {
