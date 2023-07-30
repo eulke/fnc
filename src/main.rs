@@ -25,14 +25,6 @@ fn handle_new<T: VCSOperations>(
         }
     };
 
-    let current_semver = language.current_pkg_version();
-    let incremented_semver = semver::increment(&current_semver, &version);
-    let branch_name = match name.as_str() {
-        "release" => format!("release/{}", &incremented_semver),
-        "hotfix" => format!("hotfix/{}", &incremented_semver),
-        _ => panic!("Invalid name. Only 'release' and 'hotfix' are allowed."),
-    };
-
     match vcs.validate_status() {
         Ok(true) => (),
         Ok(false) => {
@@ -75,6 +67,14 @@ fn handle_new<T: VCSOperations>(
         println!("Error pulling from remote. Process finished");
         process::exit(1);
     });
+
+    let current_semver = language.current_pkg_version();
+    let incremented_semver = semver::increment(&current_semver, &version);
+    let branch_name = match name.as_str() {
+        "release" => format!("release/{}", &incremented_semver),
+        "hotfix" => format!("hotfix/{}", &incremented_semver),
+        _ => panic!("Invalid name. Only 'release' and 'hotfix' are allowed."),
+    };
 
     vcs.create_branch(&branch_name).unwrap_or_else(|_| {
         println!("Error crating the branch. Process finished");
