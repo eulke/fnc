@@ -59,11 +59,6 @@ fn handle_new<T: VCSOperations>(
                 println!("Cannot checkout to the default branch.");
                 process::exit(1);
             });
-
-            vcs.pull().unwrap_or_else(|_| {
-                println!("Error pulling from remote. Process finished");
-                process::exit(1);
-            });
         },
         "hotfix" => {
             vcs.checkout_branch("master").unwrap_or_else(|_| {
@@ -72,14 +67,14 @@ fn handle_new<T: VCSOperations>(
                     process::exit(1);
                 });
             });
-
-            vcs.pull().unwrap_or_else(|_| {
-                println!("Error pulling from remote. Process finished");
-                process::exit(1);
-            });
         },
         _ => panic!("Invalid name. Only 'release' and 'hotfix' are allowed."),
     }
+
+    vcs.pull().unwrap_or_else(|_| {
+        println!("Error pulling from remote. Process finished");
+        process::exit(1);
+    });
 
     vcs.create_branch(&branch_name).unwrap_or_else(|_| {
         println!("Error crating the branch. Process finished");
