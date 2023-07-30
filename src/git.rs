@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::process::Command;
 use crate::ports::{AuthorInfo, VCSOperations};
 use git2::{AnnotatedCommit, AutotagOption, BranchType, build, Config, FetchOptions, Reference, RemoteCallbacks, Repository, StatusOptions};
 
@@ -73,12 +74,15 @@ impl VCSOperations for Adapter {
     }
 
     fn pull(&self) -> Result<(), Box<dyn Error>> {
-        let mut remote = self.repo.find_remote("origin")?;
-        let head = self.repo.head()?;
-        let current_branch = head.shorthand().unwrap();
-        let fetch_commit = do_fetch(&self.repo, &[current_branch], &mut remote)?;
-        do_merge(&self.repo, current_branch, fetch_commit)?;
+        // let mut remote = self.repo.find_remote("origin")?;
+        // let head = self.repo.head()?;
+        // let current_branch = head.shorthand().unwrap();
+        // let fetch_commit = do_fetch(&self.repo, &[current_branch], &mut remote)?;
+        // do_merge(&self.repo, current_branch, fetch_commit)?;
+        //
+        // Ok(())
 
+        Command::new("git").arg("pull").output()?;
         Ok(())
     }
 }
