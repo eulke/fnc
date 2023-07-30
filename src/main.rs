@@ -17,16 +17,9 @@ fn handle_new<T: VCSOperations>(
     name: String,
     version: Option<String>,
 ) {
-    let version = match version {
-        Some(version) => version,
-        None => {
-            println!("No version provided. Incrementing patch version.");
-            "patch".to_owned()
-        }
-    };
 
     match vcs.validate_status() {
-        Ok(true) => (),
+        Ok(true) => println!("Status is clean. Process continues"),
         Ok(false) => {
             println!("There are uncommitted changes. Process finished");
             process::exit(1);
@@ -47,12 +40,14 @@ fn handle_new<T: VCSOperations>(
                 }
             };
 
+            println!("Checking out to the default branch: {}", default_branch);
             vcs.checkout_branch(&default_branch).unwrap_or_else(|_| {
                 println!("Cannot checkout to the default branch.");
                 process::exit(1);
             });
         },
         "hotfix" => {
+            println!("Checking out to the master or main branch");
             vcs.checkout_branch("master").unwrap_or_else(|_| {
                 vcs.checkout_branch("main").unwrap_or_else(|_| {
                     println!("Cannot checkout to the master or main branch.");
@@ -63,24 +58,36 @@ fn handle_new<T: VCSOperations>(
         _ => panic!("Invalid name. Only 'release' and 'hotfix' are allowed."),
     }
 
+    println!("Pulling from remote");
     vcs.pull().unwrap_or_else(|_| {
         println!("Error pulling from remote. Process finished");
         process::exit(1);
     });
 
+    let version = match version {
+        Some(version) => version,
+        None => {
+            println!("No version provided. Incrementing patch version.");
+            "patch".to_owned()
+        }
+    };
+
     let current_semver = language.current_pkg_version();
     let incremented_semver = semver::increment(&current_semver, &version);
+    println!("Incrementing version from {} to {}", &current_semver, &incremented_semver);
     let branch_name = match name.as_str() {
         "release" => format!("release/{}", &incremented_semver),
         "hotfix" => format!("hotfix/{}", &incremented_semver),
         _ => panic!("Invalid name. Only 'release' and 'hotfix' are allowed."),
     };
 
+    println!("Creating branch {}", &branch_name);
     vcs.create_branch(&branch_name).unwrap_or_else(|_| {
         println!("Error crating the branch. Process finished");
         process::exit(1);
     });
 
+    println!("Checking out to the newly created branch");
     vcs.checkout_branch(&branch_name).unwrap_or_else(|_| {
         println!("Cannot checkout to the newly created branch.");
         process::exit(1);
@@ -97,6 +104,7 @@ fn handle_new<T: VCSOperations>(
         }
     };
 
+    println!("Writing version");
     match language.increment_pkg_version(&incremented_semver, &author) {
         Ok(_) => println!("Version incremented successfully."),
         Err(_) => {
@@ -104,6 +112,8 @@ fn handle_new<T: VCSOperations>(
             process::exit(1);
         }
     }
+
+    println!("All done!");
 }
 
 fn main() {
