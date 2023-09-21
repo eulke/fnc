@@ -32,7 +32,7 @@ impl ChangelogOperations for Changelog {
     fn read_version() -> String {
         let (changelog_content, _) = read_file().expect("Failed to read changelog");
 
-        let re = Regex::new(r"\[(\d+\.\d+\.\d+)\]").expect("Invalid regex");
+        let re = Regex::new(r"\[(\d+\.\d+\.\d+)]").expect("Invalid regex");
         let mut max_version = Version::parse("0.0.0").expect("Invalid Semver version");
 
         for cap in re.captures_iter(&changelog_content) {

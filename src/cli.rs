@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 
 #[derive(Parser)]
 #[command(name = "meli")]
@@ -14,9 +14,24 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
+    /// Automate deploy flow creating branch, incrementing version and updating changelog
     Deploy {
-        deploy_type: String,
-        #[arg(short, long)]
-        version: Option<String>,
+        #[clap(value_enum)]
+        deploy_type: DeployType,
+        #[clap(value_enum, default_value_t=Version::Patch)]
+        version: Version,
     },
+}
+
+#[derive(ValueEnum, Clone, Debug)]
+pub enum DeployType {
+    Hotfix,
+    Release,
+}
+
+#[derive(ValueEnum, Clone, Debug)]
+pub enum Version {
+    Patch,
+    Minor,
+    Major,
 }

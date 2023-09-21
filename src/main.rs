@@ -10,12 +10,13 @@ use clap::Parser;
 use cli::{Cli, Commands};
 use language::Language;
 use ports::{AuthorInfo, PackageOperations, VCSOperations};
+use crate::cli::{DeployType, Version};
 
 fn handle_deploy<T: VCSOperations>(
     vcs: &T,
     language: &dyn PackageOperations,
-    deploy_type: String,
-    version: Option<String>,
+    deploy_type: DeployType,
+    version: Version,
 ) {
 
     match vcs.validate_status() {
@@ -30,8 +31,8 @@ fn handle_deploy<T: VCSOperations>(
         }
     }
 
-    match deploy_type.as_str() {
-        "release" => {
+    match deploy_type {
+        DeployType::Release => {
             let default_branch = match vcs.get_default_branch() {
                 Ok(branch) => branch,
                 Err(_) => {
@@ -46,7 +47,7 @@ fn handle_deploy<T: VCSOperations>(
                 process::exit(1);
             });
         },
-        "hotfix" => {
+        DeployType::Hotfix => {
             println!("Checking out to the master or main branch");
             vcs.checkout_branch("master").unwrap_or_else(|_| {
                 vcs.checkout_branch("main").unwrap_or_else(|_| {
@@ -55,7 +56,6 @@ fn handle_deploy<T: VCSOperations>(
                 });
             });
         },
-        _ => panic!("Invalid name. Only 'release' and 'hotfix' are allowed."),
     }
 
     println!("Pulling from remote");
@@ -64,21 +64,12 @@ fn handle_deploy<T: VCSOperations>(
         process::exit(1);
     });
 
-    let version = match version {
-        Some(version) => version,
-        None => {
-            println!("No version provided. Incrementing patch version.");
-            "patch".to_owned()
-        }
-    };
-
     let current_semver = language.current_pkg_version();
     let incremented_semver = semver::increment(&current_semver, &version);
     println!("Incrementing version from {} to {}", &current_semver, &incremented_semver);
-    let branch_name = match deploy_type.as_str() {
-        "release" => format!("release/{}", &incremented_semver),
-        "hotfix" => format!("hotfix/{}", &incremented_semver),
-        _ => panic!("Invalid name. Only 'release' and 'hotfix' are allowed."),
+    let branch_name = match deploy_type {
+        DeployType::Release => format!("release/{}", &incremented_semver),
+        DeployType::Hotfix => format!("hotfix/{}", &incremented_semver),
     };
 
     println!("Creating branch {}", &branch_name);
