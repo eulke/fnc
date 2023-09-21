@@ -14,8 +14,8 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    New {
-        name: String,
+    Deploy {
+        deploy_type: String,
         #[arg(short, long)]
         version: Option<String>,
     },

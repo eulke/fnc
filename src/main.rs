@@ -11,10 +11,10 @@ use cli::{Cli, Commands};
 use language::Language;
 use ports::{AuthorInfo, PackageOperations, VCSOperations};
 
-fn handle_new<T: VCSOperations>(
+fn handle_deploy<T: VCSOperations>(
     vcs: &T,
     language: &dyn PackageOperations,
-    name: String,
+    deploy_type: String,
     version: Option<String>,
 ) {
 
@@ -30,7 +30,7 @@ fn handle_new<T: VCSOperations>(
         }
     }
 
-    match name.as_str() {
+    match deploy_type.as_str() {
         "release" => {
             let default_branch = match vcs.get_default_branch() {
                 Ok(branch) => branch,
@@ -75,7 +75,7 @@ fn handle_new<T: VCSOperations>(
     let current_semver = language.current_pkg_version();
     let incremented_semver = semver::increment(&current_semver, &version);
     println!("Incrementing version from {} to {}", &current_semver, &incremented_semver);
-    let branch_name = match name.as_str() {
+    let branch_name = match deploy_type.as_str() {
         "release" => format!("release/{}", &incremented_semver),
         "hotfix" => format!("hotfix/{}", &incremented_semver),
         _ => panic!("Invalid name. Only 'release' and 'hotfix' are allowed."),
@@ -127,8 +127,8 @@ fn main() {
     };
 
     match cli.command {
-        Commands::New { name, version } => {
-            handle_new(&vcs, &(*language), name, version);
+        Commands::Deploy { deploy_type, version } => {
+            handle_deploy(&vcs, &(*language), deploy_type, version);
         }
     }
 }
