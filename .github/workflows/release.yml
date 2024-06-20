@@ -7,6 +7,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  PKG_CONFIG_SYSROOT_DIR: /
 
 jobs:
   build_and_release:
@@ -21,7 +22,7 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y pkg-config libssl-dev
+          sudo apt-get install -y pkg-config libssl-dev libz-dev
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
