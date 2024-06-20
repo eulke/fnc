@@ -11,7 +11,7 @@ env:
 jobs:
   build_and_release:
     name: Build and Release
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         target: [x86_64-apple-darwin, aarch64-apple-darwin]
@@ -23,21 +23,24 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      - name: Install cross
+        run: cargo install cross
+
       - name: Build
-        run: cargo build --release --target ${{ matrix.target }}
+        run: cross build --release --target ${{ matrix.target }}
 
       - name: Package
         run: |
           mkdir -p release
-          cp target/${{ matrix.target }}/release/your_app_name release/
+          cp target/${{ matrix.target }}/release/fnc release/
           cd release
-          tar -czf ../your_app_name-${{ matrix.target }}.tar.gz *
+          tar -czf ../fnc-${{ matrix.target }}.tar.gz *
           cd ..
 
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            your_app_name-${{ matrix.target }}.tar.gz
+            fnc-${{ matrix.target }}.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
