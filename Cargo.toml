@@ -1,10 +1,10 @@
 [package]
-name = "meli-cli"
+name = "meli_cli"
 version = "0.1.0"
 edition = "2021"
 
 [[bin]]
-name = "meli"
+name = "fnc"
 path = "src/main.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
