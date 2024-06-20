@@ -17,29 +17,27 @@ jobs:
         target: [x86_64-apple-darwin, aarch64-apple-darwin]
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
-          target: ${{ matrix.target }}
-          override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          use-cross: true
-          command: build
-          args: --release --target ${{ matrix.target }}
+          targets: ${{ matrix.target }}
+
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }}
 
       - name: Package
         run: |
           mkdir -p release
-          cp target/${{ matrix.target }}/release/fnc release/
+          cp target/${{ matrix.target }}/release/your_app_name release/
           cd release
-          tar -czf ../fnc-${{ matrix.target }}.tar.gz *
+          tar -czf ../your_app_name-${{ matrix.target }}.tar.gz *
           cd ..
 
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            fnc-${{ matrix.target }}.tar.gz
+            your_app_name-${{ matrix.target }}.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
