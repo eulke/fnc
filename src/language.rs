@@ -10,17 +10,46 @@ use std::fs;
 
 use crate::ports::PackageOperations;
 
+const CARGO_TOML: &str = "Cargo.toml";
+const PACKAGE_JSON: &str = "package.json";
+const GO_MOD: &str = "go.mod";
+const POM_XML: &str = "pom.xml";
+
 pub struct Language;
+
+struct LanguageStrategy {
+    file: &'static str,
+    operation: Box<dyn PackageOperations>,
+}
+
 impl Language {
+    fn strategies() -> Vec<LanguageStrategy> {
+        vec![
+            LanguageStrategy {
+                file: CARGO_TOML,
+                operation: Box::new(Rust {}),
+            },
+            LanguageStrategy {
+                file: PACKAGE_JSON,
+                operation: Box::new(Javascript {}),
+            },
+            LanguageStrategy {
+                file: GO_MOD,
+                operation: Box::new(Go {}),
+            },
+            LanguageStrategy {
+                file: POM_XML,
+                operation: Box::new(Go {}), // This should be changed to the correct language
+            },
+        ]
+    }
+
     pub fn detect() -> Option<Box<dyn PackageOperations>> {
-        if fs::metadata("Cargo.toml").is_ok() {
-            Some(Box::new(Rust {}))
-        } else if fs::metadata("package.json").is_ok() {
-            Some(Box::new(Javascript {}))
-        } else if fs::metadata("go.mod").is_ok() || fs::metadata("pom.xml").is_ok() {
-            Some(Box::new(Go {}))
-        } else {
-            None
+        for strategy in Self::strategies() {
+            if fs::metadata(strategy.file).is_ok() {
+                return Some(strategy.operation);
+            }
         }
+        None
     }
 }

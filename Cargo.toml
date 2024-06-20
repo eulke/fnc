@@ -10,11 +10,11 @@ path = "src/main.rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-chrono = "0.4.26"
-clap = { version = "4.3.8", features = ["derive"] }
-git2 = "0.17.2"
-regex = "1.8.4"
-semver = "1.0.17"
-serde = "1.0.164"
-serde_json = "1.0.99"
-toml = "0.7.5"
+chrono = "0.4.38"
+clap = { version = "4.5.7", features = ["derive"] }
+git2 = "0.18.3"
+regex = "1.10.5"
+semver = "1.0.23"
+serde = "1.0.203"
+serde_json = "1.0.117"
+toml = "0.8.14"

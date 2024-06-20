@@ -84,16 +84,13 @@ fn handle_deploy<T: VCSOperations>(
         process::exit(1);
     });
 
-    let author = match vcs.read_config() {
-        Ok(author) => author,
-        Err(_) => {
-            println!("Failed to get author info, add manually");
-            AuthorInfo {
-                name: String::from(""),
-                email: String::from(""),
-            }
+    let author = vcs.read_config().unwrap_or_else(|_| {
+        println!("Failed to get author info, add manually");
+        AuthorInfo {
+            name: String::from(""),
+            email: String::from(""),
         }
-    };
+    });
 
     println!("Writing version");
     match language.increment_pkg_version(&incremented_semver, &author) {
