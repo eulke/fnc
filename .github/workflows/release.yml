@@ -4,6 +4,9 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: write
+
 env:
   CARGO_TERM_COLOR: always
   PROJECT_NAME: fnc
@@ -14,10 +17,10 @@ jobs:
     strategy:
       matrix:
         include:
-          - name: macos-intel
+          - name: macos-amd64
             runner: macos-latest
             target: x86_64-apple-darwin
-          - name: macos-apple-silicon
+          - name: macos-arm64
             runner: macos-latest
             target: aarch64-apple-darwin
 
