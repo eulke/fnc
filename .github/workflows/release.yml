@@ -37,16 +37,28 @@ jobs:
 
       - name: Install OpenSSL (macOS)
         run: |
+          brew update
           brew install openssl@3
           echo 'export PATH="/usr/local/opt/openssl@3/bin:$PATH"' >> ~/.bash_profile
-          export LDFLAGS="-L/usr/local/opt/openssl@3/lib"
-          export CPPFLAGS="-I/usr/local/opt/openssl@3/include"
-          export PKG_CONFIG_PATH="/usr/local/opt/openssl@3/lib/pkgconfig"
+          echo 'export LDFLAGS="-L/usr/local/opt/openssl@3/lib"' >> ~/.bash_profile
+          echo 'export CPPFLAGS="-I/usr/local/opt/openssl@3/include"' >> ~/.bash_profile
+          echo 'export PKG_CONFIG_PATH="/usr/local/opt/openssl@3/lib/pkgconfig"' >> ~/.bash_profile
+          source ~/.bash_profile
+
+      - name: Check OpenSSL installation
+        run: |
+          which openssl
+          openssl version
+          ls -l /usr/local/opt/openssl@3
+          ls -l /usr/local/opt/openssl@3/include
+          ls -l /usr/local/opt/openssl@3/lib
 
       - name: Build Binary
         run: cargo build --verbose --locked --release --target ${{ matrix.target }}
         env:
           OPENSSL_DIR: /usr/local/opt/openssl@3
+          OPENSSL_LIB_DIR: /usr/local/opt/openssl@3/lib
+          OPENSSL_INCLUDE_DIR: /usr/local/opt/openssl@3/include
 
       - name: Package Binary
         shell: bash
