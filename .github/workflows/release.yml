@@ -49,16 +49,24 @@ jobs:
         run: |
           which openssl
           openssl version
-          ls -l /usr/local/opt/openssl@3
-          ls -l /usr/local/opt/openssl@3/include
-          ls -l /usr/local/opt/openssl@3/lib
+          echo $PATH
+          ls -l /opt/homebrew/opt/openssl@1.1 || echo "OpenSSL 1.1 not found in expected location"
+          ls -l /opt/homebrew/Cellar/openssl@1.1 || echo "OpenSSL 1.1 not found in Cellar"
+
+      - name: Set up OpenSSL environment
+        run: |
+          echo 'export PATH="/opt/homebrew/opt/openssl@1.1/bin:$PATH"' >> ~/.bash_profile
+          echo 'export LDFLAGS="-L/opt/homebrew/opt/openssl@1.1/lib"' >> ~/.bash_profile
+          echo 'export CPPFLAGS="-I/opt/homebrew/opt/openssl@1.1/include"' >> ~/.bash_profile
+          echo 'export PKG_CONFIG_PATH="/opt/homebrew/opt/openssl@1.1/lib/pkgconfig"' >> ~/.bash_profile
+          source ~/.bash_profile
 
       - name: Build Binary
         run: cargo build --verbose --locked --release --target ${{ matrix.target }}
         env:
-          OPENSSL_DIR: /usr/local/opt/openssl@3
-          OPENSSL_LIB_DIR: /usr/local/opt/openssl@3/lib
-          OPENSSL_INCLUDE_DIR: /usr/local/opt/openssl@3/include
+          OPENSSL_DIR: /opt/homebrew/opt/openssl@1.1
+          OPENSSL_LIB_DIR: /opt/homebrew/opt/openssl@1.1/lib
+          OPENSSL_INCLUDE_DIR: /opt/homebrew/opt/openssl@1.1/include
 
       - name: Package Binary
         shell: bash
