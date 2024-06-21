@@ -45,13 +45,13 @@ jobs:
           mkdir -p release
           cp target/${{ matrix.target }}/release/${PROJECT_NAME} release/
           cd release
-          tar -czf ../${PROJECT_NAME}-${{ matrix.name }}.tar.gz *
+          tar -czf ../fnc-${{ matrix.name }}.tar.gz *
           cd ..
+          echo "ASSET_PATH=fnc-${{ matrix.name }}.tar.gz" >> $GITHUB_ENV
 
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            ${PROJECT_NAME}-${{ matrix.name }}.tar.gz
+          files: ${{ env.ASSET_PATH }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
