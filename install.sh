@@ -27,6 +27,28 @@ mv fnc ~/.local/bin/
 # Add ~/.local/bin to PATH
 export PATH="$HOME/.local/bin:$PATH"
 
+# Detect shell configuration file
+if [ -f "$HOME/.zshrc" ]; then
+    SHELL_CONFIG="$HOME/.zshrc"
+elif [ -f "$HOME/.bashrc" ]; then
+    SHELL_CONFIG="$HOME/.bashrc"
+else
+    echo "Warning: Could not find a .zshrc or .bashrc file."
+    echo "You may need to add ~/.local/bin to your PATH manually."
+    SHELL_CONFIG=""
+fi
+
+# Add export command to shell configuration file
+if [ -n "$SHELL_CONFIG" ]; then
+    # Check if the export command already exists in the file
+    if grep -q "export PATH=\"\$HOME/.local/bin:\$PATH\"" "$SHELL_CONFIG"; then
+        echo "The export command already exists in $SHELL_CONFIG."
+    else
+        echo "Adding the export command to $SHELL_CONFIG..."
+        echo "export PATH=\"\$HOME/.local/bin:\$PATH\"" >> "$SHELL_CONFIG"
+    fi
+fi
+
 # Clean up the temporary files
 rm fnc-macos-$ARCH.tar.gz
 
@@ -39,7 +61,3 @@ if [ $? -eq 0 ]; then
 else
     echo "Binary 'fnc' not found in PATH. You may need to add ~/.local/bin to your PATH."
 fi
-
-echo "Note: The change to the PATH environment variable only affects the current shell session."
-echo "To make the binary available in new terminal sessions, add the following line to your shell configuration file (e.g., ~/.bashrc or ~/.zshrc):"
-echo "    export PATH=\"\$HOME/.local/bin:\$PATH\""
