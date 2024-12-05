@@ -65,7 +65,7 @@ impl DeployProgress {
             } else if pb.message().contains("checkout") {
                 "🔄"
             } else if pb.message().contains("pull") {
-                "⬇️ "
+                "⬇️"
             } else if pb.message().contains("version") {
                 "📝"
             } else if pb.message().contains("branch") {
@@ -89,7 +89,7 @@ impl DeployProgress {
     }
 
     pub fn pulling(&mut self) {
-        self.start_step("Pulling latest changes...".into(), "⬇️ ");
+        self.start_step("Pulling latest changes...".into(), "⬇️");
     }
 
     pub fn version_increment(&mut self, from: &str, to: &str) {
