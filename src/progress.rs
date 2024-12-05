@@ -78,7 +78,7 @@ impl DeployProgress {
     }
 
     pub fn pulling(&mut self) {
-        self.start_step("Pulling latest changes...".into(), "⬇️");
+        self.start_step("Pulling latest changes...".into(), "⬇️ ");
     }
 
     pub fn version_increment(&mut self, from: &str, to: &str) {
