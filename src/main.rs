@@ -22,7 +22,7 @@ fn handle_deploy<T: VCSOperations>(
     deploy_type: DeployType,
     version: Version,
 ) -> Result<()> {
-    let progress = DeployProgress::new();
+    let mut progress = DeployProgress::new();
 
     // Validate VCS status
     progress.status_check();
