@@ -42,23 +42,44 @@ Currently, `fnc` supports the following command:
 
 - `deploy`: Automate the deploy flow by creating a branch, incrementing the version, and updating the changelog.
 
-##### Deploy Command Options
+##### Deploy Command
 ```bash
-fnc deploy [deploy_type] [version]
+fnc deploy [OPTIONS] [DEPLOY_TYPE] [VERSION]
 ```
 
-Options:
-- `DEPLOY_TYPE`: Specify the type of deployment (required)
-  - `hotfix`: For quick fixes to the production version
-  - `release`: For planned releases with new features
-- `VERSION`: Specify the version increment type (optional, defaults to `patch`)
-  - `patch`: Increment the patch version (e.g., 1.0.0 -> 1.0.1)
-  - `minor`: Increment the minor version (e.g., 1.0.0 -> 1.1.0)
-  - `major`: Increment the major version (e.g., 1.0.0 -> 2.0.0)
+###### Options
+- `-i, --interactive`: Run in interactive mode. When enabled, you'll be guided through the deployment process with prompts.
 
-Example:
+###### Deploy Types
+- `hotfix`: Create a hotfix deployment from the main/master branch
+- `release`: Create a release deployment from the default branch
+
+###### Version Types
+- `patch`: Increment the patch version (e.g., 1.0.0 -> 1.0.1)
+- `minor`: Increment the minor version (e.g., 1.0.0 -> 1.1.0)
+- `major`: Increment the major version (e.g., 1.0.0 -> 2.0.0)
+
+###### Examples
 ```bash
+# Interactive deployment
+fnc deploy -i
+
+# Create a hotfix with patch version increment
+fnc deploy hotfix patch
+
+# Create a release with minor version increment
 fnc deploy release minor
+
+# Create a release with major version increment
+fnc deploy release major
 ```
 
-This command will create a new release branch, increment the minor version, and prepare for deployment.
+### Supported Languages
+The tool automatically detects and supports the following project types:
+- Node.js (package.json)
+- Rust (Cargo.toml)
+
+### Requirements
+- Git installed and configured
+- Project must be in a Git repository
+- Project must use one of the supported version control formats
