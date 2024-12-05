@@ -16,15 +16,17 @@ pub struct Cli {
 pub enum Commands {
     /// Automate deploy flow creating branch, incrementing version and updating changelog
     Deploy {
-        #[clap(value_enum)]
-        deploy_type: DeployType,
-        
-        #[clap(value_enum, default_value_t=Version::Patch)]
-        version: Version,
-
         /// Run in interactive mode
         #[clap(short = 'i', long = "interactive")]
         interactive: bool,
+
+        /// Type of deployment
+        #[clap(value_enum, required_unless_present = "interactive")]
+        deploy_type: Option<DeployType>,
+        
+        /// Version increment type
+        #[clap(value_enum)]
+        version: Option<Version>,
     },
 }
 

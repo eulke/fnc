@@ -105,7 +105,8 @@ fn main() -> Result<()> {
                 let options = interactive::DeployOptions::prompt();
                 (options.deploy_type, options.version)
             } else {
-                (deploy_type, version)
+                (deploy_type.expect("deploy_type is required in non-interactive mode"), 
+                 version.unwrap_or(Version::Patch))
             };
 
             let language = Language::detect().expect("Unable to detect language");
