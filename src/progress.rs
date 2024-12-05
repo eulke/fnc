@@ -3,6 +3,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 
 pub struct DeployProgress {
     current_step: Option<ProgressBar>,
+    current_emoji: Option<&'static str>,
     step_number: usize,
     total_steps: usize,
 }
@@ -11,6 +12,7 @@ impl DeployProgress {
     pub fn new() -> Self {
         Self { 
             current_step: None,
+            current_emoji: None,
             step_number: 0,
             total_steps: 7, // Total number of deploy steps
         }
@@ -29,55 +31,42 @@ impl DeployProgress {
         pb
     }
 
-    fn finish_step(&mut self, success: bool, message: Option<String>, emoji: &str) {
+    fn finish_step(&mut self, success: bool, message: Option<String>) {
         if let Some(pb) = self.current_step.take() {
             pb.finish_and_clear();
             
-            let prefix = if success { emoji } else { "❌" };
+            let emoji = if success { 
+                self.current_emoji.unwrap_or("✅")
+            } else { 
+                "❌" 
+            };
+            
             let msg = message.unwrap_or_else(|| pb.message().to_string());
             
             // Extract the actual message without the step numbers
             let msg_parts: Vec<&str> = msg.split("] ").collect();
             let actual_msg = msg_parts.get(1).map(|s| *s).unwrap_or(&msg);
             
-            println!("[{}/{}] {} {}", self.step_number, self.total_steps, prefix, actual_msg);
+            println!("[{}/{}] {} {}", self.step_number, self.total_steps, emoji, actual_msg);
         }
+        self.current_emoji = None;
     }
 
-    fn start_step(&mut self, message: String, _completion_emoji: &str) {
+    fn start_step(&mut self, message: String, completion_emoji: &'static str) {
         // Finish previous step if any
-        if let Some(current_emoji) = self.get_current_step_emoji() {
-            self.finish_step(true, None, current_emoji);
+        if self.current_step.is_some() {
+            self.finish_step(true, None);
         }
         
         // Increment step number for new step
         self.step_number += 1;
         
+        // Store the emoji for this step
+        self.current_emoji = Some(completion_emoji);
+        
         // Create new step with {steps} {spinner} {message} format
         let step_message = format!("[{}/{}] {}", self.step_number, self.total_steps, message);
         self.current_step = Some(Self::create_spinner(step_message));
-    }
-
-    fn get_current_step_emoji(&self) -> Option<&'static str> {
-        self.current_step.as_ref().map(|pb| {
-            if pb.message().contains("status") {
-                "🔍"
-            } else if pb.message().contains("checkout") {
-                "🔄"
-            } else if pb.message().contains("pull") {
-                "⬇️"
-            } else if pb.message().contains("version") {
-                "📝"
-            } else if pb.message().contains("branch") {
-                if pb.message().contains("Creating") {
-                    "🌿"
-                } else {
-                    "🔀"
-                }
-            } else {
-                "✅"
-            }
-        })
     }
 
     pub fn status_check(&mut self) {
@@ -110,8 +99,8 @@ impl DeployProgress {
 
     pub fn finish(&mut self, success: bool) {
         // Finish last step with its specific emoji
-        if let Some(current_emoji) = self.get_current_step_emoji() {
-            self.finish_step(success, None, current_emoji);
+        if self.current_step.is_some() {
+            self.finish_step(success, None);
         }
         
         // Reset step number
