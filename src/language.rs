@@ -7,13 +7,19 @@ use go::Go;
 use javascript::Javascript;
 use rust::Rust;
 use std::fs;
+use thiserror::Error;
 
 use crate::ports::PackageOperations;
 
 const CARGO_TOML: &str = "Cargo.toml";
 const PACKAGE_JSON: &str = "package.json";
 const GO_MOD: &str = "go.mod";
-const POM_XML: &str = "pom.xml";
+
+#[derive(Error, Debug)]
+pub enum LanguageError {
+    #[error("Failed to read manifest file: {0}")]
+    ManifestReadError(#[from] std::io::Error),
+}
 
 pub struct Language;
 
@@ -36,10 +42,6 @@ impl Language {
             LanguageStrategy {
                 file: GO_MOD,
                 operation: Box::new(Go {}),
-            },
-            LanguageStrategy {
-                file: POM_XML,
-                operation: Box::new(Go {}), // This should be changed to the correct language
             },
         ]
     }

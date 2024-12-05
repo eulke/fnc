@@ -3,120 +3,105 @@ mod git;
 mod language;
 mod ports;
 mod semver;
+mod error;
+mod progress;
 
 use std::process;
-
 use clap::Parser;
 use cli::{Cli, Commands};
 use language::Language;
-use ports::{AuthorInfo, PackageOperations, VCSOperations};
+use ports::{PackageOperations, VCSOperations};
 use crate::cli::{DeployType, Version};
+use crate::error::{DeployError, Result};
+use crate::progress::DeployProgress;
 
 fn handle_deploy<T: VCSOperations>(
     vcs: &T,
     language: &dyn PackageOperations,
     deploy_type: DeployType,
     version: Version,
-) {
+) -> Result<()> {
+    let progress = DeployProgress::new();
 
-    match vcs.validate_status() {
-        Ok(true) => println!("Status is clean. Process continues"),
-        Ok(false) => {
-            println!("There are uncommitted changes. Process finished");
-            process::exit(1);
-        }
-        Err(_) => {
-            println!("Error validating status. Process finished");
-            process::exit(1);
-        }
+    // Validate VCS status
+    progress.status_check();
+    if !vcs.validate_status().map_err(|e| DeployError::VCSStatusError(e.to_string()))? {
+        progress.finish(false);
+        return Err(DeployError::VCSStatusError("There are uncommitted changes".to_string()));
     }
 
-    match deploy_type {
+    // Handle branch checkout based on deploy type
+    let target_branch = match deploy_type {
         DeployType::Release => {
-            let default_branch = match vcs.get_default_branch() {
-                Ok(branch) => branch,
-                Err(_) => {
-                    println!("Error getting default branch. Process finished");
-                    process::exit(1);
-                }
-            };
-
-            println!("Checking out to the default branch: {}", default_branch);
-            vcs.checkout_branch(&default_branch).unwrap_or_else(|_| {
-                println!("Cannot checkout to the default branch.");
-                process::exit(1);
-            });
-        },
+            let branch = vcs.get_default_branch()
+                .map_err(|e| DeployError::BranchError(format!("Failed to get default branch: {}", e)))?;
+            progress.branch_checkout(&branch);
+            branch
+        }
         DeployType::Hotfix => {
-            println!("Checking out to the master or main branch");
-            vcs.checkout_branch("master").unwrap_or_else(|_| {
-                vcs.checkout_branch("main").unwrap_or_else(|_| {
-                    println!("Cannot checkout to the master or main branch.");
-                    process::exit(1);
-                });
-            });
-        },
-    }
+            // Try master first, then main
+            match vcs.checkout_branch("master") {
+                Ok(_) => {
+                    progress.branch_checkout("master");
+                    String::from("master")
+                }
+                Err(_) => {
+                    let result = vcs.checkout_branch("main")
+                        .map(|_| String::from("main"))
+                        .map_err(|e| DeployError::BranchError(format!("Failed to checkout master/main: {}", e)))?;
+                    progress.branch_checkout("main");
+                    result
+                }
+            }
+        }
+    };
 
-    println!("Pulling from remote");
-    vcs.pull().unwrap_or_else(|_| {
-        println!("Error pulling from remote. Process finished");
-        process::exit(1);
-    });
+    vcs.checkout_branch(&target_branch)
+        .map_err(|e| DeployError::BranchError(format!("Failed to checkout {}: {}", target_branch, e)))?;
+
+    progress.pulling();
+    vcs.pull()
+        .map_err(|e| DeployError::RemoteError(format!("Failed to pull from remote: {}", e)))?;
 
     let current_semver = language.current_pkg_version();
     let incremented_semver = semver::increment(&current_semver, &version);
-    println!("Incrementing version from {} to {}", &current_semver, &incremented_semver);
+    progress.version_increment(&current_semver, &incremented_semver);
+
     let branch_name = match deploy_type {
         DeployType::Release => format!("release/{}", &incremented_semver),
         DeployType::Hotfix => format!("hotfix/{}", &incremented_semver),
     };
 
-    println!("Creating branch {}", &branch_name);
-    vcs.create_branch(&branch_name).unwrap_or_else(|_| {
-        println!("Error crating the branch. Process finished");
-        process::exit(1);
-    });
+    progress.branch_creation(&branch_name);
+    vcs.create_branch(&branch_name)
+        .map_err(|e| DeployError::BranchError(format!("Failed to create branch {}: {}", branch_name, e)))?;
 
-    println!("Checking out to the newly created branch");
-    vcs.checkout_branch(&branch_name).unwrap_or_else(|_| {
-        println!("Cannot checkout to the newly created branch.");
-        process::exit(1);
-    });
+    progress.branch_switch(&branch_name);
+    vcs.checkout_branch(&branch_name)
+        .map_err(|e| DeployError::BranchError(format!("Failed to checkout branch {}: {}", branch_name, e)))?;
 
-    let author = vcs.read_config().unwrap_or_else(|_| {
-        println!("Failed to get author info, add manually");
-        AuthorInfo {
-            name: String::from(""),
-            email: String::from(""),
-        }
-    });
+    let author = vcs.read_config()
+        .map_err(|e| DeployError::ConfigError(format!("Failed to get author info: {}", e)))?;
 
-    println!("Writing version");
-    match language.increment_pkg_version(&incremented_semver, &author) {
-        Ok(_) => println!("Version incremented successfully."),
-        Err(_) => {
-            println!("Error encountered incrementing version");
-            process::exit(1);
-        }
-    }
+    progress.updating_version();
+    language.increment_pkg_version(&incremented_semver, &author)
+        .map_err(|e| DeployError::VersionError(format!("Failed to increment version: {}", e)))?;
 
-    println!("All done!");
+    progress.finish(true);
+    Ok(())
 }
 
 fn main() {
     let cli = Cli::parse();
-
-    let vcs = git::Adapter::new();
-
-    let language = match Language::detect() {
-        Some(lang) => lang,
-        None => panic!("Unable to detect language"),
-    };
+    let language = Language::detect().expect("Unable to detect language");
 
     match cli.command {
         Commands::Deploy { deploy_type, version } => {
-            handle_deploy(&vcs, &(*language), deploy_type, version);
+            let git = git::Adapter::new();
+            if let Err(e) = handle_deploy(&git, &*language, deploy_type, version) {
+                eprintln!("Error: {}", e);
+                process::exit(1);
+            }
         }
     }
 }
