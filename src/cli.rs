@@ -18,8 +18,13 @@ pub enum Commands {
     Deploy {
         #[clap(value_enum)]
         deploy_type: DeployType,
+        
         #[clap(value_enum, default_value_t=Version::Patch)]
         version: Version,
+
+        /// Run in interactive mode
+        #[clap(short = 'i', long = "interactive")]
+        interactive: bool,
     },
 }
 

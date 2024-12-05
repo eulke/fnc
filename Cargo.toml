@@ -12,6 +12,7 @@ path = "src/main.rs"
 [dependencies]
 chrono = "0.4.38"
 clap = { version = "4.5.7", features = ["derive"] }
+dialoguer = "0.11.0"
 git2 = { version = "0.18.3", features = ["vendored-openssl"] }
 indicatif = "0.17.8"
 regex = "1.10.5"

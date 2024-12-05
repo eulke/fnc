@@ -1,18 +1,19 @@
 mod cli;
-mod git;
-mod language;
-mod ports;
-mod semver;
 mod error;
+mod git;
+mod interactive;
+mod language;
 mod progress;
+mod semver;
+mod ports;
 
-use std::process;
 use clap::Parser;
 use cli::{Cli, Commands};
-use language::Language;
+use error::DeployError;
+use crate::error::Result;
+use crate::language::Language;
 use ports::{PackageOperations, VCSOperations};
 use crate::cli::{DeployType, Version};
-use crate::error::{DeployError, Result};
 use crate::progress::DeployProgress;
 
 fn handle_deploy<T: VCSOperations>(
@@ -91,17 +92,27 @@ fn handle_deploy<T: VCSOperations>(
     Ok(())
 }
 
-fn main() {
+fn main() -> Result<()> {
     let cli = Cli::parse();
-    let language = Language::detect().expect("Unable to detect language");
 
     match cli.command {
-        Commands::Deploy { deploy_type, version } => {
+        Commands::Deploy {
+            deploy_type,
+            version,
+            interactive,
+        } => {
+            let (deploy_type, version) = if interactive {
+                let options = interactive::DeployOptions::prompt();
+                (options.deploy_type, options.version)
+            } else {
+                (deploy_type, version)
+            };
+
+            let language = Language::detect().expect("Unable to detect language");
             let git = git::Adapter::new();
-            if let Err(e) = handle_deploy(&git, &*language, deploy_type, version) {
-                eprintln!("Error: {}", e);
-                process::exit(1);
-            }
+            
+            handle_deploy(&git, &*language, deploy_type, version)?;
+            Ok(())
         }
     }
 }
