@@ -15,8 +15,15 @@ if [ "$OS" != "Darwin" ]; then
     exit 1
 fi
 
+# Get the latest release version from GitHub
+echo "🔍 Fetching latest version..."
+VERSION=$(curl -s https://api.github.com/repos/eulke/fnc/releases/latest | grep -o '"tag_name": ".*"' | cut -d'"' -f4)
+if [ -z "$VERSION" ]; then
+    echo "❌ Failed to fetch latest version"
+    exit 1
+fi
+
 # Determine architecture and set download URL
-VERSION="v0.0.18"
 ARCH=$(uname -m)
 if [ "$ARCH" = "arm64" ]; then
     BINARY_URL="https://github.com/eulke/fnc/releases/download/${VERSION}/fnc-macos-arm64.tar.gz"
