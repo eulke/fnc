@@ -75,7 +75,7 @@ impl DeployProgress {
                     "🔀"
                 }
             } else {
-                "✓"
+                "✅"
             }
         })
     }
