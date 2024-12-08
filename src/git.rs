@@ -1,5 +1,7 @@
 use std::error::Error;
 use std::process::Command;
+use std::thread;
+use std::time::Duration;
 use crate::ports::{AuthorInfo, VCSOperations};
 use git2::{BranchType, Config, Repository, StatusOptions};
 use thiserror::Error;
@@ -75,16 +77,35 @@ impl VCSOperations for Adapter {
 
     fn pull(&self) -> Result<(), Box<dyn Error>> {
         // First do a hard reset to ensure we're in sync with the remote
-        Command::new("git")
+        let reset_output = Command::new("git")
             .args(["reset", "--hard", "HEAD"])
             .output()
             .map_err(|e| Box::new(GitError::CommandFailed(e.to_string())) as Box<dyn Error>)?;
 
+        if !reset_output.status.success() {
+            let error = String::from_utf8_lossy(&reset_output.stderr);
+            return Err(Box::new(GitError::CommandFailed(error.to_string())));
+        }
+
         // Then pull with --ff-only to ensure we don't create merge commits
-        Command::new("git")
+        let pull_output = Command::new("git")
             .args(["pull", "--ff-only"])
             .output()
             .map_err(|e| Box::new(GitError::CommandFailed(e.to_string())) as Box<dyn Error>)?;
+
+        if !pull_output.status.success() {
+            let error = String::from_utf8_lossy(&pull_output.stderr);
+            return Err(Box::new(GitError::CommandFailed(error.to_string())));
+        }
+
+        // Sync the filesystem to ensure all files are updated
+        Command::new("sync")
+            .output()
+            .map_err(|e| Box::new(GitError::CommandFailed(e.to_string())) as Box<dyn Error>)?;
+
+        // Add a small delay to ensure filesystem has caught up
+        thread::sleep(Duration::from_millis(100));
+        
         Ok(())
     }
 }
