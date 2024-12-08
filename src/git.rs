@@ -74,8 +74,15 @@ impl VCSOperations for Adapter {
     }
 
     fn pull(&self) -> Result<(), Box<dyn Error>> {
+        // First do a hard reset to ensure we're in sync with the remote
         Command::new("git")
-            .arg("pull")
+            .args(["reset", "--hard", "HEAD"])
+            .output()
+            .map_err(|e| Box::new(GitError::CommandFailed(e.to_string())) as Box<dyn Error>)?;
+
+        // Then pull with --ff-only to ensure we don't create merge commits
+        Command::new("git")
+            .args(["pull", "--ff-only"])
             .output()
             .map_err(|e| Box::new(GitError::CommandFailed(e.to_string())) as Box<dyn Error>)?;
         Ok(())

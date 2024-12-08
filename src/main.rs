@@ -64,6 +64,7 @@ fn handle_deploy<T: VCSOperations>(
     vcs.pull()
         .map_err(|e| DeployError::RemoteError(format!("Failed to pull from remote: {}", e)))?;
 
+    // Get version information after pulling to ensure we have the latest
     let current_semver = language.current_pkg_version();
     let incremented_semver = semver::increment(&current_semver, &version);
     progress.version_increment(&current_semver, &incremented_semver);
