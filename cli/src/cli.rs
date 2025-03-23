@@ -20,6 +20,9 @@ pub enum Commands {
         deploy_type: DeployType,
         #[clap(value_enum, default_value_t=VersionType::Patch)]
         version_type: VersionType,
+        #[clap(long, default_value_t=false)]
+        /// Force deployment even if the repository is not clean (development only)
+        force: bool,
     },
 }
 
