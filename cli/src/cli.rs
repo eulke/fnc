@@ -1,4 +1,5 @@
 use clap::{Parser, Subcommand, ValueEnum};
+use version::VersionType;
 
 #[derive(Parser)]
 #[command(name = "fnc")]
@@ -17,8 +18,8 @@ pub enum Commands {
     Deploy {
         #[clap(value_enum)]
         deploy_type: DeployType,
-        #[clap(value_enum, default_value_t=Version::Patch)]
-        version: Version,
+        #[clap(value_enum, default_value_t=VersionType::Patch)]
+        version_type: VersionType,
     },
 }
 
@@ -28,9 +29,3 @@ pub enum DeployType {
     Release,
 }
 
-#[derive(ValueEnum, Clone, Debug)]
-pub enum Version {
-    Patch,
-    Minor,
-    Major,
-}
