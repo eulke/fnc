@@ -48,7 +48,7 @@ impl Version {
     }
 
     // Increment a version based on the version type
-    pub fn increment(version: SemverVersion, version_type: VersionType) -> Result<SemverVersion, VersionError> {
+    pub fn increment(version: SemverVersion, version_type: &VersionType) -> Result<SemverVersion, VersionError> {
         let new_version = match version_type {
             VersionType::Major => SemverVersion {
                 major: version.major + 1,
@@ -89,7 +89,7 @@ impl Version {
     }
     
     /// Update the version in a project at the given path
-    pub fn update_in_project(dir_path: &Path, version_type: VersionType) -> Result<SemverVersion, VersionError> {
+    pub fn update_in_project(dir_path: &Path, version_type: &VersionType) -> Result<SemverVersion, VersionError> {
         let ecosystem_type = Self::detect_ecosystem(dir_path)?;
         let ecosystem = ecosystems::create_ecosystem(ecosystem_type);
         
@@ -97,7 +97,7 @@ impl Version {
         let current_version = ecosystem.read_version(dir_path)?;
         
         // Increment it
-        let new_version = Self::increment(current_version, version_type)?;
+        let new_version = Self::increment(current_version, &version_type)?;
         
         // Write it back
         ecosystem.write_version(dir_path, &new_version)?;

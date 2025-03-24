@@ -1,24 +1,25 @@
-use std::{error::Error, process::Command};
+use std::process::Command;
 
 use git2::{BranchType, Repository as GitRepository, StatusOptions};
+use crate::error::{GitError, Result};
 
 pub trait Repository {
-    fn open() -> Self;
-    fn validate_status(&self) -> Result<bool, Box<dyn Error>>;
-    fn create_branch(&self, name: &str) -> Result<(), Box<dyn Error>>;
-    fn checkout_branch(&self, branch_name: &str) -> Result<(), Box<dyn Error>>;
-    fn pull(&self) -> Result<(), Box<dyn Error>>;
-    fn get_default_branch(&self) -> Result<String, Box<dyn Error>>;
+    fn open() -> Result<Self> where Self: Sized;
+    fn validate_status(&self) -> Result<bool>;
+    fn create_branch(&self, name: &str) -> Result<()>;
+    fn checkout_branch(&self, branch_name: &str) -> Result<()>;
+    fn pull(&self) -> Result<()>;
+    fn get_default_branch(&self) -> Result<String>;
 }
 
 pub struct RealGitRepository { repo: GitRepository }
 impl Repository for RealGitRepository {
-    fn open() -> Self {
-        let repo = GitRepository::discover(".").unwrap();
-        Self { repo }
+    fn open() -> Result<Self> {
+        let repo = GitRepository::discover(".")?;
+        Ok(Self { repo })
     }
 
-    fn validate_status(&self) -> Result<bool, Box<dyn Error>> {
+    fn validate_status(&self) -> Result<bool> {
         let repo = &self.repo;
 
         let mut options = StatusOptions::new();
@@ -29,7 +30,7 @@ impl Repository for RealGitRepository {
         Ok(statuses.is_empty())
     }
 
-    fn create_branch(&self, name: &str) -> Result<(), Box<dyn Error>> {
+    fn create_branch(&self, name: &str) -> Result<()> {
         let repo = &self.repo;
 
         let current_commit = repo.head()?.peel_to_commit()?;
@@ -43,7 +44,7 @@ impl Repository for RealGitRepository {
         Ok(())
     }
 
-    fn checkout_branch(&self, branch_name: &str) -> Result<(), Box<dyn Error>> {
+    fn checkout_branch(&self, branch_name: &str) -> Result<()> {
         let repo = &self.repo;
         let obj = repo.revparse_single(&("refs/heads/".to_owned() + branch_name))?;
 
@@ -53,23 +54,22 @@ impl Repository for RealGitRepository {
         Ok(())
     }
 
-    fn pull(&self) -> Result<(), Box<dyn Error>> {
+    fn pull(&self) -> Result<()> {
         Command::new("git").arg("pull").output()?;
         Ok(())
     }
 
-    fn get_default_branch(&self) -> Result<String, Box<dyn Error>> {
+    fn get_default_branch(&self) -> Result<String> {
         let repo = &self.repo;
 
-        let branch = repo.find_branch("develop", BranchType::Local).unwrap_or_else(|_| {
-            repo.find_branch("master", BranchType::Local).unwrap_or_else(|_| {
-                repo.find_branch("main", BranchType::Local).unwrap_or_else(|_| {
-                    panic!("No default branch found")
-                })
-            })
-        });
+        let branch = repo.find_branch("develop", BranchType::Local)
+            .or_else(|_| repo.find_branch("master", BranchType::Local))
+            .or_else(|_| repo.find_branch("main", BranchType::Local))
+            .map_err(|_| GitError::BranchNotFound("No default branch found".to_string()))?;
 
-        let branch_name = branch.name()?.unwrap().to_string();
+        let branch_name = branch.name()?
+            .ok_or_else(|| GitError::RepositoryError("Invalid branch name".to_string()))?
+            .to_string();
 
         Ok(branch_name)
     }
