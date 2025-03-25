@@ -79,7 +79,7 @@ impl Version {
             .map_err(|e| e.with_context(format!("Failed to read current version from {} project", &ecosystem_type)))?;
         
         // Increment it
-        let new_version = Self::increment(&current_version, &version_type)
+        let new_version = Self::increment(&current_version, version_type)
             .map_err(|e| e.with_context(format!("Failed to increment {:?} version from {}", version_type, current_version)))?;
         
         // Write it back

@@ -5,7 +5,6 @@ use serde_json::Value;
 use std::fmt;
 use std::path::Path;
 use std::fs;
-use regex;
 
 /// Represents the type of ecosystem (language/framework)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -318,7 +317,7 @@ impl PythonEcosystem {
             .map_err(|_| VersionError::Other("Failed to compile regex".to_string()))?;
         
         let new_content = version_regex.replace_all(&content, |caps: &regex::Captures| {
-            format!("{}{}{}", &caps[1], version.to_string(), &caps[3])
+            format!("{}{}{}", &caps[1], version, &caps[3])
         });
         
         // Check if replacement actually happened
