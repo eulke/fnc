@@ -1,4 +1,4 @@
-use crate::VersionError;
+use crate::error::{VersionError, Result};
 use semver::Version as SemverVersion;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -30,10 +30,10 @@ impl fmt::Display for EcosystemType {
 /// Trait for ecosystem-specific version operations
 pub trait Ecosystem {
     /// Read the current version from a project
-    fn read_version(&self, dir_path: &Path) -> Result<SemverVersion, VersionError>;
+    fn read_version(&self, dir_path: &Path) -> Result<SemverVersion>;
     
     /// Write a new version to a project
-    fn write_version(&self, dir_path: &Path, version: &SemverVersion) -> Result<(), VersionError>;
+    fn write_version(&self, dir_path: &Path, version: &SemverVersion) -> Result<()>;
 }
 
 /// Create an ecosystem implementation based on the type
@@ -46,7 +46,7 @@ pub fn create_ecosystem(ecosystem_type: &EcosystemType) -> Box<dyn Ecosystem> {
 }
 
 /// Detect the ecosystem type from a directory
-pub fn detect_ecosystem(dir_path: &Path) -> Result<EcosystemType, VersionError> {
+pub fn detect_ecosystem(dir_path: &Path) -> Result<EcosystemType> {
     if !dir_path.is_dir() {
         return Err(VersionError::IoError(std::io::Error::new(
             std::io::ErrorKind::NotFound,
@@ -89,7 +89,7 @@ struct PackageJson {
 }
 
 impl Ecosystem for JavaScriptEcosystem {
-    fn read_version(&self, dir_path: &Path) -> Result<SemverVersion, VersionError> {
+    fn read_version(&self, dir_path: &Path) -> Result<SemverVersion> {
         let package_json_path = dir_path.join("package.json");
         let content = fs::read_to_string(package_json_path)?;
         
@@ -100,7 +100,7 @@ impl Ecosystem for JavaScriptEcosystem {
         Ok(version)
     }
     
-    fn write_version(&self, dir_path: &Path, version: &SemverVersion) -> Result<(), VersionError> {
+    fn write_version(&self, dir_path: &Path, version: &SemverVersion) -> Result<()> {
         let package_json_path = dir_path.join("package.json");
         let content = fs::read_to_string(&package_json_path)?;
         
@@ -123,7 +123,7 @@ impl Ecosystem for JavaScriptEcosystem {
 struct RustEcosystem;
 
 impl Ecosystem for RustEcosystem {
-    fn read_version(&self, dir_path: &Path) -> Result<SemverVersion, VersionError> {
+    fn read_version(&self, dir_path: &Path) -> Result<SemverVersion> {
         let cargo_toml_path = dir_path.join("Cargo.toml");
         let content = fs::read_to_string(cargo_toml_path)?;
         
@@ -141,7 +141,7 @@ impl Ecosystem for RustEcosystem {
         Ok(version)
     }
     
-    fn write_version(&self, dir_path: &Path, version: &SemverVersion) -> Result<(), VersionError> {
+    fn write_version(&self, dir_path: &Path, version: &SemverVersion) -> Result<()> {
         let cargo_toml_path = dir_path.join("Cargo.toml");
         let content = fs::read_to_string(&cargo_toml_path)?;
         
@@ -173,7 +173,7 @@ impl Ecosystem for RustEcosystem {
 struct PythonEcosystem;
 
 impl Ecosystem for PythonEcosystem {
-    fn read_version(&self, dir_path: &Path) -> Result<SemverVersion, VersionError> {
+    fn read_version(&self, dir_path: &Path) -> Result<SemverVersion> {
         // First try pyproject.toml
         let pyproject_toml_path = dir_path.join("pyproject.toml");
         if pyproject_toml_path.exists() {
@@ -189,7 +189,7 @@ impl Ecosystem for PythonEcosystem {
         Err(VersionError::VersionNotFound)
     }
     
-    fn write_version(&self, dir_path: &Path, version: &SemverVersion) -> Result<(), VersionError> {
+    fn write_version(&self, dir_path: &Path, version: &SemverVersion) -> Result<()> {
         // First try pyproject.toml
         let pyproject_toml_path = dir_path.join("pyproject.toml");
         if pyproject_toml_path.exists() {
@@ -207,7 +207,7 @@ impl Ecosystem for PythonEcosystem {
 }
 
 impl PythonEcosystem {
-    fn read_from_pyproject_toml(&self, path: &Path) -> Result<SemverVersion, VersionError> {
+    fn read_from_pyproject_toml(&self, path: &Path) -> Result<SemverVersion> {
         let content = fs::read_to_string(path)?;
         
         let pyproject: toml::Table = toml::from_str(&content)
@@ -245,7 +245,7 @@ impl PythonEcosystem {
         version.map(|s| s.to_string())
     }
     
-    fn write_to_pyproject_toml(&self, path: &Path, version: &SemverVersion) -> Result<(), VersionError> {
+    fn write_to_pyproject_toml(&self, path: &Path, version: &SemverVersion) -> Result<()> {
         let content = fs::read_to_string(path)?;
         
         let mut pyproject: toml::Table = toml::from_str(&content)
@@ -292,7 +292,7 @@ impl PythonEcosystem {
         Ok(())
     }
     
-    fn read_from_setup_py(&self, path: &Path) -> Result<SemverVersion, VersionError> {
+    fn read_from_setup_py(&self, path: &Path) -> Result<SemverVersion> {
         let content = fs::read_to_string(path)?;
         
         // This is a simple regex-based approach; a more robust solution might require
@@ -310,7 +310,7 @@ impl PythonEcosystem {
         Err(VersionError::VersionNotFound)
     }
     
-    fn write_to_setup_py(&self, path: &Path, version: &SemverVersion) -> Result<(), VersionError> {
+    fn write_to_setup_py(&self, path: &Path, version: &SemverVersion) -> Result<()> {
         let content = fs::read_to_string(path)?;
         
         // Replace version using regex
