@@ -2,10 +2,10 @@ use crate::VersionError;
 use semver::Version as SemverVersion;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::fmt;
 use std::path::Path;
 use std::fs;
 use regex;
-
 
 /// Represents the type of ecosystem (language/framework)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -14,6 +14,17 @@ pub enum EcosystemType {
     Rust,          // Cargo.toml
     Python,        // pyproject.toml or setup.py
     // Add more as needed
+}
+
+// Implement Display trait for EcosystemType for better error messages
+impl fmt::Display for EcosystemType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            EcosystemType::JavaScript => write!(f, "JavaScript"),
+            EcosystemType::Rust => write!(f, "Rust"),
+            EcosystemType::Python => write!(f, "Python"),
+        }
+    }
 }
 
 /// Trait for ecosystem-specific version operations
@@ -26,7 +37,7 @@ pub trait Ecosystem {
 }
 
 /// Create an ecosystem implementation based on the type
-pub fn create_ecosystem(ecosystem_type: EcosystemType) -> Box<dyn Ecosystem> {
+pub fn create_ecosystem(ecosystem_type: &EcosystemType) -> Box<dyn Ecosystem> {
     match ecosystem_type {
         EcosystemType::JavaScript => Box::new(JavaScriptEcosystem),
         EcosystemType::Rust => Box::new(RustEcosystem),
