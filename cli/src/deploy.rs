@@ -1,11 +1,12 @@
 use crate::ui;
 use crate::progress::ProgressTracker;
 use anyhow::{Context, Result};
-use git::repository::Repository;
+use git::{config::Config, repository::Repository};
 use std::path::Path;
 use std::process;
 use version::{Version, VersionType};
 use crate::cli::DeployType;
+use changelog;
 
 /// Validate that the repository is clean
 pub fn validate_repository_status(repo: &impl Repository, _verbose: bool) -> Result<()> {
@@ -88,6 +89,35 @@ pub fn create_deployment_branch(repo: &impl Repository, deploy_type: &DeployType
     Ok(new_branch)
 }
 
+/// Update the CHANGELOG.md file with new version information
+pub fn update_changelog(new_version: &str, verbose: bool) -> Result<()> {
+    ui::status_message("Updating CHANGELOG.md");
+    
+    // Get author information from git config
+    let author = git::config::RealGitConfig::read_config().context("Failed to get user from git config")?;
+    
+    let author = format!("{} ({})", author.name, author.email);
+    
+    if verbose {
+        println!("Using author info: {}", author);
+    }
+    
+    // Look for CHANGELOG.md in the current directory
+    let changelog_path = Path::new("CHANGELOG.md");
+    
+    // Ensure changelog exists, create it if it doesn't
+    changelog::ensure_changelog_exists(changelog_path, new_version, &author)
+        .context("Failed to ensure CHANGELOG.md exists")?;
+    
+    // Update the changelog with the new version
+    changelog::update_changelog(changelog_path, new_version, &author)
+        .context("Failed to update CHANGELOG.md")?;
+    
+    ui::success_message("Updated CHANGELOG.md with new version");
+    
+    Ok(())
+}
+
 /// Display final success message and next steps
 pub fn display_deployment_success(deploy_type: &DeployType, new_version: &str, new_branch: &str) {
     println!();
@@ -111,6 +141,7 @@ pub fn execute(deploy_type: DeployType, version_type: VersionType, force: bool, 
             "Pulling latest changes".to_string(),
             "Updating version".to_string(),
             "Creating deployment branch".to_string(),
+            "Updating CHANGELOG.md".to_string(),
         ]);
     
     ui::info_message(&format!("Starting with {:?} version update", version_type));
@@ -156,6 +187,11 @@ pub fn execute(deploy_type: DeployType, version_type: VersionType, force: bool, 
     // 7. Create deployment branch
     progress.start_step();
     let new_branch = create_deployment_branch(&repo, &deploy_type, &new_version)?;
+    progress.complete_step();
+
+    // 8. Update CHANGELOG.md
+    progress.start_step();
+    update_changelog(&new_version, verbose)?;
     progress.complete_step();
     
     // Complete the progress tracking
