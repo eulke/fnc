@@ -69,6 +69,15 @@ impl Version {
             .map_err(|e| e.with_context(format!("Failed to read version from {} project", &ecosystem_type)))
     }
     
+    /// Write a specific version to a project at the given path
+    pub fn write_to_project(dir_path: &Path, version: &SemverVersion) -> Result<()> {
+        let ecosystem_type = Self::detect_ecosystem(dir_path)?;
+        let ecosystem = ecosystems::create_ecosystem(&ecosystem_type);
+        
+        ecosystem.write_version(dir_path, version)
+            .map_err(|e| e.with_context(format!("Failed to write version {} to project files", version)))
+    }
+    
     /// Update the version in a project at the given path
     pub fn update_in_project(dir_path: &Path, version_type: &VersionType) -> Result<SemverVersion> {
         let ecosystem_type = Self::detect_ecosystem(dir_path)?;

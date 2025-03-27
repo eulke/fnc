@@ -4,11 +4,10 @@ use anyhow::{Context, Result};
 use git::{config::Config, repository::Repository};
 use std::path::Path;
 use std::process;
-use version::{Version, VersionType};
+use version::{SemverVersion, Version, VersionType};
 use crate::cli::DeployType;
 use changelog;
 
-/// Validate that the repository is clean
 pub fn validate_repository_status(repo: &impl Repository, _verbose: bool) -> Result<()> {
     let is_clean = repo.validate_status()
         .context("Failed to validate git repository status")?;
@@ -22,7 +21,6 @@ pub fn validate_repository_status(repo: &impl Repository, _verbose: bool) -> Res
     Ok(())
 }
 
-/// Get the target branch based on deployment type
 pub fn get_target_branch(repo: &impl Repository, deploy_type: &DeployType, verbose: bool) -> Result<String> {
     match deploy_type {
         DeployType::Release => {
@@ -33,7 +31,7 @@ pub fn get_target_branch(repo: &impl Repository, deploy_type: &DeployType, verbo
             Ok(branch)
         },
         DeployType::Hotfix => {
-            let branch = String::from("main");  // For hotfixes, we use main/master
+            let branch = String::from("main");
             if verbose {
                 println!("Using 'main' branch for hotfix deployment");
             }
@@ -42,8 +40,7 @@ pub fn get_target_branch(repo: &impl Repository, deploy_type: &DeployType, verbo
     }
 }
 
-/// Update version in the project
-pub fn update_version(version_type: &VersionType, verbose: bool) -> Result<(String, String)> {
+pub fn calculate_new_version(version_type: &VersionType, verbose: bool) -> Result<(SemverVersion, SemverVersion)> {
     let current_path = Path::new(".");
     
     if verbose {
@@ -52,7 +49,7 @@ pub fn update_version(version_type: &VersionType, verbose: bool) -> Result<(Stri
             .display());
     }
     
-    ui::status_message(&format!("Updating {:?} version in project", version_type));
+    ui::status_message(&format!("Calculating {:?} version", version_type));
     let current_version = Version::read_from_project(current_path)
         .with_context(|| "Failed to read current version from project")?;
     
@@ -60,15 +57,33 @@ pub fn update_version(version_type: &VersionType, verbose: bool) -> Result<(Stri
         println!("Current version: {}", current_version);
     }
     
-    let new_version = Version::update_in_project(current_path, version_type)
-        .with_context(|| format!("Failed to update {:?} version in project", version_type))?;
-    ui::success_message(&format!("Version updated from {} to {}", current_version, new_version));
+    // Just increment the version without writing to files
+    let new_version = Version::increment(&current_version, version_type)
+        .with_context(|| format!("Failed to increment {:?} version", version_type))?;
     
-    Ok((current_version.to_string(), new_version.to_string()))
+    ui::success_message(&format!("Version will be updated from {} to {}", current_version, new_version));
+    
+    Ok((current_version, new_version))
 }
 
-/// Create and checkout a new branch for the deployment
-pub fn create_deployment_branch(repo: &impl Repository, deploy_type: &DeployType, new_version: &str) -> Result<String> {
+pub fn write_version_to_files(new_version: &SemverVersion, verbose: bool) -> Result<()> {
+    let current_path = Path::new(".");
+    
+    ui::status_message("Writing new version to project files");
+    
+    if verbose {
+        println!("Writing version {} to files in {}", new_version, current_path.display());
+    }
+    
+    Version::write_to_project(current_path, new_version)
+        .with_context(|| format!("Failed to write new version {} to project files", new_version))?;
+    
+    ui::success_message(&format!("Version {} written to project files", new_version));
+    
+    Ok(())
+}
+
+pub fn create_deployment_branch(repo: &impl Repository, deploy_type: &DeployType, new_version: &SemverVersion) -> Result<String> {
     let branch_prefix = match deploy_type {
         DeployType::Release => "release",
         DeployType::Hotfix => "hotfix",
@@ -80,7 +95,6 @@ pub fn create_deployment_branch(repo: &impl Repository, deploy_type: &DeployType
         .with_context(|| format!("Failed to create branch '{}'", new_branch))?;
     ui::success_message(&format!("Created new branch: {}", new_branch));
     
-    // Checkout to the new branch
     ui::status_message(&format!("Checking out to {}", new_branch));
     repo.checkout_branch(&new_branch)
         .with_context(|| format!("Failed to checkout branch '{}'", new_branch))?;
@@ -89,11 +103,9 @@ pub fn create_deployment_branch(repo: &impl Repository, deploy_type: &DeployType
     Ok(new_branch)
 }
 
-/// Update the CHANGELOG.md file with new version information
-pub fn update_changelog(new_version: &str, verbose: bool) -> Result<()> {
+pub fn update_changelog(new_version: &SemverVersion, verbose: bool) -> Result<()> {
     ui::status_message("Updating CHANGELOG.md");
     
-    // Get author information from git config
     let author = git::config::RealGitConfig::read_config().context("Failed to get user from git config")?;
     
     let author = format!("{} ({})", author.name, author.email);
@@ -102,15 +114,12 @@ pub fn update_changelog(new_version: &str, verbose: bool) -> Result<()> {
         println!("Using author info: {}", author);
     }
     
-    // Look for CHANGELOG.md in the current directory
     let changelog_path = Path::new("CHANGELOG.md");
     
-    // Ensure changelog exists, create it if it doesn't
-    changelog::ensure_changelog_exists(changelog_path, new_version, &author)
+    changelog::ensure_changelog_exists(changelog_path, &new_version.to_string(), &author)
         .context("Failed to ensure CHANGELOG.md exists")?;
     
-    // Update the changelog with the new version
-    changelog::update_changelog(changelog_path, new_version, &author)
+    changelog::update_changelog(changelog_path, &new_version.to_string(), &author)
         .context("Failed to update CHANGELOG.md")?;
     
     ui::success_message("Updated CHANGELOG.md with new version");
@@ -118,8 +127,7 @@ pub fn update_changelog(new_version: &str, verbose: bool) -> Result<()> {
     Ok(())
 }
 
-/// Display final success message and next steps
-pub fn display_deployment_success(deploy_type: &DeployType, new_version: &str, new_branch: &str) {
+pub fn display_deployment_success(deploy_type: &DeployType, new_version: &SemverVersion, new_branch: &str) {
     println!();
     ui::success_message(&format!("Successfully deployed {:?} version {}", deploy_type, new_version));
     ui::info_message(&format!("Branch {} has been created and checked out", new_branch));
@@ -129,9 +137,7 @@ pub fn display_deployment_success(deploy_type: &DeployType, new_version: &str, n
     ui::step_message(2, &format!("Push the branch to remote: git push -u origin {}", new_branch));
 }
 
-/// Execute the deployment process
 pub fn execute(deploy_type: DeployType, version_type: VersionType, force: bool, verbose: bool) -> Result<()> {
-    // Initialize progress tracker
     let mut progress = ProgressTracker::new(&format!("{:?} Deployment", deploy_type))
         .with_steps(vec![
             "Opening git repository".to_string(),
@@ -139,8 +145,9 @@ pub fn execute(deploy_type: DeployType, version_type: VersionType, force: bool, 
             "Getting target branch".to_string(),
             "Checking out target branch".to_string(),
             "Pulling latest changes".to_string(),
-            "Updating version".to_string(),
+            "Calculating new version".to_string(),
             "Creating deployment branch".to_string(),
+            "Writing version to files".to_string(),
             "Updating CHANGELOG.md".to_string(),
         ]);
     
@@ -179,9 +186,9 @@ pub fn execute(deploy_type: DeployType, version_type: VersionType, force: bool, 
         .context("Failed to pull latest changes from remote")?;
     progress.complete_step();
     
-    // 6. Update version
+    // 6. Calculate new version (without writing to files)
     progress.start_step();
-    let (_, new_version) = update_version(&version_type, verbose)?;
+    let (_, new_version) = calculate_new_version(&version_type, verbose)?;
     progress.complete_step();
     
     // 7. Create deployment branch
@@ -189,7 +196,12 @@ pub fn execute(deploy_type: DeployType, version_type: VersionType, force: bool, 
     let new_branch = create_deployment_branch(&repo, &deploy_type, &new_version)?;
     progress.complete_step();
 
-    // 8. Update CHANGELOG.md
+    // 8. Write version to files
+    progress.start_step();
+    write_version_to_files(&new_version, verbose)?;
+    progress.complete_step();
+
+    // 9. Update CHANGELOG.md
     progress.start_step();
     update_changelog(&new_version, verbose)?;
     progress.complete_step();

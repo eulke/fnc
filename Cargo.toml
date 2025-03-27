@@ -1,3 +1,3 @@
 [workspace]
+members = ["changelog", "cli", "git", "version"]
 resolver = "2"
-members = [ "changelog","cli", "git", "version"]

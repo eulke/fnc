@@ -1,3 +1,5 @@
+## [0.1.10] 2025-03-27 _Esteban Ulke (esteban.ulke@mercadolibre.com)_
+
 ## [0.1.8] 2025-03-27 _Esteban Ulke (esteban.ulke@mercadolibre.com)_
 
 ## [0.1.7] 2025-03-27 _Esteban Ulke (esteban.ulke@mercadolibre.com)_
