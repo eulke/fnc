@@ -2,6 +2,7 @@ mod cli;
 mod ui;
 mod deploy;
 mod progress;
+mod package_version;
 
 use clap::Parser;
 use cli::{Cli, Commands};
@@ -18,6 +19,12 @@ fn main() -> Result<()> {
         } => {
             deploy::execute(deploy_type, version_type, force, verbose)?;
             Ok(())
+        }
+        Commands::FixPackageVersion {
+            dir,
+            verbose,
+        } => {
+            package_version::execute(dir, verbose)
         }
     }
 }

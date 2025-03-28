@@ -33,6 +33,17 @@ pub enum Commands {
         #[clap(short, long, default_value_t=false)]
         verbose: bool,
     },
+    
+    /// Fix package versions in a JavaScript monorepo
+    FixPackageVersion {
+        /// Directory to start searching from (defaults to current directory)
+        #[clap(short, long)]
+        dir: Option<String>,
+        
+        /// Enable verbose output with additional information
+        #[clap(short, long, default_value_t=false)]
+        verbose: bool,
+    },
 }
 
 #[derive(ValueEnum, Clone, Debug)]
