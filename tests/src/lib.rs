@@ -101,7 +101,7 @@ edition = "2021"
         let changelog_path = project_path.join("CHANGELOG.md");
         changelog::ensure_changelog_exists(&changelog_path, "0.1.0", "Test User (test@example.com)").unwrap();
         
-        let current_version = Version::read_from_project(project_path).unwrap();
+        let _current_version = Version::read_from_project(project_path).unwrap();
         let new_version = Version::update_in_project(project_path, &VersionType::Minor).unwrap();
         assert_eq!(new_version.to_string(), "0.2.0");
         
