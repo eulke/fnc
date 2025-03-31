@@ -238,6 +238,7 @@ type PackageVersionMap = HashMap<String, HashMap<String, Vec<String>>>;
 fn find_version_inconsistencies(packages: &[PackageInfo]) -> PackageVersionMap {
     let mut inconsistencies: PackageVersionMap = HashMap::new();
     let mut package_versions: HashMap<String, HashSet<String>> = HashMap::new();
+    let mut all_versions = HashSet::new();
     
     // First pass: collect all versions for each package
     for pkg in packages {
@@ -246,23 +247,33 @@ fn find_version_inconsistencies(packages: &[PackageInfo]) -> PackageVersionMap {
             .or_insert_with(HashSet::new);
         
         entry.insert(pkg.version.to_string());
+        all_versions.insert(pkg.version.to_string());
     }
     
-    // Filter out packages with only one version
-    let packages_with_multiple_versions: HashSet<String> = package_versions
-        .iter()
-        .filter(|(_, versions)| versions.len() > 1)
-        .map(|(name, _)| name.clone())
-        .collect();
+    // If we have multiple versions in the monorepo, consider them all potentially inconsistent
+    let sync_all_versions = all_versions.len() > 1;
     
-    if packages_with_multiple_versions.is_empty() {
+    // Find packages with multiple versions or check if we need to sync all packages
+    let packages_with_inconsistent_versions: HashSet<String> = if sync_all_versions {
+        // If we need to sync all, collect all package names
+        packages.iter().map(|pkg| pkg.name.clone()).collect()
+    } else {
+        // Otherwise, just collect packages with multiple versions
+        package_versions
+            .iter()
+            .filter(|(_, versions)| versions.len() > 1)
+            .map(|(name, _)| name.clone())
+            .collect()
+    };
+    
+    if packages_with_inconsistent_versions.is_empty() && !sync_all_versions {
         // Check dependencies for inconsistencies with actual package versions
         return check_dependency_inconsistencies(packages, &package_versions);
     }
     
-    // Second pass: build inconsistency map for packages with multiple versions
+    // Second pass: build inconsistency map
     for pkg in packages {
-        if packages_with_multiple_versions.contains(&pkg.name) {
+        if packages_with_inconsistent_versions.contains(&pkg.name) {
             let version_map = inconsistencies
                 .entry(pkg.name.clone())
                 .or_insert_with(HashMap::new);
@@ -396,6 +407,77 @@ fn ask_user_for_version_fixes(
     let stdin = io::stdin();
     let mut buffer = String::new();
     
+    // First, collect all unique versions across all packages
+    let mut all_versions: HashMap<String, Vec<String>> = HashMap::new();
+    for (pkg_name, versions) in inconsistencies {
+        for (version, _) in versions {
+            let entry = all_versions.entry(version.clone()).or_insert_with(Vec::new);
+            entry.push(pkg_name.clone());
+        }
+    }
+    
+    // If we have more than one unique version, ask user to select one for all packages
+    if all_versions.len() > 1 {
+        println!("\nMultiple versions found across packages. Choose one version to apply to all packages:");
+        
+        let mut version_list: Vec<(String, usize, Vec<String>)> = all_versions
+            .iter()
+            .map(|(version, pkgs)| (version.clone(), pkgs.len(), pkgs.clone()))
+            .collect();
+        
+        // Sort by frequency (most common first)
+        version_list.sort_by(|a, b| b.1.cmp(&a.1));
+        
+        for (idx, (version, count, pkgs)) in version_list.iter().enumerate() {
+            if count > &3 {
+                println!("  {}. {} (used in {} packages)", idx + 1, version, count);
+            } else {
+                println!("  {}. {} (used in {})", idx + 1, version, pkgs.join(", "));
+            }
+        }
+        
+        println!("  0. Skip global version selection (proceed package by package)");
+        
+        write!(stdout, "Enter choice [1-{}, default=1]: ", version_list.len())?;
+        stdout.flush()?;
+        
+        buffer.clear();
+        stdin.read_line(&mut buffer)?;
+        let choice = buffer.trim();
+        
+        let idx = if choice.is_empty() {
+            0 // Default to the first option
+        } else {
+            match choice.parse::<usize>() {
+                Ok(num) if num == 0 => {
+                    println!("Proceeding with individual package selection.");
+                    // Fall through to package-by-package logic
+                    99999 // Invalid high number to skip the next block
+                }
+                Ok(num) if num <= version_list.len() => num - 1,
+                _ => {
+                    println!("Invalid choice, using default (1)");
+                    0
+                }
+            }
+        };
+        
+        // Apply the selected version to all packages
+        if idx < version_list.len() {
+            let selected_version = &version_list[idx].0;
+            println!("Applying version {} to all packages with inconsistencies.", selected_version);
+            
+            // Apply the selected version to all packages
+            for (pkg_name, _) in inconsistencies {
+                fixes.insert(pkg_name.clone(), selected_version.clone());
+            }
+            
+            return Ok(fixes);
+        }
+    }
+    
+    // If user skipped global selection or there's only one unique version, 
+    // proceed with package-by-package selection
     for (pkg_name, versions) in inconsistencies {
         println!("\nPackage: {}", pkg_name);
         println!("Choose the correct version:");
