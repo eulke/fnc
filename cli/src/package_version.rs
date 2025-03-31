@@ -1,7 +1,7 @@
 use crate::ui;
 use anyhow::{Context, Result, anyhow};
 use version::SemverVersion;
-use serde_json::{Value, json};
+use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::{self, Write};
@@ -297,61 +297,6 @@ fn find_version_inconsistencies(packages: &[PackageInfo]) -> PackageVersionMap {
     inconsistencies
 }
 
-fn check_dependency_inconsistencies(
-    packages: &[PackageInfo],
-    _package_versions: &HashMap<String, HashSet<String>>
-) -> PackageVersionMap {
-    let mut inconsistencies: PackageVersionMap = HashMap::new();
-    
-    // Build a map of package name -> actual version
-    let mut actual_versions: HashMap<String, String> = HashMap::new();
-    for pkg in packages {
-        actual_versions.insert(pkg.name.clone(), pkg.version.to_string());
-    }
-    
-    // Check dependencies for inconsistencies
-    for pkg in packages {
-        for (dep_name, dep_version_req) in &pkg.dependencies {
-            // Only check internal dependencies (packages in the monorepo)
-            if !actual_versions.contains_key(dep_name) {
-                continue;
-            }
-            
-            // Clean the version requirement (remove ^, ~, etc)
-            let cleaned_version = clean_version_req(dep_version_req);
-            let actual_version = &actual_versions[dep_name];
-            
-            if cleaned_version != *actual_version {
-                let version_map = inconsistencies
-                    .entry(dep_name.clone())
-                    .or_insert_with(HashMap::new);
-                
-                // Add the actual version
-                let actual_locations = version_map
-                    .entry(actual_version.clone())
-                    .or_insert_with(Vec::new);
-                
-                if !actual_locations.iter().any(|loc| loc.ends_with("(package)")) {
-                    actual_locations.push("actual package version".to_string());
-                }
-                
-                // Add the dependency version
-                let dep_locations = version_map
-                    .entry(cleaned_version.clone())
-                    .or_insert_with(Vec::new);
-                
-                dep_locations.push(format!(
-                    "{} (dependency in {})", 
-                    dep_version_req, 
-                    pkg.path.display()
-                ));
-            }
-        }
-    }
-    
-    inconsistencies
-}
-
 fn clean_version_req(version_req: &str) -> String {
     let version = version_req.trim();
     
@@ -363,11 +308,83 @@ fn clean_version_req(version_req: &str) -> String {
         .trim_start_matches('>');
     
     // For version ranges, just take the first part
-    if let Some(idx) = version.find(|c| c == ' ' || c == '-') {
-        return version[0..idx].to_string();
+    if let Some(_idx) = version.find(|c| c == ' ' || c == '-') {
+        // Only split on space for ranges, preserve prerelease identifiers
+        if version.contains(' ') {
+            if let Some(space_idx) = version.find(' ') {
+                return version[0..space_idx].to_string();
+            }
+        }
     }
     
     version.to_string()
+}
+
+fn check_dependency_inconsistencies(
+    packages: &[PackageInfo],
+    _package_versions: &HashMap<String, HashSet<String>>
+) -> PackageVersionMap {
+    let mut inconsistencies: PackageVersionMap = HashMap::new();
+    
+    let mut actual_versions: HashMap<String, String> = HashMap::new();
+    for pkg in packages {
+        actual_versions.insert(pkg.name.clone(), pkg.version.to_string());
+    }
+    
+    for pkg in packages {
+        for (dep_name, dep_version_req) in &pkg.dependencies {
+            if !actual_versions.contains_key(dep_name) {
+                continue;
+            }
+            
+            let cleaned_version = clean_version_req(dep_version_req);
+            let actual_version = &actual_versions[dep_name];
+            
+            if let (Ok(cleaned_semver), Ok(actual_semver)) = (
+                SemverVersion::parse(&cleaned_version),
+                SemverVersion::parse(actual_version)
+            ) {
+                let is_inconsistent = if cleaned_semver.major != actual_semver.major ||
+                                         cleaned_semver.minor != actual_semver.minor ||
+                                         cleaned_semver.patch != actual_semver.patch {
+                    true
+                } else {
+                    let has_different_prereleases = match (&cleaned_version.contains('-'), &actual_version.contains('-')) {
+                        (true, true) => cleaned_version != *actual_version,
+                        _ => false
+                    };
+                    
+                    has_different_prereleases
+                };
+                
+                if is_inconsistent {
+                    let version_map = inconsistencies
+                        .entry(dep_name.clone())
+                        .or_insert_with(HashMap::new);
+                    
+                    let actual_locations = version_map
+                        .entry(actual_version.clone())
+                        .or_insert_with(Vec::new);
+                    
+                    if !actual_locations.iter().any(|loc| loc.ends_with("(package)")) {
+                        actual_locations.push("actual package version".to_string());
+                    }
+                    
+                    let dep_locations = version_map
+                        .entry(cleaned_version.clone())
+                        .or_insert_with(Vec::new);
+                    
+                    dep_locations.push(format!(
+                        "{} (dependency in {})", 
+                        dep_version_req, 
+                        pkg.path.display()
+                    ));
+                }
+            }
+        }
+    }
+    
+    inconsistencies
 }
 
 fn ask_user_for_version_fixes(
@@ -492,60 +509,57 @@ fn fix_version_inconsistencies(
 
 fn update_package_version(package_json_path: &Path, version: &str) -> Result<()> {
     let content = fs::read_to_string(package_json_path)?;
-    let mut package_json: Value = serde_json::from_str(&content)?;
     
-    if let Some(obj) = package_json.as_object_mut() {
-        obj.insert("version".to_string(), json!(version));
+    // Use regex to find and replace only the version line
+    let version_regex = regex::Regex::new(r#"(\s*"version"\s*:\s*)"([^"]+)"(,?)"#)?;
+    let updated_content = version_regex.replace(&content, |caps: &regex::Captures| {
+        format!("{}\"{}\"{}",
+            &caps[1],  // The prefix including whitespace and "version":
+            version,   // The new version
+            &caps[3]   // The trailing comma if present
+        )
+    }).to_string();
+    
+    if content != updated_content {
+        fs::write(package_json_path, updated_content)?;
     }
-    
-    let updated_content = serde_json::to_string_pretty(&package_json)?;
-    fs::write(package_json_path, updated_content)?;
     
     Ok(())
 }
 
 fn update_package_dependency(package_json_path: &Path, dep_name: &str, version: &str) -> Result<()> {
     let content = fs::read_to_string(package_json_path)?;
-    let mut package_json: Value = serde_json::from_str(&content)?;
     
-    // Function to update a specific dependency section
-    let update_dep_section = |section: &mut Value, dep_name: &str, version: &str| {
-        if let Some(deps) = section.as_object_mut() {
-            if deps.contains_key(dep_name) {
-                let current_ver = &deps[dep_name];
-                if let Some(current_str) = current_ver.as_str() {
-                    // Preserve version prefix (^, ~, etc)
-                    let prefix = if current_str.starts_with('^') {
-                        "^"
-                    } else if current_str.starts_with('~') {
-                        "~"
-                    } else {
-                        ""
-                    };
-                    
-                    deps.insert(dep_name.to_string(), json!(format!("{}{}", prefix, version)));
-                }
-            }
-        }
-    };
+    // Create regex that only matches the specific dependency
+    // This preserves all formatting and just changes the version number
+    let dep_regex = regex::Regex::new(&format!(
+        r#"(\s*"{}"?\s*:\s*)"[^"]+"(,?)"#,
+        regex::escape(dep_name)
+    ))?;
     
-    // Update in dependencies
-    if let Some(deps) = package_json.get_mut("dependencies") {
-        update_dep_section(deps, dep_name, version);
+    // Find prefix character in original content to preserve it
+    let dep_prefix_regex = regex::Regex::new(&format!(
+        r#""{}"?\s*:\s*"([~^=]?)"#,
+        regex::escape(dep_name)
+    ))?;
+    
+    // Extract prefix if it exists
+    let prefix = dep_prefix_regex.captures(&content)
+        .map(|caps| caps.get(1).map_or("", |m| m.as_str()))
+        .unwrap_or("");
+    
+    let updated_content = dep_regex.replace_all(&content, |caps: &regex::Captures| {
+        format!("{}\"{}{}\"{}",
+            &caps[1],  // The prefix including whitespace, dep name and colon
+            prefix,    // The version prefix (^, ~, etc)
+            version,   // The new version
+            &caps[2]   // The trailing comma if present
+        )
+    }).to_string();
+    
+    if content != updated_content {
+        fs::write(package_json_path, updated_content)?;
     }
-    
-    // Update in devDependencies
-    if let Some(deps) = package_json.get_mut("devDependencies") {
-        update_dep_section(deps, dep_name, version);
-    }
-    
-    // Update in peerDependencies
-    if let Some(deps) = package_json.get_mut("peerDependencies") {
-        update_dep_section(deps, dep_name, version);
-    }
-    
-    let updated_content = serde_json::to_string_pretty(&package_json)?;
-    fs::write(package_json_path, updated_content)?;
     
     Ok(())
 }
