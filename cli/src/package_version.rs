@@ -1,5 +1,4 @@
-use crate::ui;
-use anyhow::{Context, Result, anyhow};
+use crate::{ui, error::{Result, CliError}};
 use version::SemverVersion;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
@@ -7,7 +6,7 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct PackageInfo {
     name: String,
     version: SemverVersion,
@@ -28,14 +27,14 @@ pub fn execute(dir: Option<String>, verbose: bool) -> Result<()> {
     ui::status_message("Analyzing monorepo package versions...");
     
     let workspaces = get_workspaces(&working_dir)
-        .with_context(|| "Failed to read workspaces from root package.json")?;
+        .map_err(|e| e.with_context("Failed to read workspaces from root package.json"))?;
     
     if verbose {
         println!("Found workspaces: {:?}", workspaces);
     }
     
     let package_infos = find_all_packages(&working_dir, &workspaces, verbose)
-        .with_context(|| "Failed to scan packages")?;
+        .map_err(|e| e.with_context("Failed to scan packages"))?;
     
     if package_infos.is_empty() {
         ui::warning_message("No packages found in the monorepo");
@@ -96,7 +95,7 @@ pub fn execute(dir: Option<String>, verbose: bool) -> Result<()> {
 fn get_workspaces(dir: &Path) -> Result<Vec<String>> {
     let package_json_path = dir.join("package.json");
     if !package_json_path.exists() {
-        return Err(anyhow!("No package.json found in {}", dir.display()));
+        return Err(CliError::PackageNotFound(dir.to_path_buf()));
     }
     
     let content = fs::read_to_string(&package_json_path)?;
@@ -114,11 +113,11 @@ fn get_workspaces(dir: &Path) -> Result<Vec<String>> {
                     .filter_map(|v| v.as_str().map(String::from))
                     .collect()
             } else {
-                return Err(anyhow!("Unable to parse workspaces in package.json"));
+                return Err(CliError::Other("Unable to parse workspaces in package.json".to_string()));
             }
         },
         _ => {
-            return Err(anyhow!("No workspaces found in package.json"));
+            return Err(CliError::NoWorkspaces);
         }
     };
     
@@ -157,9 +156,13 @@ fn find_all_packages(dir: &Path, workspaces: &[String], verbose: bool) -> Result
 }
 
 fn read_package_info(path: &Path, verbose: bool) -> Result<Option<PackageInfo>> {
-    let content = fs::read_to_string(path)?;
-    let pkg_data: Value = serde_json::from_str(&content)?;
+    let content = fs::read_to_string(path)
+        .map_err(|e| CliError::Io(e).with_context(format!("Failed to read package.json at {}", path.display())))?;
     
+    let pkg_data: Value = serde_json::from_str(&content)
+        .map_err(|e| CliError::JsonParseError(e).with_context(format!("Failed to parse JSON in {}", path.display())))?;
+    
+    // Extract the package name
     let name = match pkg_data.get("name") {
         Some(Value::String(name)) => name.clone(),
         _ => {
@@ -170,6 +173,7 @@ fn read_package_info(path: &Path, verbose: bool) -> Result<Option<PackageInfo>> 
         }
     };
     
+    // Extract the package version
     let version_str = match pkg_data.get("version") {
         Some(Value::String(version)) => version,
         _ => {
@@ -180,50 +184,31 @@ fn read_package_info(path: &Path, verbose: bool) -> Result<Option<PackageInfo>> 
         }
     };
     
-    let version = match SemverVersion::parse(version_str) {
-        Ok(v) => v,
-        Err(e) => {
-            if verbose {
-                println!(
-                    "Skipping package '{}' at {} - invalid version '{}': {}", 
-                    name, path.display(), version_str, e
-                );
+    let version = SemverVersion::parse(version_str)
+        .map_err(|e| CliError::SemverError(e).with_context(format!("Invalid version '{}' in package {}", version_str, name)))?;
+    
+    // Get parent directory as package directory
+    let pkg_dir = path.parent().unwrap_or_else(|| Path::new(".")).to_path_buf();
+    
+    // Read dependencies
+    let mut dependencies = HashMap::new();
+    
+    // Helper closure to extract dependencies from a section
+    let mut extract_deps = |section: &str| {
+        if let Some(deps) = pkg_data.get(section)
+            .and_then(|d| d.as_object()) {
+            for (dep_name, dep_version) in deps {
+                if let Some(ver) = dep_version.as_str() {
+                    dependencies.insert(dep_name.clone(), ver.to_string());
+                }
             }
-            return Ok(None);
         }
     };
     
-    // Extract dependencies
-    let mut dependencies = HashMap::new();
-    
-    // Check regular dependencies
-    if let Some(deps) = pkg_data.get("dependencies").and_then(|d| d.as_object()) {
-        for (dep_name, dep_version) in deps {
-            if let Some(Value::String(ver)) = dep_version.as_str().map(|s| Value::String(s.to_string())) {
-                dependencies.insert(dep_name.clone(), ver);
-            }
-        }
-    }
-    
-    // Check dev dependencies
-    if let Some(deps) = pkg_data.get("devDependencies").and_then(|d| d.as_object()) {
-        for (dep_name, dep_version) in deps {
-            if let Some(Value::String(ver)) = dep_version.as_str().map(|s| Value::String(s.to_string())) {
-                dependencies.insert(dep_name.clone(), ver);
-            }
-        }
-    }
-    
-    // Check peer dependencies
-    if let Some(deps) = pkg_data.get("peerDependencies").and_then(|d| d.as_object()) {
-        for (dep_name, dep_version) in deps {
-            if let Some(Value::String(ver)) = dep_version.as_str().map(|s| Value::String(s.to_string())) {
-                dependencies.insert(dep_name.clone(), ver);
-            }
-        }
-    }
-    
-    let pkg_dir = path.parent().unwrap_or(Path::new(".")).to_path_buf();
+    // Extract all dependency types
+    extract_deps("dependencies");
+    extract_deps("devDependencies");
+    extract_deps("peerDependencies");
     
     Ok(Some(PackageInfo {
         name,
@@ -236,29 +221,24 @@ fn read_package_info(path: &Path, verbose: bool) -> Result<Option<PackageInfo>> 
 type PackageVersionMap = HashMap<String, HashMap<String, Vec<String>>>;
 
 fn find_version_inconsistencies(packages: &[PackageInfo]) -> PackageVersionMap {
-    let mut inconsistencies: PackageVersionMap = HashMap::new();
-    let mut package_versions: HashMap<String, HashSet<String>> = HashMap::new();
+    let mut inconsistencies = HashMap::new();
+    let mut package_versions = HashMap::new();
     let mut all_versions = HashSet::new();
     
-    // First pass: collect all versions for each package
     for pkg in packages {
-        let entry = package_versions
+        package_versions
             .entry(pkg.name.clone())
-            .or_insert_with(HashSet::new);
-        
-        entry.insert(pkg.version.to_string());
+            .or_insert_with(HashSet::new)
+            .insert(pkg.version.to_string());
+            
         all_versions.insert(pkg.version.to_string());
     }
     
-    // If we have multiple versions in the monorepo, consider them all potentially inconsistent
     let sync_all_versions = all_versions.len() > 1;
     
-    // Find packages with multiple versions or check if we need to sync all packages
-    let packages_with_inconsistent_versions: HashSet<String> = if sync_all_versions {
-        // If we need to sync all, collect all package names
+    let packages_with_inconsistent_versions: Vec<String> = if sync_all_versions {
         packages.iter().map(|pkg| pkg.name.clone()).collect()
     } else {
-        // Otherwise, just collect packages with multiple versions
         package_versions
             .iter()
             .filter(|(_, versions)| versions.len() > 1)
@@ -291,17 +271,20 @@ fn find_version_inconsistencies(packages: &[PackageInfo]) -> PackageVersionMap {
     
     // Merge the two inconsistency maps
     for (pkg_name, versions) in dep_inconsistencies {
-        if inconsistencies.contains_key(&pkg_name) {
-            let existing_versions = inconsistencies.get_mut(&pkg_name).unwrap();
-            for (version, locations) in versions {
-                let existing_locations = existing_versions
-                    .entry(version)
-                    .or_insert_with(Vec::new);
-                
-                existing_locations.extend(locations);
+        match inconsistencies.entry(pkg_name) {
+            std::collections::hash_map::Entry::Vacant(e) => {
+                e.insert(versions);
+            },
+            std::collections::hash_map::Entry::Occupied(mut e) => {
+                let existing_versions = e.get_mut();
+                for (version, locations) in versions {
+                    let existing_locations = existing_versions
+                        .entry(version)
+                        .or_default();
+                    
+                    existing_locations.extend(locations);
+                }
             }
-        } else {
-            inconsistencies.insert(pkg_name, versions);
         }
     }
     
@@ -309,26 +292,15 @@ fn find_version_inconsistencies(packages: &[PackageInfo]) -> PackageVersionMap {
 }
 
 fn clean_version_req(version_req: &str) -> String {
-    let version = version_req.trim();
-    
-    // Remove semver operators and whitespace
-    let version = version
-        .trim_start_matches('^')
-        .trim_start_matches('~')
-        .trim_start_matches('=')
-        .trim_start_matches('>');
+    let version = version_req
+        .trim()
+        .trim_start_matches(['^', '~', '=', '>']);
     
     // For version ranges, just take the first part
-    if let Some(_idx) = version.find(|c| c == ' ' || c == '-') {
-        // Only split on space for ranges, preserve prerelease identifiers
-        if version.contains(' ') {
-            if let Some(space_idx) = version.find(' ') {
-                return version[0..space_idx].to_string();
-            }
-        }
-    }
-    
-    version.to_string()
+    version
+        .split_once(' ')
+        .map_or(version, |(first, _)| first)
+        .to_string()
 }
 
 fn check_dependency_inconsistencies(
@@ -360,30 +332,31 @@ fn check_dependency_inconsistencies(
                                          cleaned_semver.patch != actual_semver.patch {
                     true
                 } else {
-                    let has_different_prereleases = match (&cleaned_version.contains('-'), &actual_version.contains('-')) {
+                    match (&cleaned_version.contains('-'), &actual_version.contains('-')) {
                         (true, true) => cleaned_version != *actual_version,
                         _ => false
-                    };
-                    
-                    has_different_prereleases
+                    }
                 };
                 
                 if is_inconsistent {
+                    // Create map entry for package's inconsistent versions
                     let version_map = inconsistencies
                         .entry(dep_name.clone())
-                        .or_insert_with(HashMap::new);
+                        .or_default();
                     
+                    // Add actual version location
                     let actual_locations = version_map
                         .entry(actual_version.clone())
-                        .or_insert_with(Vec::new);
+                        .or_default();
                     
                     if !actual_locations.iter().any(|loc| loc.ends_with("(package)")) {
                         actual_locations.push("actual package version".to_string());
                     }
                     
+                    // Add dependency version location
                     let dep_locations = version_map
                         .entry(cleaned_version.clone())
-                        .or_insert_with(Vec::new);
+                        .or_default();
                     
                     dep_locations.push(format!(
                         "{} (dependency in {})", 
@@ -409,9 +382,11 @@ fn ask_user_for_version_fixes(
     
     // First, collect all unique versions across all packages
     let mut all_versions: HashMap<String, Vec<String>> = HashMap::new();
-    for (pkg_name, versions) in inconsistencies {
-        for (version, _) in versions {
-            let entry = all_versions.entry(version.clone()).or_insert_with(Vec::new);
+    for pkg_name in inconsistencies.keys() {
+        let version_map = inconsistencies.get(pkg_name).unwrap();
+        
+        for version in version_map.keys() {
+            let entry = all_versions.entry(version.clone()).or_default();
             entry.push(pkg_name.clone());
         }
     }
@@ -449,17 +424,17 @@ fn ask_user_for_version_fixes(
             0 // Default to the first option
         } else {
             match choice.parse::<usize>() {
-                Ok(num) if num == 0 => {
-                    println!("Proceeding with individual package selection.");
-                    // Fall through to package-by-package logic
-                    99999 // Invalid high number to skip the next block
+                    Ok(0) => {
+                        println!("Proceeding with individual package selection.");
+                        // Fall through to package-by-package logic
+                        99999 // Invalid high number to skip the next block
+                    }
+                    Ok(num) if num <= version_list.len() => num - 1,
+                    _ => {
+                        println!("Invalid choice, using default (1)");
+                        0
+                    }
                 }
-                Ok(num) if num <= version_list.len() => num - 1,
-                _ => {
-                    println!("Invalid choice, using default (1)");
-                    0
-                }
-            }
         };
         
         // Apply the selected version to all packages
@@ -468,7 +443,7 @@ fn ask_user_for_version_fixes(
             println!("Applying version {} to all packages with inconsistencies.", selected_version);
             
             // Apply the selected version to all packages
-            for (pkg_name, _) in inconsistencies {
+            for pkg_name in inconsistencies.keys() {
                 fixes.insert(pkg_name.clone(), selected_version.clone());
             }
             
@@ -478,10 +453,11 @@ fn ask_user_for_version_fixes(
     
     // If user skipped global selection or there's only one unique version, 
     // proceed with package-by-package selection
-    for (pkg_name, versions) in inconsistencies {
+    for pkg_name in inconsistencies.keys() {
         println!("\nPackage: {}", pkg_name);
         println!("Choose the correct version:");
         
+        let versions = inconsistencies.get(pkg_name).unwrap();
         let mut version_list: Vec<(String, usize)> = versions
             .iter()
             .map(|(version, locations)| (version.clone(), locations.len()))
@@ -507,7 +483,7 @@ fn ask_user_for_version_fixes(
             0 // Default to the first option
         } else {
             match choice.parse::<usize>() {
-                Ok(num) if num == 0 => {
+                Ok(0) => {
                     println!("Skipping {}", pkg_name);
                     continue;
                 }
@@ -563,7 +539,7 @@ fn fix_version_inconsistencies(
         let mut any_dep_updated = false;
         
         // Check if we need to update any dependencies
-        for (dep_name, _) in &pkg.dependencies {
+        for dep_name in pkg.dependencies.keys() {
             if let Some(target_version) = fixes.get(dep_name) {
                 if verbose {
                     println!(
@@ -644,4 +620,21 @@ fn update_package_dependency(package_json_path: &Path, dep_name: &str, version: 
     }
     
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_clean_version_req() {
+        assert_eq!(clean_version_req("^1.2.3"), "1.2.3");
+        assert_eq!(clean_version_req("~1.2.3"), "1.2.3");
+        assert_eq!(clean_version_req(">=1.2.3"), "1.2.3");
+        assert_eq!(clean_version_req("=1.2.3"), "1.2.3");
+        assert_eq!(clean_version_req("1.2.3"), "1.2.3");
+        assert_eq!(clean_version_req("^1.2.3 || ^2.0.0"), "1.2.3");
+        assert_eq!(clean_version_req(">1.0.0 <2.0.0"), "1.0.0");
+        assert_eq!(clean_version_req("  ^1.2.3  "), "1.2.3");
+    }
 }

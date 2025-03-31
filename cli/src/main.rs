@@ -3,10 +3,13 @@ mod ui;
 mod deploy;
 mod progress;
 mod package_version;
+mod error;
+mod sync_versions;
 
 use clap::Parser;
 use cli::{Cli, Commands};
-use anyhow::Result;
+use error::Result;
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
     
@@ -25,6 +28,15 @@ fn main() -> Result<()> {
             verbose,
         } => {
             package_version::execute(dir, verbose)
+        }
+        Commands::SyncVersions {
+            source,
+            targets,
+            discover,
+            max_depth,
+            verbose,
+        } => {
+            sync_versions::execute(source, targets, discover, max_depth, verbose)
         }
     }
 }

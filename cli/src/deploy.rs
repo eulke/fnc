@@ -1,16 +1,15 @@
 use crate::ui;
 use crate::progress::ProgressTracker;
-use anyhow::{Context, Result};
+use crate::error::{Result, CliError};
 use git::{config::Config, repository::Repository};
 use std::path::Path;
 use std::process;
 use version::{SemverVersion, Version, VersionType};
 use crate::cli::DeployType;
-use changelog;
 
 pub fn validate_repository_status(repo: &impl Repository, _verbose: bool) -> Result<()> {
     let is_clean = repo.validate_status()
-        .context("Failed to validate git repository status")?;
+        .map_err(|e| CliError::Git(e).with_context("Failed to validate git repository status"))?;
     if !is_clean {
         ui::error_message("Git repository is not clean");
         println!("Please commit or stash your changes before deploying.");
@@ -26,7 +25,7 @@ pub fn get_target_branch(repo: &impl Repository, deploy_type: &DeployType, verbo
         DeployType::Release => {
             ui::status_message("Determining default branch");
             let branch = repo.get_default_branch()
-                .context("Failed to determine default branch")?;
+                .map_err(|e| CliError::Git(e).with_context("Failed to determine default branch"))?;
             ui::success_message(&format!("Default branch is '{}'", branch));
             Ok(branch)
         },
@@ -51,7 +50,7 @@ pub fn calculate_new_version(version_type: &VersionType, verbose: bool) -> Resul
     
     ui::status_message(&format!("Calculating {:?} version", version_type));
     let current_version = Version::read_from_project(current_path)
-        .with_context(|| "Failed to read current version from project")?;
+        .map_err(|e| CliError::Version(e).with_context("Failed to read current version from project"))?;
     
     if verbose {
         println!("Current version: {}", current_version);
@@ -59,7 +58,8 @@ pub fn calculate_new_version(version_type: &VersionType, verbose: bool) -> Resul
     
     // Just increment the version without writing to files
     let new_version = Version::increment(&current_version, version_type)
-        .with_context(|| format!("Failed to increment {:?} version", version_type))?;
+        .map_err(|e| CliError::Version(e)
+            .with_context(format!("Failed to increment {:?} version", version_type)))?;
     
     ui::success_message(&format!("Version will be updated from {} to {}", current_version, new_version));
     
@@ -76,7 +76,8 @@ pub fn write_version_to_files(new_version: &SemverVersion, verbose: bool) -> Res
     }
     
     Version::write_to_project(current_path, new_version)
-        .with_context(|| format!("Failed to write new version {} to project files", new_version))?;
+        .map_err(|e| CliError::Version(e)
+            .with_context(format!("Failed to write new version {} to project files", new_version)))?;
     
     ui::success_message(&format!("Version {} written to project files", new_version));
     
@@ -92,12 +93,12 @@ pub fn create_deployment_branch(repo: &impl Repository, deploy_type: &DeployType
     let new_branch = format!("{}/{}", branch_prefix, new_version);
     ui::status_message(&format!("Creating new branch: {}", new_branch));
     repo.create_branch(&new_branch)
-        .with_context(|| format!("Failed to create branch '{}'", new_branch))?;
+        .map_err(|e| CliError::Git(e).with_context(format!("Failed to create branch '{}'", new_branch)))?;
     ui::success_message(&format!("Created new branch: {}", new_branch));
     
     ui::status_message(&format!("Checking out to {}", new_branch));
     repo.checkout_branch(&new_branch)
-        .with_context(|| format!("Failed to checkout branch '{}'", new_branch))?;
+        .map_err(|e| CliError::Git(e).with_context(format!("Failed to checkout branch '{}'", new_branch)))?;
     ui::success_message(&format!("Checked out {}", new_branch));
     
     Ok(new_branch)
@@ -106,7 +107,8 @@ pub fn create_deployment_branch(repo: &impl Repository, deploy_type: &DeployType
 pub fn update_changelog(new_version: &SemverVersion, verbose: bool) -> Result<()> {
     ui::status_message("Updating CHANGELOG.md");
     
-    let author = git::config::RealGitConfig::read_config().context("Failed to get user from git config")?;
+    let author = git::config::RealGitConfig::read_config()
+        .map_err(|e| CliError::Git(e).with_context("Failed to get user from git config"))?;
     
     let author = format!("{} ({})", author.name, author.email);
     
@@ -117,10 +119,10 @@ pub fn update_changelog(new_version: &SemverVersion, verbose: bool) -> Result<()
     let changelog_path = Path::new("CHANGELOG.md");
     
     changelog::ensure_changelog_exists(changelog_path, &new_version.to_string(), &author)
-        .context("Failed to ensure CHANGELOG.md exists")?;
+        .map_err(|e| CliError::Other(e.to_string()).with_context("Failed to ensure CHANGELOG.md exists"))?;
     
     changelog::update_changelog(changelog_path, &new_version.to_string(), &author)
-        .context("Failed to update CHANGELOG.md")?;
+        .map_err(|e| CliError::Other(e.to_string()).with_context("Failed to update CHANGELOG.md"))?;
     
     ui::success_message("Updated CHANGELOG.md with new version");
     
@@ -156,7 +158,7 @@ pub fn execute(deploy_type: DeployType, version_type: VersionType, force: bool, 
     // 1. Open git repository
     progress.start_step();
     let repo = git::repository::RealGitRepository::open()
-        .context("Failed to open git repository")?;
+        .map_err(|e| CliError::Git(e).with_context("Failed to open git repository"))?;
     progress.complete_step();
     
     // 2. Validate repository status
@@ -177,13 +179,13 @@ pub fn execute(deploy_type: DeployType, version_type: VersionType, force: bool, 
     // 4. Checkout target branch
     progress.start_step();
     repo.checkout_branch(&target_branch)
-        .with_context(|| format!("Failed to checkout branch '{}'", target_branch))?;
+        .map_err(|e| CliError::Git(e).with_context(format!("Failed to checkout branch '{}'", target_branch)))?;
     progress.complete_step();
     
     // 5. Pull latest changes
     progress.start_step();
     repo.pull()
-        .context("Failed to pull latest changes from remote")?;
+        .map_err(|e| CliError::Git(e).with_context("Failed to pull latest changes from remote"))?;
     progress.complete_step();
     
     // 6. Calculate new version (without writing to files)

@@ -1,0 +1,10 @@
+[package]
+name = "fnc-tests"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+changelog = { path = "../changelog" }
+version = { path = "../version" }
+tempfile = "3.9"

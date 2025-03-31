@@ -44,6 +44,29 @@ pub enum Commands {
         #[clap(short, long, default_value_t=false)]
         verbose: bool,
     },
+    
+    /// Synchronize versions across multiple projects (including across ecosystems)
+    SyncVersions {
+        /// Primary project directory whose version will be used as the source
+        #[clap(short, long)]
+        source: String,
+        
+        /// Comma-separated list of target directories to update with the source version
+        #[clap(short, long)]
+        targets: Vec<String>,
+        
+        /// Enable auto-discovery of projects in subdirectories
+        #[clap(short, long, default_value_t=false)]
+        discover: bool,
+        
+        /// Max depth for auto-discovery (only used with --discover)
+        #[clap(long, default_value_t=3)]
+        max_depth: usize,
+        
+        /// Enable verbose output with additional information
+        #[clap(short, long, default_value_t=false)]
+        verbose: bool,
+    },
 }
 
 #[derive(ValueEnum, Clone, Debug)]

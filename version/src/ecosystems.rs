@@ -3,8 +3,15 @@ use semver::Version as SemverVersion;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fmt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::fs;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+use once_cell::sync::Lazy;
+
+/// Cache for ecosystem detection results to avoid redundant filesystem operations
+static ECOSYSTEM_CACHE: Lazy<Arc<Mutex<HashMap<PathBuf, EcosystemType>>>> = 
+    Lazy::new(|| Arc::new(Mutex::new(HashMap::new())));
 
 /// Represents the type of ecosystem (language/framework)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -46,6 +53,17 @@ pub fn create_ecosystem(ecosystem_type: &EcosystemType) -> Box<dyn Ecosystem> {
 
 /// Detect the ecosystem type from a directory
 pub fn detect_ecosystem(dir_path: &Path) -> Result<EcosystemType> {
+    // Check cache first
+    let path_buf = dir_path.to_path_buf();
+    {
+        if let Ok(cache) = ECOSYSTEM_CACHE.lock() {
+            if let Some(ecosystem) = cache.get(&path_buf) {
+                return Ok(*ecosystem);
+            }
+        }
+    }
+
+    // If not found in cache, detect ecosystem
     if !dir_path.is_dir() {
         return Err(VersionError::IoError(std::io::Error::new(
             std::io::ErrorKind::NotFound,
@@ -56,20 +74,35 @@ pub fn detect_ecosystem(dir_path: &Path) -> Result<EcosystemType> {
     // Try to detect JavaScript ecosystem (package.json)
     let package_json_path = dir_path.join("package.json");
     if package_json_path.exists() {
-        return Ok(EcosystemType::JavaScript);
+        let result = EcosystemType::JavaScript;
+        // Update cache
+        if let Ok(mut cache) = ECOSYSTEM_CACHE.lock() {
+            cache.insert(path_buf, result);
+        }
+        return Ok(result);
     }
     
     // Try to detect Rust ecosystem (Cargo.toml)
     let cargo_toml_path = dir_path.join("Cargo.toml");
     if cargo_toml_path.exists() {
-        return Ok(EcosystemType::Rust);
+        let result = EcosystemType::Rust;
+        // Update cache
+        if let Ok(mut cache) = ECOSYSTEM_CACHE.lock() {
+            cache.insert(path_buf, result);
+        }
+        return Ok(result);
     }
     
     // Try to detect Python ecosystem (pyproject.toml or setup.py)
     let pyproject_toml_path = dir_path.join("pyproject.toml");
     let setup_py_path = dir_path.join("setup.py");
     if pyproject_toml_path.exists() || setup_py_path.exists() {
-        return Ok(EcosystemType::Python);
+        let result = EcosystemType::Python;
+        // Update cache
+        if let Ok(mut cache) = ECOSYSTEM_CACHE.lock() {
+            cache.insert(path_buf, result);
+        }
+        return Ok(result);
     }
     
     Err(VersionError::NoEcosystemDetected)
