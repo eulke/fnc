@@ -28,9 +28,10 @@ pub fn get_target_branch(repo: &impl Repository, deploy_type: &DeployType, verbo
             Ok(branch)
         },
         DeployType::Hotfix => {
-            let branch = String::from("main");
+            let branch = repo.get_main_branch()
+                .map_err(|e| CliError::Git(e).with_context("Failed to determine main branch"))?;
             if verbose {
-                println!("Using 'main' branch for hotfix deployment");
+                println!("Using '{}' branch for hotfix deployment", branch);
             }
             Ok(branch)
         },

@@ -10,6 +10,7 @@ pub trait Repository {
     fn checkout_branch(&self, branch_name: &str) -> Result<()>;
     fn pull(&self) -> Result<()>;
     fn get_default_branch(&self) -> Result<String>;
+    fn get_main_branch(&self) -> Result<String>;
 }
 
 pub struct RealGitRepository { repo: GitRepository }
@@ -66,6 +67,20 @@ impl Repository for RealGitRepository {
             .or_else(|_| repo.find_branch("master", BranchType::Local))
             .or_else(|_| repo.find_branch("main", BranchType::Local))
             .map_err(|_| GitError::BranchNotFound("No default branch found".to_string()))?;
+
+        let branch_name = branch.name()?
+            .ok_or_else(|| GitError::RepositoryError("Invalid branch name".to_string()))?
+            .to_string();
+
+        Ok(branch_name)
+    }
+
+    fn get_main_branch(&self) -> Result<String> {
+        let repo = &self.repo;
+
+        let branch = repo.find_branch("main", BranchType::Local)
+            .or_else(|_| repo.find_branch("master", BranchType::Local))
+            .map_err(|_| GitError::BranchNotFound("No main branch found".to_string()))?;
 
         let branch_name = branch.name()?
             .ok_or_else(|| GitError::RepositoryError("Invalid branch name".to_string()))?
