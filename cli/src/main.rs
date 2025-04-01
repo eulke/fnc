@@ -8,7 +8,7 @@ mod sync_versions;
 mod upgrade;
 
 use clap::Parser;
-use cli::{Cli, Commands};
+use cli::{Cli, Commands, FixType};
 use colored::Colorize;
 use std::process;
 
@@ -25,11 +25,12 @@ fn main() {
         } => {
             deploy::execute(deploy_type, version_type, force, verbose, interactive)
         }
-        Commands::FixPackageVersion {
-            dir,
-            verbose,
-        } => {
-            package_version::execute(dir, verbose)
+        Commands::Fix { fix_type } => {
+            match fix_type {
+                FixType::PackageVersions { dir, verbose } => {
+                    package_version::execute(dir, verbose)
+                }
+            }
         }
         Commands::SyncVersions {
             source,

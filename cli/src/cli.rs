@@ -38,15 +38,11 @@ pub enum Commands {
         interactive: bool,
     },
     
-    /// Fix package versions in a JavaScript monorepo
-    FixPackageVersion {
-        /// Directory to start searching from (defaults to current directory)
-        #[clap(short, long)]
-        dir: Option<String>,
-        
-        /// Enable verbose output with additional information
-        #[clap(short, long, default_value_t=false)]
-        verbose: bool,
+    /// Fix various issues in your projects
+    Fix {
+        /// Type of fix to perform
+        #[clap(subcommand)]
+        fix_type: FixType,
     },
     
     /// Synchronize versions across multiple projects (including across ecosystems)
@@ -77,6 +73,21 @@ pub enum Commands {
         /// Force upgrade even if running from a development environment
         #[clap(long, default_value_t=false)]
         force: bool,
+        
+        /// Enable verbose output with additional information
+        #[clap(short, long, default_value_t=false)]
+        verbose: bool,
+    },
+}
+
+#[derive(Subcommand, Clone, Debug)]
+pub enum FixType {
+    /// Fix package versions in a JavaScript monorepo
+    #[clap(name = "package-versions")]
+    PackageVersions {
+        /// Directory to start searching from (defaults to current directory)
+        #[clap(short, long)]
+        dir: Option<String>,
         
         /// Enable verbose output with additional information
         #[clap(short, long, default_value_t=false)]
