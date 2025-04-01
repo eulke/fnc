@@ -1,6 +1,6 @@
 # FNC - Fast Version Control and Release Tool
 
-FNC (Fast Next Change) is a command-line tool for managing versions, releases, and deployments across multiple project types.
+FNC (Finance) is a command-line tool for managing versions, releases, and deployments across multiple project types for finance team.
 
 ## Features
 
@@ -9,6 +9,7 @@ FNC (Fast Next Change) is a command-line tool for managing versions, releases, a
 - **Monorepo Support**: Synchronize versions across packages in a monorepo
 - **Changelog Management**: Automatically update CHANGELOG.md files
 - **Git Integration**: Create release/hotfix branches and manage deployment workflows
+- **Interactive Mode**: Dialog-based selection for deployment options
 
 ## Installation
 
@@ -21,22 +22,59 @@ cargo install --path cli
 
 ### Deploy a New Version
 
+Create release or hotfix branches with automated version bumping:
+
 ```bash
+# Create a release with interactive prompts
+fnc deploy -i
+
 # Create a release with a minor version bump
 fnc deploy release minor
 
 # Create a hotfix with a patch version bump
 fnc deploy hotfix patch
+
+# Enable verbose output
+fnc deploy release minor --verbose
+
+# Force deployment even with uncommitted changes (dev only)
+fnc deploy release minor --force
 ```
 
 ### Fix Package Versions in a Monorepo
 
 ```bash
-# Synchronize versions across all packages
-fnc fix-package-version
+# Fix package versions in a JavaScript monorepo
+fnc fix package-versions
 
 # Specify a directory to analyze
-fnc fix-package-version --dir ./path/to/monorepo
+fnc fix package-versions --dir ./path/to/monorepo
+
+# Enable verbose output
+fnc fix package-versions --verbose
+```
+
+### Synchronize Versions Across Projects
+
+```bash
+# Sync versions using a source project and targets
+fnc sync-versions --source ./main-project --targets ./project1,./project2
+
+# Auto-discover projects in subdirectories
+fnc sync-versions --source ./main-project --targets ./projects --discover
+
+# Set maximum discovery depth (default: 3)
+fnc sync-versions --source ./main-project --targets ./projects --discover --max-depth 5
+```
+
+### Upgrade FNC
+
+```bash
+# Upgrade FNC to the latest version
+fnc upgrade
+
+# Force upgrade in development environment
+fnc upgrade --force
 ```
 
 ## Supported Ecosystems
