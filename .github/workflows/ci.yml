@@ -40,7 +40,19 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           brew install openssl@3
-          echo "OPENSSL_DIR=$(brew --prefix openssl@3)" >> $GITHUB_ENV
+          if [ "${{ matrix.target }}" = "x86_64-apple-darwin" ]; then
+            # For x86_64, we need to specify the Intel path
+            echo "OPENSSL_DIR=$(brew --prefix)/Cellar/openssl@3/3.4.1" >> $GITHUB_ENV
+            # Make sure we use the x86_64 version
+            brew fetch --bottle-tag=x86_64_monterey openssl@3
+            mkdir -p /tmp/openssl-x86
+            tar -xf $(find . -name 'openssl@3-*.mojave.bottle*.tar.gz' -o -name 'openssl@3-*.catalina.bottle*.tar.gz' -o -name 'openssl@3-*.monterey.bottle*.tar.gz' -o -name 'openssl@3-*.x86_64_*.bottle*.tar.gz' | head -n 1) -C /tmp/openssl-x86
+            echo "OPENSSL_LIB_DIR=/tmp/openssl-x86/opt/openssl@3/lib" >> $GITHUB_ENV
+            echo "OPENSSL_INCLUDE_DIR=/tmp/openssl-x86/opt/openssl@3/include" >> $GITHUB_ENV
+          else
+            # For arm64, use default Homebrew path
+            echo "OPENSSL_DIR=$(brew --prefix openssl@3)" >> $GITHUB_ENV
+          fi
           # For cross-compilation
           echo "PKG_CONFIG_ALLOW_CROSS=1" >> $GITHUB_ENV
 
