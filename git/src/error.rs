@@ -39,10 +39,22 @@ impl GitError {
     /// Get a user-friendly message for command line display
     pub fn user_message(&self) -> String {
         match self {
-            GitError::Git2Error(e) => format!("Git operation failed: {}", e),
-            GitError::BranchNotFound(branch) => format!("Git branch '{}' not found", branch),
+            GitError::Git2Error(e) => {
+                let msg = format!("{}", e);
+                // Extract just the message without the class and code details
+                msg.split(';').next().map_or_else(
+                    || format!("Git error: {}", msg),
+                    |main_msg| format!("Git error: {}", main_msg.trim())
+                )
+            },
+            GitError::IoError(e) => format!("I/O error: {}", e),
+            GitError::BranchNotFound(branch) => format!("Branch '{}' not found", branch),
+            GitError::RepositoryError(msg) => format!("Repository error: {}", msg),
+            GitError::ConfigError(msg) => format!("Git config error: {}", msg),
+            GitError::CommandError(msg) => format!("Git command failed: {}", msg),
+            GitError::Utf8Error(e) => format!("Text encoding error: {}", e),
+            GitError::Other(msg) => msg.clone(),
             GitError::WithContext(ctx, err) => format!("{}: {}", ctx, err.user_message()),
-            _ => format!("{}", self),
         }
     }
 }

@@ -19,7 +19,7 @@ pub enum Commands {
     Deploy {
         /// Type of deployment to perform
         #[clap(value_enum)]
-        deploy_type: DeployType,
+        deploy_type: Option<DeployType>,
         
         /// Type of version increment to make (major, minor, patch)
         #[clap(value_enum, default_value_t=VersionType::Patch)]
@@ -32,6 +32,10 @@ pub enum Commands {
         /// Enable verbose output with additional information
         #[clap(short, long, default_value_t=false)]
         verbose: bool,
+        
+        /// Use interactive mode with dialog prompts
+        #[clap(short, long, default_value_t=false)]
+        interactive: bool,
     },
     
     /// Fix package versions in a JavaScript monorepo

@@ -45,6 +45,23 @@ impl CliError {
     pub fn with_context<C: Into<String>>(self, context: C) -> Self {
         CliError::WithContext(context.into(), Box::new(self))
     }
+    
+    pub fn user_message(&self) -> String {
+        match self {
+            CliError::Io(err) => format!("I/O operation failed: {}", err),
+            CliError::Version(err) => err.user_message(),
+            CliError::Git(err) => err.user_message(),
+            CliError::PackageNotFound(path) => format!("Package not found at: {}", path.display()),
+            CliError::JsonParseError(err) => format!("Failed to parse JSON: {}", err),
+            CliError::GlobError(err) => format!("Invalid glob pattern: {}", err),
+            CliError::NoWorkspaces => "No workspaces found in package.json".to_string(),
+            CliError::RegexError(err) => format!("Invalid regular expression: {}", err),
+            CliError::SemverError(err) => format!("Invalid semantic version: {}", err),
+            CliError::AnyhowError(err) => format!("Error: {}", err),
+            CliError::Other(msg) => msg.clone(),
+            CliError::WithContext(ctx, err) => format!("{}: {}", ctx, err.user_message()),
+        }
+    }
 }
 
 pub type Result<T> = std::result::Result<T, CliError>;

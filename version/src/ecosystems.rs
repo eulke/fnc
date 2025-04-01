@@ -139,6 +139,7 @@ impl Ecosystem for JavaScriptEcosystem {
             .current_dir(dir_path)
             .arg("version")
             .arg(version.to_string())
+            .arg("--no-git-tag-version")
             .output()
             .map_err(|e| VersionError::Other(format!("Failed to run npm version command: {}", e)))?;
             

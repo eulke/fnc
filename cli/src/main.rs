@@ -9,20 +9,21 @@ mod upgrade;
 
 use clap::Parser;
 use cli::{Cli, Commands};
-use error::Result;
+use colored::Colorize;
+use std::process;
 
-fn main() -> Result<()> {
+fn main() {
     let cli = Cli::parse();
     
-    match cli.command {
+    let result = match cli.command {
         Commands::Deploy {
             deploy_type,
             version_type,
             force,
             verbose,
+            interactive,
         } => {
-            deploy::execute(deploy_type, version_type, force, verbose)?;
-            Ok(())
+            deploy::execute(deploy_type, version_type, force, verbose, interactive)
         }
         Commands::FixPackageVersion {
             dir,
@@ -45,5 +46,10 @@ fn main() -> Result<()> {
         } => {
             upgrade::execute(force, verbose)
         }
+    };
+
+    if let Err(err) = result {
+        eprintln!("{} {}", "Error:".bold().red(), err.user_message());
+        process::exit(1);
     }
 }

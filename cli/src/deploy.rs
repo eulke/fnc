@@ -1,9 +1,9 @@
 use crate::ui;
 use crate::progress::ProgressTracker;
 use crate::error::{Result, CliError};
+use dialoguer::{Select, theme::ColorfulTheme};
 use git::{config::Config, repository::Repository};
 use std::path::Path;
-use std::process;
 use version::{SemverVersion, Version, VersionType};
 use crate::cli::DeployType;
 
@@ -11,10 +11,8 @@ pub fn validate_repository_status(repo: &impl Repository, _verbose: bool) -> Res
     let is_clean = repo.validate_status()
         .map_err(|e| CliError::Git(e).with_context("Failed to validate git repository status"))?;
     if !is_clean {
-        ui::error_message("Git repository is not clean");
-        println!("Please commit or stash your changes before deploying.");
-        println!("Hint: Use --force to bypass this check during development.");
-        process::exit(1);
+        return Err(CliError::Other("Git repository is not clean".to_string())
+            .with_context("Please commit or stash your changes before deploying"));
     }
     ui::success_message("Repository is clean");
     Ok(())
@@ -139,7 +137,35 @@ pub fn display_deployment_success(deploy_type: &DeployType, new_version: &Semver
     ui::step_message(2, &format!("Push the branch to remote: git push -u origin {}", new_branch));
 }
 
-pub fn execute(deploy_type: DeployType, version_type: VersionType, force: bool, verbose: bool) -> Result<()> {
+pub fn execute(deploy_type: Option<DeployType>, version_type: VersionType, force: bool, verbose: bool, interactive: bool) -> Result<()> {
+    // Validate that deploy_type is provided when not in interactive mode
+    if !interactive && deploy_type.is_none() {
+        return Err(CliError::Other("deploy_type is required when not using interactive mode (-i)".to_string())
+            .with_context("Run with -i flag or specify a deployment type (release or hotfix)"));
+    }
+
+    // First, if in interactive mode or deploy_type is None, determine deployment and version type
+    let (deploy_type, version_type) = if interactive || deploy_type.is_none() {
+        ui::section_header("Interactive Deployment Setup");
+
+        // Get current version for showing in the interactive version selection
+        let current_path = Path::new(".");
+        let current_version = Version::read_from_project(current_path)
+            .map_err(|e| CliError::Version(e).with_context("Failed to read current version from project"))?;
+        
+        // Interactive deployment type selection
+        let deploy_type = interactive_deploy_type_selection()?;
+        println!(); // Add some spacing
+        
+        // Interactive version type selection
+        let version_type = interactive_version_type_selection(&current_version)?;
+        println!(); // Add some spacing
+        
+        (deploy_type, version_type)
+    } else {
+        (deploy_type.unwrap(), version_type)
+    };
+    
     let mut progress = ProgressTracker::new(&format!("{:?} Deployment", deploy_type))
         .with_steps(vec![
             "Opening git repository".to_string(),
@@ -215,4 +241,52 @@ pub fn execute(deploy_type: DeployType, version_type: VersionType, force: bool, 
     display_deployment_success(&deploy_type, &new_version, &new_branch);
     
     Ok(())
+}
+
+pub fn interactive_deploy_type_selection() -> Result<DeployType> {
+    let items = vec!["Release", "Hotfix"];
+    let selection = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt("Select deployment type")
+        .default(0)
+        .items(&items)
+        .interact()
+        .map_err(|e| CliError::Other(format!("Failed to get deployment type selection: {}", e)))?;
+    
+    match selection {
+        0 => Ok(DeployType::Release),
+        1 => Ok(DeployType::Hotfix),
+        _ => Err(CliError::Other("Invalid deployment type selection".to_string()).into()),
+    }
+}
+
+pub fn interactive_version_type_selection(current_version: &SemverVersion) -> Result<VersionType> {
+    // Calculate what the new versions would be for each version type
+    let major_version = Version::increment(current_version, &VersionType::Major)
+        .map_err(|e| CliError::Version(e).with_context("Failed to calculate major version"))?;
+    
+    let minor_version = Version::increment(current_version, &VersionType::Minor)
+        .map_err(|e| CliError::Version(e).with_context("Failed to calculate minor version"))?;
+    
+    let patch_version = Version::increment(current_version, &VersionType::Patch)
+        .map_err(|e| CliError::Version(e).with_context("Failed to calculate patch version"))?;
+    
+    let items = vec![
+        format!("Major (current: {} → new: {})", current_version, major_version),
+        format!("Minor (current: {} → new: {})", current_version, minor_version),
+        format!("Patch (current: {} → new: {})", current_version, patch_version),
+    ];
+    
+    let selection = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt("Select version increment type")
+        .default(2) // Default to patch
+        .items(&items)
+        .interact()
+        .map_err(|e| CliError::Other(format!("Failed to get version type selection: {}", e)))?;
+    
+    match selection {
+        0 => Ok(VersionType::Major),
+        1 => Ok(VersionType::Minor),
+        2 => Ok(VersionType::Patch),
+        _ => Err(CliError::Other("Invalid version type selection".to_string()).into()),
+    }
 }
