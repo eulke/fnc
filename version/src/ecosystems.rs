@@ -133,18 +133,20 @@ impl Ecosystem for JavaScriptEcosystem {
     }
     
     fn write_version(&self, dir_path: &Path, version: &SemverVersion) -> Result<()> {
-        let package_json_path = dir_path.join("package.json");
-        let content = fs::read_to_string(&package_json_path)?;
+        use std::process::Command;
         
-        let mut package_json: PackageJson = serde_json::from_str(&content)
-            .map_err(|e| VersionError::ParseFileError(format!("Failed to parse package.json: {}", e)))?;
+        let npm_version_cmd = Command::new("npm")
+            .current_dir(dir_path)
+            .arg("version")
+            .arg(version.to_string())
+            .output()
+            .map_err(|e| VersionError::Other(format!("Failed to run npm version command: {}", e)))?;
+            
+        if !npm_version_cmd.status.success() {
+            let stderr = String::from_utf8_lossy(&npm_version_cmd.stderr);
+            return Err(VersionError::Other(format!("npm version command failed: {}", stderr)));
+        }
         
-        package_json.version = version.to_string();
-        
-        let updated_content = serde_json::to_string_pretty(&package_json)
-            .map_err(|e| VersionError::Other(format!("Failed to serialize package.json: {}", e)))?;
-        
-        fs::write(package_json_path, updated_content)?;
         Ok(())
     }
 }
