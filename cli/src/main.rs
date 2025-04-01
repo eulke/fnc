@@ -5,6 +5,7 @@ mod progress;
 mod package_version;
 mod error;
 mod sync_versions;
+mod upgrade;
 
 use clap::Parser;
 use cli::{Cli, Commands};
@@ -37,6 +38,12 @@ fn main() -> Result<()> {
             verbose,
         } => {
             sync_versions::execute(source, targets, discover, max_depth, verbose)
+        }
+        Commands::Upgrade {
+            force,
+            verbose,
+        } => {
+            upgrade::execute(force, verbose)
         }
     }
 }

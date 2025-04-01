@@ -67,6 +67,17 @@ pub enum Commands {
         #[clap(short, long, default_value_t=false)]
         verbose: bool,
     },
+    
+    /// Upgrade FNC CLI to the latest version
+    Upgrade {
+        /// Force upgrade even if running from a development environment
+        #[clap(long, default_value_t=false)]
+        force: bool,
+        
+        /// Enable verbose output with additional information
+        #[clap(short, long, default_value_t=false)]
+        verbose: bool,
+    },
 }
 
 #[derive(ValueEnum, Clone, Debug)]
