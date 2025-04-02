@@ -34,6 +34,9 @@ pub enum CliError {
     #[error("Anyhow error: {0}")]
     AnyhowError(#[from] anyhow::Error),
 
+    #[error("Dialoguer error: {0}")]
+    DialoguerError(#[from] dialoguer::Error),
+
     #[error("{0}")]
     Other(String),
 
@@ -58,6 +61,7 @@ impl CliError {
             CliError::RegexError(err) => format!("Invalid regular expression: {}", err),
             CliError::SemverError(err) => format!("Invalid semantic version: {}", err),
             CliError::AnyhowError(err) => format!("Error: {}", err),
+            CliError::DialoguerError(err) => format!("UI interaction error: {}", err),
             CliError::Other(msg) => msg.clone(),
             CliError::WithContext(ctx, err) => format!("{}: {}", ctx, err.user_message()),
         }

@@ -3,7 +3,6 @@ use version::SemverVersion;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -375,10 +374,6 @@ fn ask_user_for_version_fixes(
     inconsistencies: &PackageVersionMap,
 ) -> Result<HashMap<String, String>> {
     let mut fixes = HashMap::new();
-    let stdout = io::stdout();
-    let mut stdout = stdout.lock();
-    let stdin = io::stdin();
-    let mut buffer = String::new();
     
     // First, collect all unique versions across all packages
     let mut all_versions: HashMap<String, Vec<String>> = HashMap::new();
@@ -403,43 +398,26 @@ fn ask_user_for_version_fixes(
         // Sort by frequency (most common first)
         version_list.sort_by(|a, b| b.1.cmp(&a.1));
         
-        for (idx, (version, count, pkgs)) in version_list.iter().enumerate() {
+        let mut select_items = Vec::new();
+        for (version, count, pkgs) in &version_list {
             if count > &3 {
-                println!("  {}. {} (used in {} packages)", idx + 1, version, count);
+                select_items.push(format!("{} (used in {} packages)", version, count));
             } else {
-                println!("  {}. {} (used in {})", idx + 1, version, pkgs.join(", "));
+                select_items.push(format!("{} (used in {})", version, pkgs.join(", ")));
             }
         }
         
-        println!("  0. Skip global version selection (proceed package by package)");
+        select_items.push("Skip global version selection (proceed package by package)".to_string());
         
-        write!(stdout, "Enter choice [1-{}, default=1]: ", version_list.len())?;
-        stdout.flush()?;
-        
-        buffer.clear();
-        stdin.read_line(&mut buffer)?;
-        let choice = buffer.trim();
-        
-        let idx = if choice.is_empty() {
-            0 // Default to the first option
-        } else {
-            match choice.parse::<usize>() {
-                    Ok(0) => {
-                        println!("Proceeding with individual package selection.");
-                        // Fall through to package-by-package logic
-                        99999 // Invalid high number to skip the next block
-                    }
-                    Ok(num) if num <= version_list.len() => num - 1,
-                    _ => {
-                        println!("Invalid choice, using default (1)");
-                        0
-                    }
-                }
-        };
+        let selection = dialoguer::Select::new()
+            .with_prompt("Select a version to apply to all packages")
+            .default(0)
+            .items(&select_items)
+            .interact()?;
         
         // Apply the selected version to all packages
-        if idx < version_list.len() {
-            let selected_version = &version_list[idx].0;
+        if selection < version_list.len() {
+            let selected_version = &version_list[selection].0;
             println!("Applying version {} to all packages with inconsistencies.", selected_version);
             
             // Apply the selected version to all packages
@@ -455,7 +433,6 @@ fn ask_user_for_version_fixes(
     // proceed with package-by-package selection
     for pkg_name in inconsistencies.keys() {
         println!("\nPackage: {}", pkg_name);
-        println!("Choose the correct version:");
         
         let versions = inconsistencies.get(pkg_name).unwrap();
         let mut version_list: Vec<(String, usize)> = versions
@@ -466,39 +443,27 @@ fn ask_user_for_version_fixes(
         // Sort by number of locations (most frequent first)
         version_list.sort_by(|a, b| b.1.cmp(&a.1));
         
-        for (idx, (version, count)) in version_list.iter().enumerate() {
-            println!("  {}. {} (used in {} locations)", idx + 1, version, count);
+        let mut select_items = Vec::new();
+        for (version, count) in &version_list {
+            select_items.push(format!("{} (used in {} locations)", version, count));
         }
         
-        println!("  0. Skip this package");
+        select_items.push("Skip this package".to_string());
         
-        write!(stdout, "Enter choice [1-{}, default=1]: ", version_list.len())?;
-        stdout.flush()?;
+        let selection = dialoguer::Select::new()
+            .with_prompt(format!("Choose the correct version for {}", pkg_name))
+            .default(0)
+            .items(&select_items)
+            .interact()?;
         
-        buffer.clear();
-        stdin.read_line(&mut buffer)?;
-        let choice = buffer.trim();
-        
-        let idx = if choice.is_empty() {
-            0 // Default to the first option
+        if selection < version_list.len() {
+            let selected_version = &version_list[selection].0;
+            fixes.insert(pkg_name.clone(), selected_version.clone());
+            
+            println!("Will use version {} for {}", selected_version, pkg_name);
         } else {
-            match choice.parse::<usize>() {
-                Ok(0) => {
-                    println!("Skipping {}", pkg_name);
-                    continue;
-                }
-                Ok(num) if num <= version_list.len() => num - 1,
-                _ => {
-                    println!("Invalid choice, using default (1)");
-                    0
-                }
-            }
-        };
-        
-        let selected_version = &version_list[idx].0;
-        fixes.insert(pkg_name.clone(), selected_version.clone());
-        
-        println!("Will use version {} for {}", selected_version, pkg_name);
+            println!("Skipping {}", pkg_name);
+        }
     }
     
     Ok(fixes)

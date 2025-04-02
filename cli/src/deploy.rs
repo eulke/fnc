@@ -164,7 +164,10 @@ pub fn execute(deploy_type: Option<DeployType>, version_type: VersionType, force
         
         (deploy_type, version_type)
     } else {
-        (deploy_type.unwrap(), version_type)
+        match deploy_type {
+            Some(deploy_type) => (deploy_type, version_type),
+            None => unreachable!("We already checked deploy_type is Some above"),
+        }
     };
     
     let mut progress = ProgressTracker::new(&format!("{:?} Deployment", deploy_type))
@@ -256,7 +259,7 @@ pub fn interactive_deploy_type_selection() -> Result<DeployType> {
     match selection {
         0 => Ok(DeployType::Release),
         1 => Ok(DeployType::Hotfix),
-        _ => Err(CliError::Other("Invalid deployment type selection".to_string()).into()),
+        _ => Err(CliError::Other("Invalid deployment type selection".to_string())),
     }
 }
 
@@ -288,6 +291,6 @@ pub fn interactive_version_type_selection(current_version: &SemverVersion) -> Re
         0 => Ok(VersionType::Major),
         1 => Ok(VersionType::Minor),
         2 => Ok(VersionType::Patch),
-        _ => Err(CliError::Other("Invalid version type selection".to_string()).into()),
+        _ => Err(CliError::Other("Invalid version type selection".to_string())),
     }
 }
