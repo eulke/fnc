@@ -7,9 +7,24 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
+type ChangelogSections = HashMap<String, HashMap<String, Vec<String>>>;
+
 struct ChangelogEntry {
     content: String,
     category: String,
+}
+
+fn create_moved_items_regex(entries_to_move: &[ChangelogEntry]) -> Result<Regex> {
+    if entries_to_move.is_empty() {
+        Regex::new(r"^$").map_err(|e| CliError::Other(e.to_string()).with_context("Failed to create empty regex pattern"))
+    } else {
+        let pattern = entries_to_move.iter()
+            .map(|entry| regex::escape(&entry.content))
+            .collect::<Vec<_>>()
+            .join("|");
+        Regex::new(&format!(r"- ({})", pattern))
+            .map_err(|e| CliError::Other(e.to_string()).with_context("Failed to create regex pattern"))
+    }
 }
 
 pub fn execute(verbose: bool) -> Result<()> {
@@ -62,7 +77,7 @@ pub fn execute(verbose: bool) -> Result<()> {
         .cloned()
         .unwrap_or_else(HashMap::new);
     
-    let version_sections: HashMap<String, HashMap<String, Vec<String>>> = sections.iter()
+    let version_sections: ChangelogSections = sections.iter()
         .filter(|(k, _)| *k != "unreleased")
         .map(|(k, v)| (k.clone(), v.clone()))
         .collect();
@@ -118,7 +133,7 @@ pub fn execute(verbose: bool) -> Result<()> {
     Ok(())
 }
 
-fn parse_changelog(content: &str) -> Result<HashMap<String, HashMap<String, Vec<String>>>> {
+fn parse_changelog(content: &str) -> Result<ChangelogSections> {
     let mut sections = HashMap::new();
     let mut current_version: Option<String> = None;
     let mut current_category: Option<String> = None;
@@ -137,19 +152,23 @@ fn parse_changelog(content: &str) -> Result<HashMap<String, HashMap<String, Vec<
         let line = line.trim();
         
         if let Some(captures) = version_pattern.captures(line) {
-            let version = captures.get(1).unwrap().as_str().to_lowercase();
-            current_version = Some(version.clone());
-            current_category = None;
-            sections.entry(version).or_insert_with(HashMap::new);
+            if let Some(version_match) = captures.get(1) {
+                let version = version_match.as_str().to_lowercase();
+                current_version = Some(version.clone());
+                current_category = None;
+                sections.entry(version).or_insert_with(HashMap::new);
+            }
         } else if let Some(captures) = category_pattern.captures(line) {
-            if let Some(version) = &current_version {
-                let category = captures.get(1).unwrap().as_str().to_string();
+            if let (Some(version), Some(category_match)) = (&current_version, captures.get(1)) {
+                let category = category_match.as_str().to_string();
                 current_category = Some(category.clone());
-                sections.get_mut(version).unwrap().entry(category).or_insert_with(Vec::new);
+                if let Some(version_map) = sections.get_mut(version) {
+                    version_map.entry(category).or_insert_with(Vec::new);
+                }
             }
         } else if let Some(captures) = item_pattern.captures(line) {
-            if let (Some(version), Some(category)) = (&current_version, &current_category) {
-                let item = captures.get(1).unwrap().as_str().to_string();
+            if let (Some(version), Some(category), Some(item_match)) = (&current_version, &current_category, captures.get(1)) {
+                let item = item_match.as_str().to_string();
                 if let Some(categories) = sections.get_mut(version) {
                     if let Some(items) = categories.get_mut(category) {
                         items.push(item);
@@ -164,7 +183,7 @@ fn parse_changelog(content: &str) -> Result<HashMap<String, HashMap<String, Vec<
 
 fn identify_entries_in_diff(
     diff: &str,
-    version_sections: &HashMap<String, HashMap<String, Vec<String>>>,
+    version_sections: &ChangelogSections,
     verbose: bool,
 ) -> Result<Vec<ChangelogEntry>> {
     let mut entries_to_move = Vec::new();
@@ -210,9 +229,9 @@ fn reorganize_changelog(
     let mut new_unreleased = unreleased_section.clone();
     for entry in entries_to_move {
         new_unreleased
-            .entry(entry.category.clone())
+            .entry(entry.category.to_owned())
             .or_insert_with(Vec::new)
-            .push(entry.content.clone());
+            .push(entry.content.to_owned());
     }
     
     // Create fully formatted changelog content
@@ -260,16 +279,7 @@ fn reorganize_changelog(
             .unwrap_or(lines.len());
 
         // Create regex for matching entries we're moving to skip them in released versions
-        let moved_items_regex = if entries_to_move.is_empty() {
-            Regex::new(r"^$").map_err(|e| CliError::Other(e.to_string()))?
-        } else {
-            let pattern = entries_to_move.iter()
-                .map(|entry| regex::escape(&entry.content))
-                .collect::<Vec<_>>()
-                .join("|");
-            Regex::new(&format!(r"- ({})", pattern))
-                .map_err(|e| CliError::Other(e.to_string()))?
-        };
+        let moved_items_regex = create_moved_items_regex(entries_to_move)?;
         
         // Copy remaining content, skipping moved entries
         for i in next_version_idx..lines.len() {
@@ -294,16 +304,7 @@ fn reorganize_changelog(
         new_content.push_str(&formatted_unreleased);
         
         // Create regex for matching entries we're moving to skip them in released versions
-        let moved_items_regex = if entries_to_move.is_empty() {
-            Regex::new(r"^$").map_err(|e| CliError::Other(e.to_string()))?
-        } else {
-            let pattern = entries_to_move.iter()
-                .map(|entry| regex::escape(&entry.content))
-                .collect::<Vec<_>>()
-                .join("|");
-            Regex::new(&format!(r"- ({})", pattern))
-                .map_err(|e| CliError::Other(e.to_string()))?
-        };
+        let moved_items_regex = create_moved_items_regex(entries_to_move)?;
         
         // Copy remaining content, skipping moved entries
         for i in (title_idx + 1)..lines.len() {
