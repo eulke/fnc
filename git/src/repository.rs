@@ -11,7 +11,10 @@ pub trait Repository {
     fn pull(&self) -> Result<()>;
     fn get_default_branch(&self) -> Result<String>;
     fn get_main_branch(&self) -> Result<String>;
-}
+    fn search_in_branch(&self, branch: &str, text: &str) -> Result<bool>;
+    fn get_diff_from_main(&self) -> Result<String>;
+    fn get_current_branch(&self) -> Result<String>;
+    }
 
 pub struct RealGitRepository { repo: GitRepository }
 impl Repository for RealGitRepository {
@@ -86,6 +89,44 @@ impl Repository for RealGitRepository {
             .ok_or_else(|| GitError::RepositoryError("Invalid branch name".to_string()))?
             .to_string();
 
+        Ok(branch_name)
+    }
+    
+    fn search_in_branch(&self, branch: &str, text: &str) -> Result<bool> {
+        // Use git grep to search for the text in the branch
+        // Using std::process::Command because git2 doesn't provide a good API for this
+        let output = Command::new("git")
+            .args(["grep", "-q", "-i", &format!("{}", text), branch])
+            .output()?;
+        
+        // git grep returns 0 if match found, 1 if no match, >1 if error
+        Ok(output.status.success())
+    }
+
+    fn get_diff_from_main(&self) -> Result<String> {
+        let main_branch = self.get_main_branch()?;
+        
+        Command::new("git").args(["fetch", "origin", &main_branch]).output()?;
+        
+        let diff = Command::new("git")
+            .args(["diff", &format!("origin/{}", main_branch)])
+            .output()?;
+
+        Ok(String::from_utf8_lossy(&diff.stdout).to_string())
+    }
+
+    fn get_current_branch(&self) -> Result<String> {
+        let repo = &self.repo;
+        
+        let head = repo.head()?;
+        if !head.is_branch() {
+            return Err(GitError::RepositoryError("HEAD is not a branch".to_string()));
+        }
+        
+        let branch_name = head.shorthand()
+            .ok_or_else(|| GitError::RepositoryError("Invalid branch name".to_string()))?
+            .to_string();
+            
         Ok(branch_name)
     }
 }

@@ -6,6 +6,7 @@ mod package_version;
 mod error;
 mod sync_versions;
 mod upgrade;
+mod changelog;
 
 use clap::Parser;
 use cli::{Cli, Commands, FixType};
@@ -29,6 +30,9 @@ fn main() {
             match fix_type {
                 FixType::PackageVersions { dir, verbose } => {
                     package_version::execute(dir, verbose)
+                }
+                FixType::Changelog { verbose } => {
+                    changelog::execute(verbose)
                 }
             }
         }

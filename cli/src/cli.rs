@@ -93,6 +93,14 @@ pub enum FixType {
         #[clap(short, long, default_value_t=false)]
         verbose: bool,
     },
+    
+    /// Fix changelog entries by moving changes from released versions to unreleased section
+    #[clap(name = "changelog")]
+    Changelog {
+        /// Enable verbose output with additional information
+        #[clap(short, long, default_value_t=false)]
+        verbose: bool,
+    },
 }
 
 #[derive(ValueEnum, Clone, Debug)]
