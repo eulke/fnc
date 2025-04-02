@@ -14,8 +14,8 @@ FNC (Finance) is a command-line tool for managing versions, releases, and deploy
 ## Installation
 
 ```bash
-# Install from source
-cargo install --path cli
+# Install
+curl -fsSL https://raw.githubusercontent.com/eulke/fnc/main/install.sh | bash
 ```
 
 ## Usage
