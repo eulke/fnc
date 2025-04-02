@@ -35,37 +35,9 @@ jobs:
 
       - name: Setup Cache
         uses: Swatinem/rust-cache@v2
-      
-      - name: Install OpenSSL (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          brew install openssl@3
-          if [ "${{ matrix.target }}" = "x86_64-apple-darwin" ]; then
-            # For x86_64, use a custom directory in home folder (avoids permission issues)
-            mkdir -p $HOME/openssl_x64
-            # Create symlinks to the installed OpenSSL libraries
-            ln -sf $(brew --prefix openssl@3)/lib $HOME/openssl_x64/lib
-            ln -sf $(brew --prefix openssl@3)/include $HOME/openssl_x64/include
-            # Set environment variables to point to this location
-            echo "OPENSSL_DIR=$HOME/openssl_x64" >> $GITHUB_ENV
-            echo "OPENSSL_LIB_DIR=$HOME/openssl_x64/lib" >> $GITHUB_ENV
-            echo "OPENSSL_INCLUDE_DIR=$HOME/openssl_x64/include" >> $GITHUB_ENV
-            echo "OPENSSL_STATIC=1" >> $GITHUB_ENV
-          else
-            # For arm64, use default Homebrew path
-            echo "OPENSSL_DIR=$(brew --prefix openssl@3)" >> $GITHUB_ENV
-          fi
-          # For cross-compilation
-          echo "PKG_CONFIG_ALLOW_CROSS=1" >> $GITHUB_ENV
 
       - name: Build Binary
-        run: |
-          if [ "${{ matrix.target }}" = "x86_64-apple-darwin" ]; then
-            # For x86_64, attempt to use static linking for all dependencies
-            RUSTFLAGS="-C link-arg=-mmacosx-version-min=10.9" cargo build --verbose --locked --release --target ${{ matrix.target }}
-          else
-            cargo build --verbose --locked --release --target ${{ matrix.target }}
-          fi
+        run: cargo build --verbose --locked --release --target ${{ matrix.target }}
 
       - name: Package Binary
         shell: bash
