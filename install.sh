@@ -97,7 +97,7 @@ update_rc() {
     
     if grep -q "\.local/bin" "$RC_FILE"; then
         echo "✅ PATH already configured in $RC_FILE"
-        return 1
+        return 0
     fi
     
     echo "📝 Adding PATH to $RC_FILE..."
