@@ -3,6 +3,7 @@ use crate::error::{Result, CliError};
 use crate::progress::ProgressTracker;
 use git::repository::Repository;
 use std::path::PathBuf;
+use changelog::ChangelogConfig;
 
 pub fn execute(verbose: bool) -> Result<()> {
     let mut progress = ProgressTracker::new("Changelog Fix")
@@ -60,7 +61,18 @@ pub fn execute(verbose: bool) -> Result<()> {
     progress.complete_step();
     
     progress.start_step();
-    let result = changelog::fix_changelog(&changelog_path, &diff, verbose)
+    // Create CLI-specific configuration
+    let config = ChangelogConfig {
+        ignore_duplicates: true, // CLI always ignores duplicates for better UX
+        verbose,
+        ..ChangelogConfig::default()
+    };
+    
+    // Create a Changelog instance with our configuration and fix it
+    let mut changelog = changelog::Changelog::with_config(changelog_path, config, changelog::ChangelogFormat::default())
+        .map_err(|e| CliError::Other(e.to_string()))?;
+        
+    let result = changelog.fix_with_diff(&diff)
         .map_err(|e| CliError::Other(e.to_string()))?;
     progress.complete_step();
     

@@ -25,7 +25,19 @@ pub fn fix_changelog_for_release(repo: &impl Repository, verbose: bool) -> Resul
     let changelog_path = PathBuf::from("CHANGELOG.md");
     
     if changelog_path.exists() {
-        let result = changelog::fix_changelog(&changelog_path, &diff, verbose)
+        // Create a config with the verbose flag and ignoring duplicates
+        let config = changelog::ChangelogConfig {
+            verbose,
+            ignore_duplicates: true, // Best practice for deployment: ignore duplicates
+            ..changelog::ChangelogConfig::default()
+        };
+        
+        // Create a changelog instance and use its fix_with_diff method
+        let mut changelog = changelog::Changelog::with_config(changelog_path, config, changelog::ChangelogFormat::default())
+            .map_err(|e| CliError::Other(e.to_string())
+                .with_context("Failed to load changelog"))?;
+                
+        let result = changelog.fix_with_diff(&diff)
             .map_err(|e| CliError::Other(e.to_string())
                 .with_context("Failed to fix changelog"))?;
                 
@@ -140,10 +152,24 @@ pub fn update_changelog(new_version: &SemverVersion, verbose: bool) -> Result<()
     
     let changelog_path = Path::new("CHANGELOG.md");
     
-    changelog::ensure_changelog_exists(changelog_path, &new_version.to_string(), &author)
-        .map_err(|e| CliError::Other(e.to_string()).with_context("Failed to ensure CHANGELOG.md exists"))?;
+    // Create config with ignore_duplicates set to true
+    let config = changelog::ChangelogConfig {
+        verbose,
+        ignore_duplicates: true,
+        ..changelog::ChangelogConfig::default()
+    };
     
-    changelog::update_changelog(changelog_path, &new_version.to_string(), &author)
+    // Ensure the changelog exists and then update it with the version
+    let mut changelog = changelog::Changelog::ensure_exists(
+        changelog_path, 
+        &new_version.to_string(), 
+        &author,
+        Some(config.clone()),
+        None
+    ).map_err(|e| CliError::Other(e.to_string()).with_context("Failed to ensure CHANGELOG.md exists"))?;
+    
+    // Update the changelog directly through the instance
+    changelog.update_with_version(&new_version.to_string(), &author)
         .map_err(|e| CliError::Other(e.to_string()).with_context("Failed to update CHANGELOG.md"))?;
     
     ui::success_message("Updated CHANGELOG.md with new version");
