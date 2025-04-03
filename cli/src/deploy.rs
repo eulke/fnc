@@ -3,7 +3,7 @@ use crate::progress::ProgressTracker;
 use crate::error::{Result, CliError};
 use dialoguer::{Select, theme::ColorfulTheme};
 use git::{config::Config, repository::Repository};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use version::{SemverVersion, Version, VersionType};
 use crate::cli::DeployType;
 
@@ -15,6 +15,29 @@ pub fn validate_repository_status(repo: &impl Repository, _verbose: bool) -> Res
             .with_context("Please commit or stash your changes before deploying"));
     }
     ui::success_message("Repository is clean");
+    Ok(())
+}
+
+pub fn fix_changelog_for_release(repo: &impl Repository, verbose: bool) -> Result<()> {
+    let diff = repo.get_diff_from_main()
+        .map_err(|e| CliError::Git(e).with_context("Failed to get diff from main branch"))?;
+        
+    let changelog_path = PathBuf::from("CHANGELOG.md");
+    
+    if changelog_path.exists() {
+        let result = changelog::fix_changelog(&changelog_path, &diff, verbose)
+            .map_err(|e| CliError::Other(e.to_string())
+                .with_context("Failed to fix changelog"))?;
+                
+        if result.0 {
+            ui::success_message(&format!("Fixed changelog: moved {} entries to unreleased section", result.1));
+        } else {
+            ui::info_message("No changelog entries needed to be moved");
+        }
+    } else {
+        ui::warning_message("CHANGELOG.md not found, skipping changelog fix");
+    }
+    
     Ok(())
 }
 
@@ -170,18 +193,28 @@ pub fn execute(deploy_type: Option<DeployType>, version_type: VersionType, force
         }
     };
     
+    // Prepare steps for progress tracker, adding fix changelog step for release deployments
+    let mut steps = vec![
+        "Opening git repository".to_string(),
+        "Validating repository status".to_string()
+    ];
+    
+    if matches!(deploy_type, DeployType::Release) {
+        steps.push("Fixing changelog entries".to_string());
+    }
+    
+    steps.extend(vec![
+        "Getting target branch".to_string(),
+        "Checking out target branch".to_string(),
+        "Pulling latest changes".to_string(),
+        "Calculating new version".to_string(),
+        "Creating deployment branch".to_string(),
+        "Writing version to files".to_string(),
+        "Updating CHANGELOG.md".to_string(),
+    ]);
+    
     let mut progress = ProgressTracker::new(&format!("{:?} Deployment", deploy_type))
-        .with_steps(vec![
-            "Opening git repository".to_string(),
-            "Validating repository status".to_string(),
-            "Getting target branch".to_string(),
-            "Checking out target branch".to_string(),
-            "Pulling latest changes".to_string(),
-            "Calculating new version".to_string(),
-            "Creating deployment branch".to_string(),
-            "Writing version to files".to_string(),
-            "Updating CHANGELOG.md".to_string(),
-        ]);
+        .with_steps(steps);
     
     ui::info_message(&format!("Starting with {:?} version update", version_type));
     
@@ -201,39 +234,46 @@ pub fn execute(deploy_type: Option<DeployType>, version_type: VersionType, force
         progress.complete_step();
     }
     
-    // 3. Get target branch
+    // 3. Fix changelog if this is a release deployment
+    if matches!(deploy_type, DeployType::Release) {
+        progress.start_step();
+        fix_changelog_for_release(&repo, verbose)?;
+        progress.complete_step();
+    }
+    
+    // 4. Get target branch
     progress.start_step();
     let target_branch = get_target_branch(&repo, &deploy_type, verbose)?;
     progress.complete_step();
     
-    // 4. Checkout target branch
+    // Checkout target branch
     progress.start_step();
     repo.checkout_branch(&target_branch)
         .map_err(|e| CliError::Git(e).with_context(format!("Failed to checkout branch '{}'", target_branch)))?;
     progress.complete_step();
     
-    // 5. Pull latest changes
+    // Pull latest changes
     progress.start_step();
     repo.pull()
         .map_err(|e| CliError::Git(e).with_context("Failed to pull latest changes from remote"))?;
     progress.complete_step();
     
-    // 6. Calculate new version (without writing to files)
+    // Calculate new version (without writing to files)
     progress.start_step();
     let (_, new_version) = calculate_new_version(&version_type, verbose)?;
     progress.complete_step();
     
-    // 7. Create deployment branch
+    // Create deployment branch
     progress.start_step();
     let new_branch = create_deployment_branch(&repo, &deploy_type, &new_version)?;
     progress.complete_step();
 
-    // 8. Write version to files
+    // Write version to files
     progress.start_step();
     write_version_to_files(&new_version, verbose)?;
     progress.complete_step();
 
-    // 9. Update CHANGELOG.md
+    // Update CHANGELOG.md
     progress.start_step();
     update_changelog(&new_version, verbose)?;
     progress.complete_step();
