@@ -28,7 +28,7 @@ pub fn fix_changelog_for_release(repo: &impl Repository, verbose: bool) -> Resul
         // Create a config with the verbose flag and ignoring duplicates
         let config = changelog::ChangelogConfig {
             verbose,
-            ignore_duplicates: true, // Best practice for deployment: ignore duplicates
+            ignore_duplicates: true,
             ..changelog::ChangelogConfig::default()
         };
         

@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 git2 = { version = "0.20.1", features = ["vendored-openssl"] }
-thiserror = "1.0"
+thiserror = "2.0.12"
 
 [lib]
 path = "src/git.rs"

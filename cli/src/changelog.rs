@@ -63,7 +63,7 @@ pub fn execute(verbose: bool) -> Result<()> {
     progress.start_step();
     // Create CLI-specific configuration
     let config = ChangelogConfig {
-        ignore_duplicates: true, // CLI always ignores duplicates for better UX
+        ignore_duplicates: false,
         verbose,
         ..ChangelogConfig::default()
     };
