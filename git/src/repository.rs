@@ -14,9 +14,11 @@ pub trait Repository {
     fn search_in_branch(&self, branch: &str, text: &str) -> Result<bool>;
     fn get_diff_from_main(&self) -> Result<String>;
     fn get_current_branch(&self) -> Result<String>;
-    }
+}
 
-pub struct RealGitRepository { repo: GitRepository }
+pub struct RealGitRepository { 
+    repo: GitRepository 
+}
 impl RealGitRepository {
     // Helper method to find a branch from a list of possible branch names
     fn find_branch_from_candidates(&self, branch_names: &[&str], error_msg: &str) -> Result<String> {
@@ -36,7 +38,9 @@ impl RealGitRepository {
 
 impl Repository for RealGitRepository {
     fn open() -> Result<Self> {
-        let repo = GitRepository::discover(".")?;
+        let repo = GitRepository::discover(".").map_err(|e| 
+            GitError::RepositoryError(format!("Failed to discover git repository: {}", e)))?
+        ;
         Ok(Self { repo })
     }
 
@@ -46,7 +50,8 @@ impl Repository for RealGitRepository {
         let mut options = StatusOptions::new();
         options.include_untracked(true).recurse_untracked_dirs(true);
 
-        let statuses = repo.statuses(Some(&mut options))?;
+        let statuses = repo.statuses(Some(&mut options))
+            .map_err(|e| GitError::RepositoryError(format!("Failed to get repository status: {}", e)))?;
 
         Ok(statuses.is_empty())
     }
@@ -54,23 +59,38 @@ impl Repository for RealGitRepository {
     fn create_branch(&self, name: &str) -> Result<()> {
         let repo = &self.repo;
 
-        let current_commit = repo.head()?.peel_to_commit()?;
+        let current_commit = repo.head()
+            .map_err(|e| GitError::RepositoryError(format!("Failed to get HEAD: {}", e)))?            
+            .peel_to_commit()
+            .map_err(|e| GitError::RepositoryError(format!("Failed to peel HEAD to commit: {}", e)))?;
 
-        let branch_ref = repo.branch(name, &current_commit, false)?;
+        let branch_ref = repo.branch(name, &current_commit, false)
+            .map_err(|e| GitError::BranchError(format!("Failed to create branch '{}': {}", name, e)))?;
 
-        let mut branch = repo.find_branch(name, BranchType::Local)?;
+        let mut branch = repo.find_branch(name, BranchType::Local)
+            .map_err(|e| GitError::BranchNotFound(format!("Failed to find newly created branch '{}': {}", name, e)))?;
 
-        branch.set_upstream(Some(branch_ref.name()?.unwrap()))?;
+        let branch_name = branch_ref.name()?
+            .ok_or_else(|| GitError::RepositoryError(format!("Failed to get name for branch '{}'", name)))?;
+            
+        branch.set_upstream(Some(branch_name))
+            .map_err(|e| GitError::RepositoryError(format!("Failed to set upstream for branch '{}': {}", name, e)))?;
 
         Ok(())
     }
 
     fn checkout_branch(&self, branch_name: &str) -> Result<()> {
         let repo = &self.repo;
-        let obj = repo.revparse_single(&("refs/heads/".to_owned() + branch_name))?;
+        let branch_ref = format!("refs/heads/{}", branch_name);
+        
+        let obj = repo.revparse_single(&branch_ref)
+            .map_err(|e| GitError::BranchError(format!("Failed to resolve branch '{}': {}", branch_name, e)))?;
 
-        repo.checkout_tree(&obj, None)?;
-        repo.set_head(&("refs/heads/".to_owned() + branch_name))?;
+        repo.checkout_tree(&obj, None)
+            .map_err(|e| GitError::BranchError(format!("Failed to checkout branch '{}': {}", branch_name, e)))?;
+            
+        repo.set_head(&branch_ref)
+            .map_err(|e| GitError::BranchError(format!("Failed to set HEAD to '{}': {}", branch_name, e)))?;
 
         Ok(())
     }

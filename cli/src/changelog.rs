@@ -1,9 +1,15 @@
 use crate::ui;
 use crate::error::{Result, CliError};
 use crate::progress::ProgressTracker;
-use git::repository::Repository;
+use git::repository::{Repository, RealGitRepository};
 use std::path::PathBuf;
-use changelog::ChangelogConfig;
+use changelog::{Changelog, ChangelogConfig, ChangelogFormat};
+use std::convert::From;
+
+struct FixResult {
+    entries_moved: bool,
+    entry_count: usize,
+}
 
 pub fn execute(verbose: bool) -> Result<()> {
     let mut progress = ProgressTracker::new("Changelog Fix")
@@ -11,15 +17,12 @@ pub fn execute(verbose: bool) -> Result<()> {
             "Opening git repository".to_string(),
             "Finding main branch".to_string(),
             "Reading CHANGELOG.md".to_string(),
-            "Parsing changelog sections".to_string(),
             "Getting diff from main branch".to_string(),
-            "Analyzing changelog entries".to_string(),
-            "Reorganizing changelog entries".to_string(),
-            "Writing updated changelog".to_string(),
+            "Fixing changelog entries".to_string(),
         ]);
     
     progress.start_step();
-    let repo = git::repository::RealGitRepository::open()
+    let repo = RealGitRepository::open()
         .map_err(|e| CliError::Git(e).with_context("Failed to open git repository"))?;
     progress.complete_step();
     
@@ -46,9 +49,6 @@ pub fn execute(verbose: bool) -> Result<()> {
     progress.complete_step();
     
     progress.start_step();
-    progress.complete_step();
-    
-    progress.start_step();
     let diff = repo.get_diff_from_main()
         .map_err(|e| CliError::Git(e).with_context("Failed to get diff from main branch"))?;
     
@@ -58,32 +58,40 @@ pub fn execute(verbose: bool) -> Result<()> {
     progress.complete_step();
     
     progress.start_step();
-    progress.complete_step();
-    
-    progress.start_step();
-    // Create CLI-specific configuration
     let config = ChangelogConfig {
         ignore_duplicates: false,
         verbose,
         ..ChangelogConfig::default()
     };
     
-    // Create a Changelog instance with our configuration and fix it
-    let mut changelog = changelog::Changelog::with_config(changelog_path, config, changelog::ChangelogFormat::default())
-        .map_err(|e| CliError::Other(e.to_string()))?;
-        
-    let result = changelog.fix_with_diff(&diff)
-        .map_err(|e| CliError::Other(e.to_string()))?;
+    let result = fix_changelog(&changelog_path, &diff, config)?;
     progress.complete_step();
     
     progress.complete();
+    display_results(result);
     
+    Ok(())
+}
+
+fn fix_changelog(path: &PathBuf, diff: &str, config: ChangelogConfig) -> Result<FixResult> {
+    let mut changelog = Changelog::with_config(path, config, ChangelogFormat::default())
+        .map_err(|e| CliError::Other(e.user_message()).with_context("Failed to load changelog"))?;
+        
+    let (entries_moved, entry_count) = changelog.fix_with_diff(diff)
+        .map_err(|e| CliError::Other(e.user_message()).with_context("Failed to fix changelog entries"))?;
+        
+    Ok(FixResult {
+        entries_moved,
+        entry_count,
+    })
+}
+
+fn display_results(result: FixResult) {
     ui::success_message("Changelog has been fixed.");
-    if result.0 {
-        ui::info_message(&format!("Moved {} entries to the unreleased section", result.1));
+    
+    if result.entries_moved {
+        ui::info_message(&format!("Moved {} entries to the unreleased section", result.entry_count));
     } else {
         ui::info_message("No changelog entries need to be moved to unreleased section");
     }
-    
-    Ok(())
 }

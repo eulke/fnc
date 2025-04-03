@@ -6,30 +6,30 @@ use thiserror::Error;
 use std::collections::HashMap;
 use once_cell::sync::Lazy;
 
-static VERSION_PATTERN: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"## \[\d+\.\d+\.\d+\]").unwrap()
+static SEMVER_VERSION_PATTERN: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"## \[\d+\.\d+\.\d+\]").expect("Failed to compile semver regex")
 });
 
-static UNRELEASED_PATTERN: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(?i)## \[(un|un-)?released\]").unwrap()
+static UNRELEASED_SECTION_PATTERN: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"(?i)## \[(un|un-)?released\]").expect("Failed to compile unreleased section regex")
 });
 
-static CATEGORY_PATTERN: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"### (.+)").unwrap()
+static CHANGELOG_CATEGORY_PATTERN: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"### (.+)").expect("Failed to compile category regex")
 });
 
-static ITEM_PATTERN: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"- (.+)").unwrap()
+static CHANGELOG_ITEM_PATTERN: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"- (.+)").expect("Failed to compile item regex")
 });
 
 static VERSION_HEADER_PATTERN: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(?i)##\s*\[\s*((?:un|un-)?released|\d+\.\d+\.\d+)\s*\]").unwrap()
+    Regex::new(r"(?i)##\s*\[\s*((?:un|un-)?released|\d+\.\d+\.\d+)\s*\]").expect("Failed to compile version header regex")
 });
 
 /// Errors that can occur when working with changelogs
 #[derive(Error, Debug)]
 pub enum ChangelogError {
-    #[error("Failed to read changelog file: {0}")]
+    #[error("Failed to read or write changelog file: {0}")]
     ReadError(#[from] std::io::Error),
     
     #[error("Failed to parse changelog: {0}")]
@@ -50,15 +50,33 @@ pub enum ChangelogError {
     #[error("Duplicate category {0} in version {1}")]
     DuplicateCategory(String, String),
     
+    #[error("Regex error: {0}")]
+    RegexError(#[from] regex::Error),
+    
     #[error("{0}")]
     Other(String),
+    
+    #[error("{0}: {1}")]
+    WithContext(String, Box<ChangelogError>),
 }
 
 impl ChangelogError {
-    pub fn with_context(self, context: &str) -> Self {
+    pub fn with_context<C: Into<String>>(self, context: C) -> Self {
+        ChangelogError::WithContext(context.into(), Box::new(self))
+    }
+    
+    pub fn user_message(&self) -> String {
         match self {
-            ChangelogError::Other(msg) => ChangelogError::Other(format!("{}: {}", context, msg)),
-            error => error,
+            ChangelogError::ReadError(e) => format!("File operation failed: {}", e),
+            ChangelogError::ParseError(msg) => format!("Failed to parse changelog: {}", msg),
+            ChangelogError::MissingVersionSection => "Failed to find version section in changelog".to_string(),
+            ChangelogError::InvalidVersion(ver) => format!("Invalid version format: {}", ver),
+            ChangelogError::Git(msg) => format!("Git operation failed: {}", msg),
+            ChangelogError::InvalidFormat(line, msg) => format!("Invalid changelog format at line {}: {}", line, msg),
+            ChangelogError::DuplicateCategory(cat, ver) => format!("Duplicate category {} in version {}", cat, ver),
+            ChangelogError::RegexError(e) => format!("Regular expression error: {}", e),
+            ChangelogError::Other(msg) => msg.clone(),
+            ChangelogError::WithContext(ctx, err) => format!("{}: {}", ctx, err.user_message()),
         }
     }
 }
@@ -234,9 +252,9 @@ impl Changelog {
         let today = Local::now().format(&self.config.date_format).to_string();
         let version_header = format_version_header(&self.config, version, &today, author, self.format);
         
-        let new_content = if UNRELEASED_PATTERN.is_match(&self.content) {
-            UNRELEASED_PATTERN.replace(&self.content, &version_header).to_string()
-        } else if let Some(first_match) = VERSION_PATTERN.find(&self.content) {
+        let new_content = if UNRELEASED_SECTION_PATTERN.is_match(&self.content) {
+            UNRELEASED_SECTION_PATTERN.replace(&self.content, &version_header).to_string()
+        } else if let Some(first_match) = SEMVER_VERSION_PATTERN.find(&self.content) {
             let (before, after) = self.content.split_at(first_match.start());
             format!("{before}{version_header}\n\n{after}")
         } else {
@@ -401,7 +419,7 @@ pub fn parse_changelog(content: &str, config: Option<&ChangelogConfig>) -> Resul
     for (line_num, line) in content.lines().enumerate() {
         let line = line.trim();
         
-        if let Some(captures) = CATEGORY_PATTERN.captures(line) {
+        if let Some(captures) = CHANGELOG_CATEGORY_PATTERN.captures(line) {
             if let (Some(version), Some(category_match)) = (&current_version, captures.get(1)) {
                 let category = category_match.as_str().to_string();
                 current_category = Some(category.clone());
@@ -416,7 +434,7 @@ pub fn parse_changelog(content: &str, config: Option<&ChangelogConfig>) -> Resul
                     version_map.entry(category).or_default();
                 }
             }
-        } else if let Some(captures) = ITEM_PATTERN.captures(line) {
+        } else if let Some(captures) = CHANGELOG_ITEM_PATTERN.captures(line) {
             if let (Some(version), Some(category), Some(item_match)) = 
                 (&current_version, &current_category, captures.get(1)) {
                 let item = item_match.as_str().to_string();
@@ -452,14 +470,17 @@ pub fn parse_changelog(content: &str, config: Option<&ChangelogConfig>) -> Resul
 
 fn create_moved_items_regex(entries_to_move: &[ChangelogEntry]) -> Result<Regex> {
     if entries_to_move.is_empty() {
-        Regex::new(r"^$").map_err(|e| ChangelogError::ParseError(e.to_string()))
+        // Return a regex that won't match anything
+        Ok(Regex::new(r"^$")?)
     } else {
+        // Construct a pattern from all entries to detect moved items
         let pattern = entries_to_move.iter()
             .map(|entry| regex::escape(&entry.content))
             .collect::<Vec<_>>()
             .join("|");
-        Regex::new(&format!(r"- ({})", pattern))
-            .map_err(|e| ChangelogError::ParseError(e.to_string()))
+        
+        // Create the regex with error conversion through From trait
+        Ok(Regex::new(&format!(r"- ({})", pattern))?)
     }
 }
 
@@ -469,23 +490,28 @@ fn identify_entries_in_diff(
     version_sections: &ChangelogSections,
     verbose: bool,
 ) -> Result<Vec<ChangelogEntry>> {
-    let mut entries_to_move = Vec::new();
+    let mut entries_to_move = Vec::with_capacity(16); // Pre-allocate to avoid frequent reallocations
     
+    // Skip unreleased section and examine each version section
     for (version, categories) in version_sections {
         if version.to_lowercase() == "unreleased" {
             continue;
         }
         
+        // Check each category in the version section
         for (category, items) in categories {
             for item in items {
+                // Skip initial release entries as they're not relevant for moving
                 if item.to_lowercase().contains("initial release") {
                     continue;
                 }
                 
+                // Create regex pattern to find this item in the git diff
+                // Using the ? operator for cleaner error propagation
                 let escaped_item = regex::escape(item);
-                let item_pattern = Regex::new(&format!(r"(?m)^\+.*{}.*$", escaped_item))
-                    .map_err(|e| ChangelogError::ParseError(e.to_string()))?;
+                let item_pattern = Regex::new(&format!(r"(?m)^\+.*{}.*$", escaped_item))?;
                 
+                // If the item is found in the diff, it should be moved
                 if item_pattern.is_match(diff) {
                     if verbose {
                         println!("Found '{}' in diff from main branch", item);
@@ -510,6 +536,7 @@ fn reorganize_changelog(
     entries_to_move: &[ChangelogEntry],
 ) -> Result<String> {
     let mut new_unreleased = unreleased_section.clone();
+    
     for entry in entries_to_move {
         new_unreleased
             .entry(entry.category.to_owned())
@@ -518,37 +545,37 @@ fn reorganize_changelog(
     }
     
     let lines: Vec<&str> = content.lines().collect();
-    
-    let unreleased_idx = lines.iter().position(|&line| UNRELEASED_PATTERN.is_match(line));
     let formatted_unreleased = format_unreleased_section(&new_unreleased);
     
-    match unreleased_idx {
-        Some(idx) => format_with_existing_unreleased(
-            &lines, 
-            idx, 
-            &formatted_unreleased, 
-            entries_to_move
-        ),
-        None => format_with_new_unreleased(
-            &lines, 
-            &formatted_unreleased, 
-            entries_to_move
-        ),
+    let unreleased_idx = lines.iter().position(|&line| UNRELEASED_SECTION_PATTERN.is_match(line));
+    
+    if let Some(idx) = unreleased_idx {
+        format_with_existing_unreleased(&lines, idx, &formatted_unreleased, entries_to_move)
+    } else {
+        format_with_new_unreleased(&lines, &formatted_unreleased, entries_to_move)
     }
 }
 
 fn format_unreleased_section(
     unreleased: &HashMap<String, Vec<String>>,
 ) -> String {
-    let mut formatted = String::new();
-    let categories: Vec<_> = unreleased.keys().cloned().collect();
+    let mut formatted = String::with_capacity(1024); // Pre-allocate space to reduce reallocations
     
-    for category in categories {
-        if let Some(items) = unreleased.get(&category) {
+    // Sort categories for consistent output
+    let mut categories: Vec<_> = unreleased.keys().collect();
+    categories.sort(); // Ensure consistent ordering
+    
+    for category_key in categories {
+        if let Some(items) = unreleased.get(category_key) {
             if !items.is_empty() {
-                formatted.push_str(&format!("### {}\n", category));
+                formatted.push_str("### ");
+                formatted.push_str(category_key);
+                formatted.push_str("\n");
+                
                 for item in items {
-                    formatted.push_str(&format!("- {}\n", item));
+                    formatted.push_str("- ");
+                    formatted.push_str(item);
+                    formatted.push_str("\n");
                 }
                 formatted.push('\n');
             }
@@ -578,7 +605,7 @@ fn format_with_existing_unreleased(
     // Find the next version section
     let next_version_idx = lines.iter()
         .skip(unreleased_idx + 1)
-        .position(|&line| VERSION_PATTERN.is_match(line))
+        .position(|&line| SEMVER_VERSION_PATTERN.is_match(line))
         .map(|pos| pos + unreleased_idx + 1)
         .unwrap_or(lines.len());
     

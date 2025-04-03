@@ -1,4 +1,5 @@
 use crate::{ui, error::{Result, CliError}};
+use dialoguer::{Select, theme::ColorfulTheme};
 use version::SemverVersion;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
@@ -409,7 +410,7 @@ fn ask_user_for_version_fixes(
         
         select_items.push("Skip global version selection (proceed package by package)".to_string());
         
-        let selection = dialoguer::Select::new()
+        let selection = Select::with_theme(&ColorfulTheme::default())
             .with_prompt("Select a version to apply to all packages")
             .default(0)
             .items(&select_items)
@@ -450,7 +451,7 @@ fn ask_user_for_version_fixes(
         
         select_items.push("Skip this package".to_string());
         
-        let selection = dialoguer::Select::new()
+        let selection = Select::with_theme(&ColorfulTheme::default())
             .with_prompt(format!("Choose the correct version for {}", pkg_name))
             .default(0)
             .items(&select_items)
