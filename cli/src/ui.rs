@@ -1,5 +1,5 @@
-use std::io::{self, Write};
 use colored::Colorize;
+use std::io::{self, Write};
 
 /// Print a status message with a spinner-like indicator
 pub fn status_message(message: &str) {

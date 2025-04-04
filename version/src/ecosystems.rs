@@ -1,25 +1,25 @@
-use crate::error::{VersionError, Result};
+use crate::error::{Result, VersionError};
+use once_cell::sync::Lazy;
 use semver::Version as SemverVersion;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::fmt;
-use std::path::{Path, PathBuf};
-use std::fs;
 use std::collections::HashMap;
+use std::fmt;
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use once_cell::sync::Lazy;
 
 /// Cache for ecosystem detection results to avoid redundant filesystem operations
-static ECOSYSTEM_CACHE: Lazy<Arc<Mutex<HashMap<PathBuf, EcosystemType>>>> = 
+static ECOSYSTEM_CACHE: Lazy<Arc<Mutex<HashMap<PathBuf, EcosystemType>>>> =
     Lazy::new(|| Arc::new(Mutex::new(HashMap::new())));
 
 /// Represents the type of ecosystem (language/framework)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EcosystemType {
-    JavaScript,    // package.json
-    Rust,          // Cargo.toml
-    Python,        // pyproject.toml or setup.py
-    // Add more as needed
+    JavaScript, // package.json
+    Rust,       // Cargo.toml
+    Python,     // pyproject.toml or setup.py
+                // Add more as needed
 }
 
 // Implement Display trait for EcosystemType for better error messages
@@ -37,7 +37,7 @@ impl fmt::Display for EcosystemType {
 pub trait Ecosystem {
     /// Read the current version from a project
     fn read_version(&self, dir_path: &Path) -> Result<SemverVersion>;
-    
+
     /// Write a new version to a project
     fn write_version(&self, dir_path: &Path, version: &SemverVersion) -> Result<()>;
 }
@@ -70,7 +70,7 @@ pub fn detect_ecosystem(dir_path: &Path) -> Result<EcosystemType> {
             "Directory not found",
         )));
     }
-    
+
     // Try to detect JavaScript ecosystem (package.json)
     let package_json_path = dir_path.join("package.json");
     if package_json_path.exists() {
@@ -81,7 +81,7 @@ pub fn detect_ecosystem(dir_path: &Path) -> Result<EcosystemType> {
         }
         return Ok(result);
     }
-    
+
     // Try to detect Rust ecosystem (Cargo.toml)
     let cargo_toml_path = dir_path.join("Cargo.toml");
     if cargo_toml_path.exists() {
@@ -92,7 +92,7 @@ pub fn detect_ecosystem(dir_path: &Path) -> Result<EcosystemType> {
         }
         return Ok(result);
     }
-    
+
     // Try to detect Python ecosystem (pyproject.toml or setup.py)
     let pyproject_toml_path = dir_path.join("pyproject.toml");
     let setup_py_path = dir_path.join("setup.py");
@@ -104,7 +104,7 @@ pub fn detect_ecosystem(dir_path: &Path) -> Result<EcosystemType> {
         }
         return Ok(result);
     }
-    
+
     Err(VersionError::NoEcosystemDetected)
 }
 
@@ -124,30 +124,36 @@ impl Ecosystem for JavaScriptEcosystem {
     fn read_version(&self, dir_path: &Path) -> Result<SemverVersion> {
         let package_json_path = dir_path.join("package.json");
         let content = fs::read_to_string(package_json_path)?;
-        
-        let package_json: PackageJson = serde_json::from_str(&content)
-            .map_err(|e| VersionError::ParseFileError(format!("Failed to parse package.json: {}", e)))?;
-        
+
+        let package_json: PackageJson = serde_json::from_str(&content).map_err(|e| {
+            VersionError::ParseFileError(format!("Failed to parse package.json: {}", e))
+        })?;
+
         let version = SemverVersion::parse(&package_json.version)?;
         Ok(version)
     }
-    
+
     fn write_version(&self, dir_path: &Path, version: &SemverVersion) -> Result<()> {
         use std::process::Command;
-        
+
         let npm_version_cmd = Command::new("npm")
             .current_dir(dir_path)
             .arg("version")
             .arg(version.to_string())
             .arg("--no-git-tag-version")
             .output()
-            .map_err(|e| VersionError::Other(format!("Failed to run npm version command: {}", e)))?;
-            
+            .map_err(|e| {
+                VersionError::Other(format!("Failed to run npm version command: {}", e))
+            })?;
+
         if !npm_version_cmd.status.success() {
             let stderr = String::from_utf8_lossy(&npm_version_cmd.stderr);
-            return Err(VersionError::Other(format!("npm version command failed: {}", stderr)));
+            return Err(VersionError::Other(format!(
+                "npm version command failed: {}",
+                stderr
+            )));
         }
-        
+
         Ok(())
     }
 }
@@ -161,29 +167,31 @@ impl Ecosystem for RustEcosystem {
     fn read_version(&self, dir_path: &Path) -> Result<SemverVersion> {
         let cargo_toml_path = dir_path.join("Cargo.toml");
         let content = fs::read_to_string(cargo_toml_path)?;
-        
-        let cargo_toml: toml::Table = toml::from_str(&content)
-            .map_err(|e| VersionError::ParseFileError(format!("Failed to parse Cargo.toml: {}", e)))?;
-        
+
+        let cargo_toml: toml::Table = toml::from_str(&content).map_err(|e| {
+            VersionError::ParseFileError(format!("Failed to parse Cargo.toml: {}", e))
+        })?;
+
         let version = cargo_toml
             .get("package")
             .and_then(|p| p.as_table())
             .and_then(|p| p.get("version"))
             .and_then(|v| v.as_str())
             .ok_or(VersionError::VersionNotFound)?;
-        
+
         let version = SemverVersion::parse(version)?;
         Ok(version)
     }
-    
+
     fn write_version(&self, dir_path: &Path, version: &SemverVersion) -> Result<()> {
         let cargo_toml_path = dir_path.join("Cargo.toml");
         let content = fs::read_to_string(&cargo_toml_path)?;
-        
+
         // Parse TOML
-        let mut cargo_toml: toml::Table = toml::from_str(&content)
-            .map_err(|e| VersionError::ParseFileError(format!("Failed to parse Cargo.toml: {}", e)))?;
-        
+        let mut cargo_toml: toml::Table = toml::from_str(&content).map_err(|e| {
+            VersionError::ParseFileError(format!("Failed to parse Cargo.toml: {}", e))
+        })?;
+
         // Update version
         if let Some(package) = cargo_toml.get_mut("package") {
             if let Some(package_table) = package.as_table_mut() {
@@ -192,11 +200,11 @@ impl Ecosystem for RustEcosystem {
                 }
             }
         }
-        
+
         // Convert back to string and write
         let updated_content = toml::to_string(&cargo_toml)
             .map_err(|e| VersionError::Other(format!("Failed to serialize Cargo.toml: {}", e)))?;
-        
+
         fs::write(cargo_toml_path, updated_content)?;
         Ok(())
     }
@@ -214,29 +222,29 @@ impl Ecosystem for PythonEcosystem {
         if pyproject_toml_path.exists() {
             return self.read_from_pyproject_toml(&pyproject_toml_path);
         }
-        
+
         // Then try setup.py
         let setup_py_path = dir_path.join("setup.py");
         if setup_py_path.exists() {
             return self.read_from_setup_py(&setup_py_path);
         }
-        
+
         Err(VersionError::VersionNotFound)
     }
-    
+
     fn write_version(&self, dir_path: &Path, version: &SemverVersion) -> Result<()> {
         // First try pyproject.toml
         let pyproject_toml_path = dir_path.join("pyproject.toml");
         if pyproject_toml_path.exists() {
             return self.write_to_pyproject_toml(&pyproject_toml_path, version);
         }
-        
+
         // Then try setup.py
         let setup_py_path = dir_path.join("setup.py");
         if setup_py_path.exists() {
             return self.write_to_setup_py(&setup_py_path, version);
         }
-        
+
         Err(VersionError::VersionNotFound)
     }
 }
@@ -244,18 +252,20 @@ impl Ecosystem for PythonEcosystem {
 impl PythonEcosystem {
     fn read_from_pyproject_toml(&self, path: &Path) -> Result<SemverVersion> {
         let content = fs::read_to_string(path)?;
-        
-        let pyproject: toml::Table = toml::from_str(&content)
-            .map_err(|e| VersionError::ParseFileError(format!("Failed to parse pyproject.toml: {}", e)))?;
-        
+
+        let pyproject: toml::Table = toml::from_str(&content).map_err(|e| {
+            VersionError::ParseFileError(format!("Failed to parse pyproject.toml: {}", e))
+        })?;
+
         // Try to find version in different possible locations
-        let version = self.find_version_in_pyproject(&pyproject)
+        let version = self
+            .find_version_in_pyproject(&pyproject)
             .ok_or(VersionError::VersionNotFound)?;
-        
+
         let version = SemverVersion::parse(&version)?;
         Ok(version)
     }
-    
+
     fn find_version_in_pyproject(&self, pyproject: &toml::Table) -> Option<String> {
         // Standard poetry/pep621 location
         let version = pyproject
@@ -263,11 +273,11 @@ impl PythonEcosystem {
             .and_then(|p| p.as_table())
             .and_then(|p| p.get("version"))
             .and_then(|v| v.as_str());
-        
+
         if version.is_some() {
             return version.map(|s| s.to_string());
         }
-        
+
         // Legacy poetry location
         let version = pyproject
             .get("tool")
@@ -276,29 +286,33 @@ impl PythonEcosystem {
             .and_then(|p| p.as_table())
             .and_then(|p| p.get("version"))
             .and_then(|v| v.as_str());
-        
+
         version.map(|s| s.to_string())
     }
-    
+
     fn write_to_pyproject_toml(&self, path: &Path, version: &SemverVersion) -> Result<()> {
         let content = fs::read_to_string(path)?;
-        
-        let mut pyproject: toml::Table = toml::from_str(&content)
-            .map_err(|e| VersionError::ParseFileError(format!("Failed to parse pyproject.toml: {}", e)))?;
-        
+
+        let mut pyproject: toml::Table = toml::from_str(&content).map_err(|e| {
+            VersionError::ParseFileError(format!("Failed to parse pyproject.toml: {}", e))
+        })?;
+
         // Try to update version in different possible locations
-        
+
         // Standard poetry/pep621 location
         let mut updated = false;
         if let Some(project) = pyproject.get_mut("project") {
             if let Some(project_table) = project.as_table_mut() {
                 if project_table.contains_key("version") {
-                    project_table.insert("version".to_string(), toml::Value::String(version.to_string()));
+                    project_table.insert(
+                        "version".to_string(),
+                        toml::Value::String(version.to_string()),
+                    );
                     updated = true;
                 }
             }
         }
-        
+
         // Legacy poetry location
         if !updated {
             if let Some(tool) = pyproject.get_mut("tool") {
@@ -306,7 +320,10 @@ impl PythonEcosystem {
                     if let Some(poetry) = tool_table.get_mut("poetry") {
                         if let Some(poetry_table) = poetry.as_table_mut() {
                             if poetry_table.contains_key("version") {
-                                poetry_table.insert("version".to_string(), toml::Value::String(version.to_string()));
+                                poetry_table.insert(
+                                    "version".to_string(),
+                                    toml::Value::String(version.to_string()),
+                                );
                                 updated = true;
                             }
                         }
@@ -314,53 +331,55 @@ impl PythonEcosystem {
                 }
             }
         }
-        
+
         if !updated {
             return Err(VersionError::VersionNotFound);
         }
-        
+
         // Write back
-        let updated_content = toml::to_string(&pyproject)
-            .map_err(|e| VersionError::Other(format!("Failed to serialize pyproject.toml: {}", e)))?;
-        
+        let updated_content = toml::to_string(&pyproject).map_err(|e| {
+            VersionError::Other(format!("Failed to serialize pyproject.toml: {}", e))
+        })?;
+
         fs::write(path, updated_content)?;
         Ok(())
     }
-    
+
     fn read_from_setup_py(&self, path: &Path) -> Result<SemverVersion> {
         let content = fs::read_to_string(path)?;
-        
+
         // This is a simple regex-based approach; a more robust solution might require
         // actually executing the Python code or using an AST parser
         let version_regex = regex::Regex::new(r#"version\s*=\s*['"]([0-9]+\.[0-9]+\.[0-9]+)['"]"#)
             .map_err(|_| VersionError::Other("Failed to compile regex".to_string()))?;
-        
+
         if let Some(captures) = version_regex.captures(&content) {
             if let Some(version_str) = captures.get(1) {
                 let version = SemverVersion::parse(version_str.as_str())?;
                 return Ok(version);
             }
         }
-        
+
         Err(VersionError::VersionNotFound)
     }
-    
+
     fn write_to_setup_py(&self, path: &Path, version: &SemverVersion) -> Result<()> {
         let content = fs::read_to_string(path)?;
-        
+
         // Replace version using regex
-        let version_regex = regex::Regex::new(r#"(version\s*=\s*['"])([0-9]+\.[0-9]+\.[0-9]+)(['"])"#)
-            .map_err(|_| VersionError::Other("Failed to compile regex".to_string()))?;
-        
+        let version_regex =
+            regex::Regex::new(r#"(version\s*=\s*['"])([0-9]+\.[0-9]+\.[0-9]+)(['"])"#)
+                .map_err(|_| VersionError::Other("Failed to compile regex".to_string()))?;
+
         let new_content = version_regex.replace_all(&content, |caps: &regex::Captures| {
             format!("{}{}{}", &caps[1], version, &caps[3])
         });
-        
+
         // Check if replacement actually happened
         if new_content == content {
             return Err(VersionError::VersionNotFound);
         }
-        
+
         fs::write(path, new_content.as_bytes())?;
         Ok(())
     }

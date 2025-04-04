@@ -1,6 +1,5 @@
-use git2::Config as GitConfig;
 use crate::error::Result;
-
+use git2::Config as GitConfig;
 
 pub struct AuthorInfo {
     pub name: String,

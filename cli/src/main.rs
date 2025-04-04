@@ -1,12 +1,12 @@
-mod cli;
-mod ui;
-mod deploy;
-mod progress;
-mod package_version;
-mod error;
-mod sync_versions;
-mod upgrade;
 mod changelog;
+mod cli;
+mod deploy;
+mod error;
+mod package_version;
+mod progress;
+mod sync_versions;
+mod ui;
+mod upgrade;
 
 use clap::Parser;
 use cli::{Cli, Commands, FixType};
@@ -15,7 +15,7 @@ use std::process;
 
 fn main() {
     let cli = Cli::parse();
-    
+
     let result = match cli.command {
         Commands::Deploy {
             deploy_type,
@@ -23,34 +23,19 @@ fn main() {
             force,
             verbose,
             interactive,
-        } => {
-            deploy::execute(deploy_type, version_type, force, verbose, interactive)
-        }
-        Commands::Fix { fix_type } => {
-            match fix_type {
-                FixType::PackageVersions { dir, verbose } => {
-                    package_version::execute(dir, verbose)
-                }
-                FixType::Changelog { verbose } => {
-                    changelog::execute(verbose)
-                }
-            }
-        }
+        } => deploy::execute(deploy_type, version_type, force, verbose, interactive),
+        Commands::Fix { fix_type } => match fix_type {
+            FixType::PackageVersions { dir, verbose } => package_version::execute(dir, verbose),
+            FixType::Changelog { verbose } => changelog::execute(verbose),
+        },
         Commands::SyncVersions {
             source,
             targets,
             discover,
             max_depth,
             verbose,
-        } => {
-            sync_versions::execute(source, targets, discover, max_depth, verbose)
-        }
-        Commands::Upgrade {
-            force,
-            verbose,
-        } => {
-            upgrade::execute(force, verbose)
-        }
+        } => sync_versions::execute(source, targets, discover, max_depth, verbose),
+        Commands::Upgrade { force, verbose } => upgrade::execute(force, verbose),
     };
 
     if let Err(err) = result {

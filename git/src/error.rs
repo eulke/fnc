@@ -5,31 +5,31 @@ use thiserror::Error;
 pub enum GitError {
     #[error("Git2 error: {0}")]
     Git2Error(#[from] git2::Error),
-    
+
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
-    
+
     #[error("Branch not found: {0}")]
     BranchNotFound(String),
-    
+
     #[error("Branch error: {0}")]
     BranchError(String),
-    
+
     #[error("Repository error: {0}")]
     RepositoryError(String),
-    
+
     #[error("Config error: {0}")]
     ConfigError(String),
-    
+
     #[error("Failed to execute git command: {0}")]
     CommandError(String),
-    
+
     #[error("UTF-8 encoding error: {0}")]
     Utf8Error(#[from] std::str::Utf8Error),
-    
+
     #[error("Other error: {0}")]
     Other(String),
-    
+
     #[error("{0}: {1}")]
     WithContext(String, Box<GitError>),
 }
@@ -39,7 +39,7 @@ impl GitError {
     pub fn with_context<C: Into<String>>(self, context: C) -> Self {
         GitError::WithContext(context.into(), Box::new(self))
     }
-    
+
     /// Get a user-friendly message for command line display
     pub fn user_message(&self) -> String {
         match self {
@@ -48,9 +48,9 @@ impl GitError {
                 // Extract just the message without the class and code details
                 msg.split(';').next().map_or_else(
                     || format!("Git error: {}", msg),
-                    |main_msg| format!("Git error: {}", main_msg.trim())
+                    |main_msg| format!("Git error: {}", main_msg.trim()),
                 )
-            },
+            }
             GitError::IoError(e) => format!("I/O error: {}", e),
             GitError::BranchNotFound(branch) => format!("Branch '{}' not found", branch),
             GitError::BranchError(msg) => format!("Branch operation failed: {}", msg),
@@ -73,7 +73,7 @@ pub trait ResultExt<T, E> {
     where
         C: Into<String>,
         F: FnOnce() -> C;
-        
+
     /// Add context directly from a string
     fn context<C: Into<String>>(self, context: C) -> std::result::Result<T, GitError>;
 }
@@ -92,7 +92,7 @@ where
             git_err.with_context(context())
         })
     }
-    
+
     fn context<C: Into<String>>(self, context: C) -> std::result::Result<T, GitError> {
         self.map_err(|err| {
             let git_err: GitError = err.into();

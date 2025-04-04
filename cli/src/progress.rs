@@ -1,5 +1,5 @@
-use std::time::{Duration, Instant};
 use crate::ui;
+use std::time::{Duration, Instant};
 
 /// A simple progress tracker for CLI operations
 pub struct ProgressTracker {
@@ -20,13 +20,13 @@ impl ProgressTracker {
             current_step: 0,
         }
     }
-    
+
     /// Add steps to the tracker
     pub fn with_steps(mut self, steps: Vec<String>) -> Self {
         self.steps = steps;
         self
     }
-    
+
     /// Start the next step
     pub fn start_step(&mut self) -> &str {
         if self.current_step < self.steps.len() {
@@ -37,7 +37,7 @@ impl ProgressTracker {
             ""
         }
     }
-    
+
     /// Complete the current step
     pub fn complete_step(&mut self) {
         if self.current_step < self.steps.len() {
@@ -45,23 +45,28 @@ impl ProgressTracker {
             self.current_step += 1;
         }
     }
-    
+
     /// Skip the current step
     pub fn skip_step(&mut self, reason: &str) {
         if self.current_step < self.steps.len() {
-            ui::warning_message(&format!("Skipped: {} ({})", self.steps[self.current_step], reason));
+            ui::warning_message(&format!(
+                "Skipped: {} ({})",
+                self.steps[self.current_step], reason
+            ));
             self.current_step += 1;
         }
     }
-    
+
     /// Complete the operation
     pub fn complete(&self) {
         let elapsed = self.start_time.elapsed();
-        ui::success_message(&format!("{} completed in {}", 
-            self.operation_name, 
-            Self::format_duration(elapsed)));
+        ui::success_message(&format!(
+            "{} completed in {}",
+            self.operation_name,
+            Self::format_duration(elapsed)
+        ));
     }
-    
+
     /// Format a duration in a human-readable way
     fn format_duration(duration: Duration) -> String {
         let seconds = duration.as_secs();

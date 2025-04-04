@@ -1,6 +1,6 @@
-use thiserror::Error;
-use std::path::PathBuf;
 use semver::Error as SemverError;
+use std::path::PathBuf;
+use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum CliError {
@@ -24,13 +24,13 @@ pub enum CliError {
 
     #[error("No workspaces found in package.json")]
     NoWorkspaces,
-    
+
     #[error("Regex error: {0}")]
     RegexError(#[from] regex::Error),
-    
+
     #[error("Semver parse error: {0}")]
     SemverError(#[from] SemverError),
-    
+
     #[error("Anyhow error: {0}")]
     AnyhowError(#[from] anyhow::Error),
 
@@ -48,7 +48,7 @@ impl CliError {
     pub fn with_context<C: Into<String>>(self, context: C) -> Self {
         CliError::WithContext(context.into(), Box::new(self))
     }
-    
+
     pub fn user_message(&self) -> String {
         match self {
             CliError::Io(err) => format!("I/O operation failed: {}", err),
