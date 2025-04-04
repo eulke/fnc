@@ -35,8 +35,8 @@ pub fn execute(verbose: bool) -> Result<()> {
         .map_err(|e| CliError::Git(e).with_context("Failed to determine current branch"))?;
 
     if verbose {
-        println!("Using '{}' as the main branch", main_branch);
-        println!("Current branch: '{}'", current_branch);
+        println!("Using '{main_branch}' as the main branch");
+        println!("Current branch: '{current_branch}'");
     }
     progress.complete_step();
 
@@ -70,7 +70,7 @@ pub fn execute(verbose: bool) -> Result<()> {
     progress.complete_step();
 
     progress.complete();
-    display_results(result);
+    display_results(&result);
 
     Ok(())
 }
@@ -89,7 +89,7 @@ fn fix_changelog(path: &PathBuf, diff: &str, config: ChangelogConfig) -> Result<
     })
 }
 
-fn display_results(result: FixResult) {
+fn display_results(result: &FixResult) {
     ui::success_message("Changelog has been fixed.");
 
     if result.entries_moved {

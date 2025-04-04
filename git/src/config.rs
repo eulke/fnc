@@ -7,6 +7,11 @@ pub struct AuthorInfo {
 }
 
 pub trait Config {
+    /// Reads the git configuration to retrieve author information
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the git configuration cannot be read or if required fields are missing
     fn read_config() -> Result<AuthorInfo>;
 }
 

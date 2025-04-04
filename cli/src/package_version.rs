@@ -33,7 +33,7 @@ pub fn execute(dir: Option<String>, verbose: bool) -> Result<()> {
         .map_err(|e| e.with_context("Failed to read workspaces from root package.json"))?;
 
     if verbose {
-        println!("Found workspaces: {:?}", workspaces);
+        println!("Found workspaces: {workspaces:?}");
     }
 
     let package_infos = find_all_packages(&working_dir, &workspaces, verbose)
@@ -48,10 +48,10 @@ pub fn execute(dir: Option<String>, verbose: bool) -> Result<()> {
         println!("Found {} packages", package_infos.len());
         for pkg in &package_infos {
             println!(
-                "  - {} @ {} ({})",
-                pkg.name,
-                pkg.version,
-                pkg.path.display()
+                "  - {name} @ {version} ({path})",
+                name = pkg.name,
+                version = pkg.version,
+                path = pkg.path.display()
             );
         }
     }
@@ -70,14 +70,14 @@ pub fn execute(dir: Option<String>, verbose: bool) -> Result<()> {
     ));
 
     for (pkg_name, versions) in &inconsistencies {
-        println!("  Package: {}", pkg_name);
+        println!("  Package: {pkg_name}");
         println!("  Versions found:");
 
         for (version, locations) in versions {
-            println!("    - {} (in {} locations)", version, locations.len());
+            println!("    - {version} (in {} locations)", locations.len());
             if verbose {
                 for location in locations {
-                    println!("      - {}", location);
+                    println!("      - {location}");
                 }
             }
         }
@@ -154,7 +154,7 @@ fn find_all_packages(dir: &Path, workspaces: &[String], verbose: bool) -> Result
                 }
                 Err(e) => {
                     if verbose {
-                        println!("Error processing entry: {}", e);
+                        println!("Error processing entry: {e}");
                     }
                 }
             }
@@ -175,36 +175,29 @@ fn read_package_info(path: &Path, verbose: bool) -> Result<Option<PackageInfo>> 
     })?;
 
     // Extract the package name
-    let name = match pkg_data.get("name") {
-        Some(Value::String(name)) => name.clone(),
-        _ => {
-            if verbose {
-                println!("Skipping package at {} - no name field", path.display());
-            }
-            return Ok(None);
+    let Some(Value::String(name)) = pkg_data.get("name") else {
+        if verbose {
+            println!("Skipping package at {} - no name field", path.display());
         }
+        return Ok(None);
     };
+    let name = name.clone();
 
     // Extract the package version
-    let version_str = match pkg_data.get("version") {
-        Some(Value::String(version)) => version,
-        _ => {
-            if verbose {
-                println!(
-                    "Skipping package '{}' at {} - no version field",
-                    name,
-                    path.display()
-                );
-            }
-            return Ok(None);
+    let Some(Value::String(version_str)) = pkg_data.get("version") else {
+        if verbose {
+            println!(
+                "Skipping package '{}' at {} - no version field",
+                name,
+                path.display()
+            );
         }
+        return Ok(None);
     };
 
     let version = SemverVersion::parse(version_str).map_err(|e| {
-        CliError::SemverError(e).with_context(format!(
-            "Invalid version '{}' in package {}",
-            version_str, name
-        ))
+        CliError::SemverError(e)
+            .with_context(format!("Invalid version '{version_str}' in package {name}"))
     })?;
 
     // Get parent directory as package directory
@@ -423,7 +416,7 @@ fn ask_user_for_version_fixes(
         let mut select_items = Vec::new();
         for (version, count, pkgs) in &version_list {
             if count > &3 {
-                select_items.push(format!("{} (used in {} packages)", version, count));
+                select_items.push(format!("{version} (used in {count} packages)"));
             } else {
                 select_items.push(format!("{} (used in {})", version, pkgs.join(", ")));
             }
@@ -440,10 +433,7 @@ fn ask_user_for_version_fixes(
         // Apply the selected version to all packages
         if selection < version_list.len() {
             let selected_version = &version_list[selection].0;
-            println!(
-                "Applying version {} to all packages with inconsistencies.",
-                selected_version
-            );
+            println!("Applying version {selected_version} to all packages with inconsistencies.");
 
             // Apply the selected version to all packages
             for pkg_name in inconsistencies.keys() {
@@ -457,7 +447,7 @@ fn ask_user_for_version_fixes(
     // If user skipped global selection or there's only one unique version,
     // proceed with package-by-package selection
     for pkg_name in inconsistencies.keys() {
-        println!("\nPackage: {}", pkg_name);
+        println!("\nPackage: {pkg_name}");
 
         let versions = inconsistencies.get(pkg_name).unwrap();
         let mut version_list: Vec<(String, usize)> = versions
@@ -470,13 +460,13 @@ fn ask_user_for_version_fixes(
 
         let mut select_items = Vec::new();
         for (version, count) in &version_list {
-            select_items.push(format!("{} (used in {} locations)", version, count));
+            select_items.push(format!("{version} (used in {count} locations)"));
         }
 
         select_items.push("Skip this package".to_string());
 
         let selection = Select::with_theme(&ColorfulTheme::default())
-            .with_prompt(format!("Choose the correct version for {}", pkg_name))
+            .with_prompt(format!("Choose the correct version for {pkg_name}"))
             .default(0)
             .items(&select_items)
             .interact()?;
@@ -485,9 +475,9 @@ fn ask_user_for_version_fixes(
             let selected_version = &version_list[selection].0;
             fixes.insert(pkg_name.clone(), selected_version.clone());
 
-            println!("Will use version {} for {}", selected_version, pkg_name);
+            println!("Will use version {selected_version} for {pkg_name}");
         } else {
-            println!("Skipping {}", pkg_name);
+            println!("Skipping {pkg_name}");
         }
     }
 
@@ -603,8 +593,7 @@ fn update_package_dependency(
     // Extract prefix if it exists
     let prefix = dep_prefix_regex
         .captures(&content)
-        .map(|caps| caps.get(1).map_or("", |m| m.as_str()))
-        .unwrap_or("");
+        .map_or("", |caps| caps.get(1).map_or("", |m| m.as_str()));
 
     let updated_content = dep_regex
         .replace_all(&content, |caps: &regex::Captures| {

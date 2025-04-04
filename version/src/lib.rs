@@ -56,15 +56,23 @@ pub enum VersionType {
 pub struct Version;
 
 impl Version {
-    // Parse a version string into a Version
+    /// Parse a version string into a Version
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the version string cannot be parsed as a valid semver
     pub fn parse(version: &str) -> Result<SemverVersion> {
         SemverVersion::parse(version).map_err(|e| {
             VersionError::ParseError(e)
-                .with_context(format!("Failed to parse version string: '{}'", version))
+                .with_context(format!("Failed to parse version string: '{version}'"))
         })
     }
 
-    // Increment a version based on the version type
+    /// Increment a version based on the version type
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the version incrementing operation fails
     pub fn increment(version: &SemverVersion, version_type: &VersionType) -> Result<SemverVersion> {
         let mut new_version = version.clone();
 
@@ -87,6 +95,10 @@ impl Version {
     }
 
     /// Detect the ecosystem type from a directory
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the ecosystem cannot be detected or if the directory doesn't exist
     pub fn detect_ecosystem(dir_path: &Path) -> Result<EcosystemType> {
         ecosystems::detect_ecosystem(dir_path).map_err(|e| {
             e.with_context(format!(
@@ -97,9 +109,13 @@ impl Version {
     }
 
     /// Read the current version from a project at the given path
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the ecosystem cannot be detected or if reading the version fails
     pub fn read_from_project(dir_path: &Path) -> Result<SemverVersion> {
         let ecosystem_type = Self::detect_ecosystem(dir_path)?;
-        let ecosystem = ecosystems::create_ecosystem(&ecosystem_type);
+        let ecosystem = ecosystems::create_ecosystem(ecosystem_type);
         ecosystem.read_version(dir_path).map_err(|e| {
             e.with_context(format!(
                 "Failed to read version from {} project",
@@ -109,22 +125,30 @@ impl Version {
     }
 
     /// Write a specific version to a project at the given path
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the ecosystem cannot be detected or if writing the version fails
     pub fn write_to_project(dir_path: &Path, version: &SemverVersion) -> Result<()> {
         let ecosystem_type = Self::detect_ecosystem(dir_path)?;
-        let ecosystem = ecosystems::create_ecosystem(&ecosystem_type);
+        let ecosystem = ecosystems::create_ecosystem(ecosystem_type);
 
         ecosystem.write_version(dir_path, version).map_err(|e| {
             e.with_context(format!(
-                "Failed to write version {} to project files",
-                version
+                "Failed to write version {version} to project files"
             ))
         })
     }
 
     /// Update the version in a project at the given path
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the ecosystem cannot be detected, the current version cannot be read,
+    /// the version increment fails, or writing the new version to the project fails
     pub fn update_in_project(dir_path: &Path, version_type: &VersionType) -> Result<SemverVersion> {
         let ecosystem_type = Self::detect_ecosystem(dir_path)?;
-        let ecosystem = ecosystems::create_ecosystem(&ecosystem_type);
+        let ecosystem = ecosystems::create_ecosystem(ecosystem_type);
 
         // Read the current version
         let current_version = ecosystem.read_version(dir_path).map_err(|e| {
@@ -137,8 +161,7 @@ impl Version {
         // Increment it
         let new_version = Self::increment(&current_version, version_type).map_err(|e| {
             e.with_context(format!(
-                "Failed to increment {:?} version from {}",
-                version_type, current_version
+                "Failed to increment {version_type:?} version from {current_version}"
             ))
         })?;
 
@@ -147,8 +170,7 @@ impl Version {
             .write_version(dir_path, &new_version)
             .map_err(|e| {
                 e.with_context(format!(
-                    "Failed to write new version {} to project files",
-                    new_version
+                    "Failed to write new version {new_version} to project files"
                 ))
             })?;
 
@@ -169,6 +191,11 @@ impl Version {
     /// # Returns
     ///
     /// A result containing the synchronized version
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if reading the version from the primary project fails or if
+    /// writing the version to any of the dependency projects fails
     pub fn sync_across_projects(
         primary_dir: &Path,
         dependency_dirs: &[&Path],
@@ -198,41 +225,21 @@ impl Version {
     ///
     /// # Returns
     ///
-    /// A result containing a vector of tuples with (path, ecosystem_type)
+    /// A result containing a vector of tuples with (path, `ecosystem_type`)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if directory reading operations fail during the recursive search
     pub fn discover_projects(root_dir: &Path) -> Result<Vec<(PathBuf, EcosystemType)>> {
-        use std::fs;
-
+        // Set a reasonable max depth to avoid excessive recursion
+        const MAX_DEPTH: usize = 3;
         let mut projects = Vec::new();
 
-        // Scan the root directory
-        if let Ok(entries) = fs::read_dir(root_dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-
-                if path.is_dir() {
-                    // Try to detect ecosystem in this directory
-                    if let Ok(ecosystem) = Self::detect_ecosystem(&path) {
-                        projects.push((path.clone(), ecosystem));
-                    }
-
-                    // Recursively scan subdirectory if it's not a hidden directory
-                    if let Some(dir_name) = path.file_name() {
-                        if let Some(dir_name_str) = dir_name.to_str() {
-                            if !dir_name_str.starts_with('.') {
-                                // Avoid going too deep by limiting to a reasonable depth
-                                let max_depth = 3;
-                                Self::discover_projects_recursive(
-                                    &path,
-                                    &mut projects,
-                                    1,
-                                    max_depth,
-                                )?;
-                            }
-                        }
-                    }
-                }
-            }
+        if let Ok(ecosystem) = Self::detect_ecosystem(root_dir) {
+            projects.push((root_dir.to_path_buf(), ecosystem));
         }
+
+        Self::discover_projects_recursive(root_dir, &mut projects, 0, MAX_DEPTH)?;
 
         Ok(projects)
     }
@@ -246,38 +253,35 @@ impl Version {
     ) -> Result<()> {
         use std::fs;
 
-        // Don't go deeper than the max depth
         if current_depth > max_depth {
             return Ok(());
         }
 
-        if let Ok(entries) = fs::read_dir(dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
+        let entries = fs::read_dir(dir).map_err(|e| {
+            VersionError::IoError(e)
+                .with_context(format!("Failed to read directory: {}", dir.display()))
+        })?;
 
-                if path.is_dir() {
-                    // Try to detect ecosystem in this directory
-                    if let Ok(ecosystem) = Self::detect_ecosystem(&path) {
-                        projects.push((path.clone(), ecosystem));
-                    }
+        for entry in entries.flatten() {
+            let path = entry.path();
 
-                    // Recursively scan subdirectory if it's not a hidden directory
-                    if let Some(dir_name) = path.file_name() {
-                        if let Some(dir_name_str) = dir_name.to_str() {
-                            if !dir_name_str.starts_with('.')
-                                && dir_name_str != "node_modules"
-                                && dir_name_str != "target"
-                            {
-                                Self::discover_projects_recursive(
-                                    &path,
-                                    projects,
-                                    current_depth + 1,
-                                    max_depth,
-                                )?;
-                            }
-                        }
-                    }
-                }
+            if !path.is_dir() {
+                continue;
+            }
+
+            if let Ok(ecosystem) = Self::detect_ecosystem(&path) {
+                projects.push((path.clone(), ecosystem));
+            }
+
+            let should_recurse = path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name_str| {
+                    !name_str.starts_with('.') && name_str != "node_modules" && name_str != "target"
+                });
+
+            if should_recurse {
+                Self::discover_projects_recursive(&path, projects, current_depth + 1, max_depth)?;
             }
         }
 

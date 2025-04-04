@@ -13,7 +13,6 @@ pub fn execute(force: bool, verbose: bool) -> Result<()> {
         ui::info_message("Starting upgrade process for FNC CLI");
     }
 
-    // Check if running on macOS
     if env::consts::OS != "macos" {
         return Err(io::Error::new(
             io::ErrorKind::Unsupported,
@@ -22,34 +21,29 @@ pub fn execute(force: bool, verbose: bool) -> Result<()> {
         .into());
     }
 
-    // Check if we're in a development environment
     if !force {
         let current_exe = env::current_exe()?;
         let home = env::var("HOME").map_err(|e| {
             io::Error::new(
                 io::ErrorKind::NotFound,
-                format!("HOME environment variable not found: {}", e),
+                format!("HOME environment variable not found: {e}"),
             )
         })?;
         let local_bin = PathBuf::from(home).join(".local/bin/fnc");
 
-        // If the running binary is not from ~/.local/bin
         if current_exe != local_bin {
-            if verbose {
-                ui::warning_message(&format!(
-                    "Running from development environment: {:?}\nUse --force to upgrade anyway.",
-                    current_exe
-                ));
+            let message = if verbose {
+                format!(
+                    "Running from development environment: {current_exe:?}\nUse --force to upgrade anyway."
+                )
             } else {
-                ui::warning_message(
-                    "Running from development environment. Use --force to upgrade anyway.",
-                );
-            }
+                "Running from development environment. Use --force to upgrade anyway.".to_string()
+            };
+            ui::warning_message(&message);
             return Ok(());
         }
     }
 
-    // Get the installer script
     ui::status_message("Downloading installer script");
     let temp_dir = tempfile::tempdir()?;
     let script_path = temp_dir.path().join("install.sh");
@@ -65,20 +59,16 @@ pub fn execute(force: bool, verbose: bool) -> Result<()> {
         .output()?;
 
     if !output.status.success() {
+        let error_msg = String::from_utf8_lossy(&output.stderr);
         return Err(io::Error::new(
             io::ErrorKind::Other,
-            format!(
-                "Failed to download installer: {}",
-                String::from_utf8_lossy(&output.stderr)
-            ),
+            format!("Failed to download installer: {error_msg}"),
         )
         .into());
     }
 
-    // Make script executable
     fs::set_permissions(&script_path, fs::Permissions::from_mode(0o755))?;
 
-    // Run the installer script
     ui::status_message("Running installer");
     let status = Command::new(script_path).spawn()?.wait()?;
 

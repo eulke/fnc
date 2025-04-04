@@ -24,7 +24,7 @@ pub fn error_message(message: &str) {
 
 /// Print a section header to separate logical sections of output
 pub fn section_header(title: &str) {
-    println!("\n{}", format!("==== {} ====", title).cyan().bold());
+    println!("\n{}", format!("==== {title} ====").cyan().bold());
 }
 
 /// Print a simple informational message
@@ -34,5 +34,5 @@ pub fn info_message(message: &str) {
 
 /// Print a step in a numbered list of steps
 pub fn step_message(step_number: usize, message: &str) {
-    println!("  {}. {}", format!("{}", step_number).cyan(), message);
+    println!("  {}. {}", format!("{step_number}").cyan(), message);
 }

@@ -19,7 +19,7 @@ pub fn execute(
         source_path.display()
     ));
     let source_version = Version::read_from_project(&source_path)?;
-    ui::success_message(&format!("Source version: {}", source_version));
+    ui::success_message(&format!("Source version: {source_version}"));
 
     // Convert target strings to paths
     let mut target_paths: Vec<PathBuf> = targets.into_iter().map(PathBuf::from).collect();
@@ -86,7 +86,7 @@ pub fn execute(
         }
 
         match update_project_version(target, &source_version, verbose) {
-            Ok(_) => {
+            Ok(()) => {
                 successful_updates += 1;
             }
             Err(e) => {
@@ -99,11 +99,10 @@ pub fn execute(
     // Show summary
     println!();
     ui::success_message(&format!(
-        "Updated {} projects successfully",
-        successful_updates
+        "Updated {successful_updates} projects successfully"
     ));
     if failed_updates > 0 {
-        ui::warning_message(&format!("Failed to update {} projects", failed_updates));
+        ui::warning_message(&format!("Failed to update {failed_updates} projects"));
     }
 
     Ok(())
@@ -143,7 +142,7 @@ fn update_project_version(
 /// Discover projects in subdirectories
 fn discover_projects(root_dir: &Path, max_depth: usize, verbose: bool) -> Result<Vec<PathBuf>> {
     if verbose {
-        println!("Discovering projects with max depth: {}", max_depth);
+        println!("Discovering projects with max depth: {max_depth}");
     }
 
     // Use Version::discover_projects under the hood

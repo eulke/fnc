@@ -36,30 +36,30 @@ pub enum GitError {
 
 impl GitError {
     /// Add context to an error
+    #[must_use]
     pub fn with_context<C: Into<String>>(self, context: C) -> Self {
-        GitError::WithContext(context.into(), Box::new(self))
+        Self::WithContext(context.into(), Box::new(self))
     }
 
-    /// Get a user-friendly message for command line display
+    #[must_use]
     pub fn user_message(&self) -> String {
         match self {
-            GitError::Git2Error(e) => {
-                let msg = format!("{}", e);
-                // Extract just the message without the class and code details
+            Self::Git2Error(e) => {
+                let msg = format!("{e}");
                 msg.split(';').next().map_or_else(
-                    || format!("Git error: {}", msg),
+                    || format!("Git error: {msg}"),
                     |main_msg| format!("Git error: {}", main_msg.trim()),
                 )
             }
-            GitError::IoError(e) => format!("I/O error: {}", e),
-            GitError::BranchNotFound(branch) => format!("Branch '{}' not found", branch),
-            GitError::BranchError(msg) => format!("Branch operation failed: {}", msg),
-            GitError::RepositoryError(msg) => format!("Repository error: {}", msg),
-            GitError::ConfigError(msg) => format!("Git config error: {}", msg),
-            GitError::CommandError(msg) => format!("Git command failed: {}", msg),
-            GitError::Utf8Error(e) => format!("Text encoding error: {}", e),
-            GitError::Other(msg) => msg.clone(),
-            GitError::WithContext(ctx, err) => format!("{}: {}", ctx, err.user_message()),
+            Self::IoError(e) => format!("I/O error: {e}"),
+            Self::BranchNotFound(branch) => format!("Branch '{branch}' not found"),
+            Self::BranchError(msg) => format!("Branch operation failed: {msg}"),
+            Self::RepositoryError(msg) => format!("Repository error: {msg}"),
+            Self::ConfigError(msg) => format!("Git config error: {msg}"),
+            Self::CommandError(msg) => format!("Git command failed: {msg}"),
+            Self::Utf8Error(e) => format!("Text encoding error: {e}"),
+            Self::Other(msg) => msg.clone(),
+            Self::WithContext(ctx, err) => format!("{ctx}: {}", err.user_message()),
         }
     }
 }
@@ -69,12 +69,20 @@ pub type Result<T> = std::result::Result<T, GitError>;
 /// Helper trait for adding context to results
 pub trait ResultExt<T, E> {
     /// Add context to an error result with a string or string-producing closure
+    ///
+    /// # Errors
+    ///
+    /// Returns the original error wrapped in a `GitError` with additional context
     fn with_context<C, F>(self, context: F) -> std::result::Result<T, GitError>
     where
         C: Into<String>,
         F: FnOnce() -> C;
 
     /// Add context directly from a string
+    ///
+    /// # Errors
+    ///
+    /// Returns the original error wrapped in a `GitError` with additional context
     fn context<C: Into<String>>(self, context: C) -> std::result::Result<T, GitError>;
 }
 
@@ -94,9 +102,6 @@ where
     }
 
     fn context<C: Into<String>>(self, context: C) -> std::result::Result<T, GitError> {
-        self.map_err(|err| {
-            let git_err: GitError = err.into();
-            git_err.with_context(context)
-        })
+        self.with_context(|| context)
     }
 }

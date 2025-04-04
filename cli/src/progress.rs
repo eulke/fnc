@@ -13,7 +13,7 @@ impl ProgressTracker {
     /// Create a new progress tracker with the given operation name
     pub fn new(operation_name: &str) -> Self {
         ui::section_header(operation_name);
-        ProgressTracker {
+        Self {
             operation_name: operation_name.to_string(),
             start_time: Instant::now(),
             steps: Vec::new(),
@@ -28,7 +28,7 @@ impl ProgressTracker {
     }
 
     /// Start the next step
-    pub fn start_step(&mut self) -> &str {
+    pub fn start_step(&self) -> &str {
         if self.current_step < self.steps.len() {
             let step = &self.steps[self.current_step];
             ui::status_message(step);
@@ -71,11 +71,11 @@ impl ProgressTracker {
     fn format_duration(duration: Duration) -> String {
         let seconds = duration.as_secs();
         if seconds < 60 {
-            format!("{} seconds", seconds)
+            format!("{seconds} seconds")
         } else if seconds < 3600 {
-            format!("{} minutes {} seconds", seconds / 60, seconds % 60)
+            format!("{} minutes {seconds_remainder} seconds", seconds / 60, seconds_remainder = seconds % 60)
         } else {
-            format!("{} hours {} minutes", seconds / 3600, (seconds % 3600) / 60)
+            format!("{hours} hours {minutes} minutes", hours = seconds / 3600, minutes = (seconds % 3600) / 60)
         }
     }
 }

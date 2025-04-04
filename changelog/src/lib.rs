@@ -59,33 +59,35 @@ pub enum ChangelogError {
 }
 
 impl ChangelogError {
+    #[must_use]
     pub fn with_context<C: Into<String>>(self, context: C) -> Self {
-        ChangelogError::WithContext(context.into(), Box::new(self))
+        Self::WithContext(context.into(), Box::new(self))
     }
 
+    #[must_use]
     pub fn user_message(&self) -> String {
         match self {
-            ChangelogError::ReadError(e) => format!("File operation failed: {}", e),
-            ChangelogError::ParseError(msg) => format!("Failed to parse changelog: {}", msg),
-            ChangelogError::MissingVersionSection => {
+            Self::ReadError(e) => format!("File operation failed: {e}"),
+            Self::ParseError(msg) => format!("Failed to parse changelog: {msg}"),
+            Self::MissingVersionSection => {
                 "Failed to find version section in changelog".to_string()
             }
-            ChangelogError::InvalidVersion(ver) => format!("Invalid version format: {}", ver),
-            ChangelogError::Git(msg) => format!("Git operation failed: {}", msg),
-            ChangelogError::InvalidFormat(line, msg) => {
-                format!("Invalid changelog format at line {}: {}", line, msg)
+            Self::InvalidVersion(ver) => format!("Invalid version format: {ver}"),
+            Self::Git(msg) => format!("Git operation failed: {msg}"),
+            Self::InvalidFormat(line, msg) => {
+                format!("Invalid changelog format at line {line}: {msg}")
             }
-            ChangelogError::DuplicateCategory(cat, ver) => {
-                format!("Duplicate category {} in version {}", cat, ver)
+            Self::DuplicateCategory(cat, ver) => {
+                format!("Duplicate category {cat} in version {ver}")
             }
-            ChangelogError::RegexError(e) => format!("Regular expression error: {}", e),
-            ChangelogError::Other(msg) => msg.clone(),
-            ChangelogError::WithContext(ctx, err) => format!("{}: {}", ctx, err.user_message()),
+            Self::RegexError(e) => format!("Regular expression error: {e}"),
+            Self::Other(msg) => msg.clone(),
+            Self::WithContext(ctx, err) => format!("{ctx}: {}", err.user_message()),
         }
     }
 }
 
-/// Type alias for Result with ChangelogError
+/// Type alias for Result with `ChangelogError`
 pub type Result<T> = std::result::Result<T, ChangelogError>;
 
 /// Map of sections in changelog, organized by version and category
@@ -152,11 +154,19 @@ pub struct Changelog {
 
 impl Changelog {
     /// Creates a new Changelog instance from a file path
+    /// Creates a new Changelog instance from a file path
+    ///
+    /// # Errors
+    /// Returns error if file cannot be read or parsed
     pub fn new(path: impl Into<PathBuf>) -> Result<Self> {
         Self::with_config(path, ChangelogConfig::default(), ChangelogFormat::default())
     }
 
     /// Creates a new Changelog with custom configuration
+    /// Creates a new Changelog with custom configuration
+    ///
+    /// # Errors
+    /// Returns error if file cannot be read or parsed
     pub fn with_config(
         path: impl Into<PathBuf>,
         config: ChangelogConfig,
@@ -166,8 +176,7 @@ impl Changelog {
 
         if !path.exists() {
             return Err(ChangelogError::Other(format!(
-                "Changelog file not found at {:?}",
-                path
+                "Changelog file not found at {path:?}"
             )));
         }
 
@@ -186,6 +195,10 @@ impl Changelog {
     }
 
     /// Ensures a changelog file exists, creating it if necessary
+    /// Ensures a changelog file exists, creating it if necessary
+    ///
+    /// # Errors
+    /// Returns error if file cannot be created, read, or parsed
     pub fn ensure_exists(
         path: impl Into<PathBuf>,
         version: &str,
@@ -211,26 +224,31 @@ impl Changelog {
     }
 
     /// Gets a reference to all changelog sections
-    pub fn sections(&self) -> &ChangelogSections {
+    #[must_use]
+    pub const fn sections(&self) -> &ChangelogSections {
         &self.sections
     }
 
     /// Gets the path to the changelog file
+    #[must_use]
     pub fn path(&self) -> &Path {
         &self.path
     }
 
     /// Gets the raw content of the changelog
+    #[must_use]
     pub fn content(&self) -> &str {
         &self.content
     }
 
     /// Gets the unreleased section, or an empty map if none exists
+    #[must_use]
     pub fn unreleased_section(&self) -> HashMap<String, Vec<String>> {
         self.sections.get("unreleased").cloned().unwrap_or_default()
     }
 
     /// Gets all version sections except unreleased
+    #[must_use]
     pub fn version_sections(&self) -> ChangelogSections {
         self.sections
             .iter()
@@ -249,6 +267,10 @@ impl Changelog {
     /// # Returns
     ///
     /// Result indicating success or failure
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if changelog update operations fail
     pub fn update_with_version(&mut self, version: &str, author: &str) -> Result<()> {
         let today = Local::now().format(&self.config.date_format).to_string();
         let version_header =
@@ -280,7 +302,11 @@ impl Changelog {
     ///
     /// # Returns
     ///
-    /// The extracted changes as a string, or an error if the parsing fails
+    /// The extracted changes as a string
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the parsing fails or if the requested version cannot be found
     pub fn extract_changes(&self, version: Option<&str>) -> Result<String> {
         let version_regex = if let Some(v) = version {
             Regex::new(&format!(r"## \[{}\]", regex::escape(v)))
@@ -297,8 +323,7 @@ impl Changelog {
 
         let next_section = version_regex
             .find_at(&self.content, section_start + 1)
-            .map(|m| m.start())
-            .unwrap_or(self.content.len());
+            .map_or(self.content.len(), |m| m.start());
 
         let section = self.content[section_start..next_section].trim();
         Ok(section.to_string())
@@ -312,7 +337,11 @@ impl Changelog {
     ///
     /// # Returns
     ///
-    /// A tuple with (were_entries_moved, number_of_entries_moved)
+    /// A tuple with (`were_entries_moved`, `number_of_entries_moved`)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if parsing the diff fails or if sections cannot be processed properly
     pub fn fix_with_diff(&mut self, diff: &str) -> Result<(bool, usize)> {
         let unreleased_section = self.unreleased_section();
         let version_sections = self.version_sections();
@@ -367,7 +396,8 @@ impl Changelog {
     }
 
     /// Gets the format of the changelog
-    pub fn format(&self) -> ChangelogFormat {
+    #[must_use]
+    pub const fn format(&self) -> ChangelogFormat {
         self.format
     }
 
@@ -377,7 +407,8 @@ impl Changelog {
     }
 
     /// Gets a reference to the changelog's configuration
-    pub fn config(&self) -> &ChangelogConfig {
+    #[must_use]
+    pub const fn config(&self) -> &ChangelogConfig {
         &self.config
     }
 
@@ -401,7 +432,7 @@ fn format_version_header(
             .replace("{1}", date)
             .replace("{2}", author),
         ChangelogFormat::GitHub => {
-            format!("## [{0}] - {1}", version, date)
+            format!("## [{version}] - {date}")
         }
     }
 }
@@ -416,6 +447,12 @@ fn format_version_header(
 /// # Returns
 ///
 /// Parsed changelog sections, or an error if parsing fails
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - A duplicate category is found for a version (when `ignore_duplicates` is false)
+/// - The changelog format is invalid (e.g., content without a proper category header)
 pub fn parse_changelog(
     content: &str,
     config: Option<&ChangelogConfig>,
@@ -471,7 +508,7 @@ pub fn parse_changelog(
         {
             return Err(ChangelogError::InvalidFormat(
                 line_num + 1,
-                format!("Expected category header but found: {}", line),
+                format!("Expected category header but found: {line}"),
             ));
         }
     }
@@ -479,21 +516,19 @@ pub fn parse_changelog(
     Ok(sections)
 }
 
-fn create_moved_items_regex(entries_to_move: &[ChangelogEntry]) -> Result<Regex> {
+fn should_exclude_line(entries_to_move: &[ChangelogEntry], line: &str) -> Result<bool> {
     if entries_to_move.is_empty() {
-        // Return a regex that won't match anything
-        Ok(Regex::new(r"^$")?)
-    } else {
-        // Construct a pattern from all entries to detect moved items
-        let pattern = entries_to_move
-            .iter()
-            .map(|entry| regex::escape(&entry.content))
-            .collect::<Vec<_>>()
-            .join("|");
-
-        // Create the regex with error conversion through From trait
-        Ok(Regex::new(&format!(r"- ({})", pattern))?)
+        return Ok(false);
     }
+
+    let pattern = entries_to_move
+        .iter()
+        .map(|entry| regex::escape(&entry.content))
+        .collect::<Vec<_>>()
+        .join("|");
+
+    let regex = Regex::new(&format!(r"- ({pattern})"))?;
+    Ok(regex.is_match(line))
 }
 
 /// Identifies changelog entries that appear in the git diff and should be moved
@@ -521,12 +556,12 @@ fn identify_entries_in_diff(
                 // Create regex pattern to find this item in the git diff
                 // Using the ? operator for cleaner error propagation
                 let escaped_item = regex::escape(item);
-                let item_pattern = Regex::new(&format!(r"(?m)^\+.*{}.*$", escaped_item))?;
+                let item_pattern = Regex::new(&format!(r"(?m)^\+.*{escaped_item}.*$"))?;
 
                 // If the item is found in the diff, it should be moved
                 if item_pattern.is_match(diff) {
                     if verbose {
-                        println!("Found '{}' in diff from main branch", item);
+                        println!("Found '{item}' in diff from main branch");
                     }
 
                     entries_to_move.push(ChangelogEntry {
@@ -551,9 +586,9 @@ fn reorganize_changelog(
 
     for entry in entries_to_move {
         new_unreleased
-            .entry(entry.category.to_owned())
+            .entry(entry.category.clone())
             .or_default()
-            .push(entry.content.to_owned());
+            .push(entry.content.clone());
     }
 
     let lines: Vec<&str> = content.lines().collect();
@@ -563,11 +598,10 @@ fn reorganize_changelog(
         .iter()
         .position(|&line| UNRELEASED_SECTION_PATTERN.is_match(line));
 
-    if let Some(idx) = unreleased_idx {
-        format_with_existing_unreleased(&lines, idx, &formatted_unreleased, entries_to_move)
-    } else {
-        format_with_new_unreleased(&lines, &formatted_unreleased, entries_to_move)
-    }
+    unreleased_idx.map_or_else(
+        || format_with_new_unreleased(&lines, &formatted_unreleased, entries_to_move),
+        |idx| format_with_existing_unreleased(&lines, idx, &formatted_unreleased, entries_to_move),
+    )
 }
 
 fn format_unreleased_section(unreleased: &HashMap<String, Vec<String>>) -> String {
@@ -619,15 +653,11 @@ fn format_with_existing_unreleased(
         .iter()
         .skip(unreleased_idx + 1)
         .position(|&line| SEMVER_VERSION_PATTERN.is_match(line))
-        .map(|pos| pos + unreleased_idx + 1)
-        .unwrap_or(lines.len());
+        .map_or(lines.len(), |pos| pos + unreleased_idx + 1);
 
-    // Create regex for moved items
-    let moved_items_regex = create_moved_items_regex(entries_to_move)?;
-
-    // Add remaining content, excluding moved items
     for line in lines.iter().skip(next_version_idx) {
-        if !moved_items_regex.is_match(line) {
+        let should_exclude = should_exclude_line(entries_to_move, line)?;
+        if !should_exclude {
             new_content.push_str(line);
             new_content.push('\n');
         }
@@ -649,22 +679,17 @@ fn format_with_new_unreleased(
         .position(|&line| line.starts_with("# "))
         .unwrap_or(0);
 
-    // Add up to the title
     for line in lines.iter().take(title_idx + 1) {
         new_content.push_str(line);
         new_content.push('\n');
     }
 
-    // Add unreleased section
     new_content.push_str("\n## [Unreleased]\n\n");
     new_content.push_str(formatted_unreleased);
 
-    // Create regex for moved items
-    let moved_items_regex = create_moved_items_regex(entries_to_move)?;
-
-    // Add remaining content, excluding moved items
     for line in lines.iter().skip(title_idx + 1) {
-        if !moved_items_regex.is_match(line) {
+        let should_exclude = should_exclude_line(entries_to_move, line)?;
+        if !should_exclude {
             new_content.push_str(line);
             new_content.push('\n');
         }
