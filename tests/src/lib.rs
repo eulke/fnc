@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod tests {
+    // No imports from cli::error needed
     use std::fs;
     use std::path::Path;
     use tempfile::TempDir;
@@ -13,9 +14,22 @@ edition = "2021"
 
 [dependencies]
 "#;
+
+        let changelog = r"# Changelog
+
+## [Unreleased]
+### Fixed
+- Test fix
+
+## [0.1.0] - 2023-01-01
+### Added
+- Test added
+";
+
         fs::write(dir.join("Cargo.toml"), cargo_toml)?;
         fs::create_dir_all(dir.join("src"))?;
         fs::write(dir.join("src").join("lib.rs"), "// Test file")?;
+        fs::write(dir.join("CHANGELOG.md"), changelog)?;
         Ok(())
     }
 
@@ -27,8 +41,21 @@ edition = "2021"
   "main": "index.js",
   "dependencies": {}
 }"#;
+
+        let changelog = r"# Changelog
+
+## [Unreleased]
+### Fixed
+- Test fix
+
+## [0.1.0] - 2023-01-01
+### Added
+- Test added
+";
+
         fs::write(dir.join("package.json"), package_json)?;
         fs::write(dir.join("index.js"), "// Test file")?;
+        fs::write(dir.join("CHANGELOG.md"), changelog)?;
         Ok(())
     }
 
@@ -76,20 +103,25 @@ edition = "2021"
         let project_path = temp_dir.path();
         let changelog_path = project_path.join("CHANGELOG.md");
 
+        // Create a basic changelog file first
+        let initial_content = r"# Changelog
+
+## [Unreleased]
+### Fixed
+- Test fix
+
+## [0.1.0] - 2023-01-01
+### Added
+- Initial release";
+        fs::write(&changelog_path, initial_content).unwrap();
+
         let config = changelog::ChangelogConfig::default();
         let format = changelog::ChangelogFormat::default();
-        changelog::Changelog::ensure_exists(
-            &changelog_path,
-            "0.1.0",
-            "Test User (test@example.com)",
-            Some(config),
-            Some(format),
-        )
-        .unwrap();
 
         assert!(changelog_path.exists());
 
-        let mut changelog = changelog::Changelog::new(&changelog_path).unwrap();
+        let mut changelog =
+            changelog::Changelog::new(&changelog_path, config.clone(), format).unwrap();
         changelog
             .update_with_version("0.2.0", "Test User (test@example.com)")
             .unwrap();
@@ -112,24 +144,19 @@ edition = "2021"
         let changelog_path = project_path.join("CHANGELOG.md");
         let config = changelog::ChangelogConfig::default();
         let format = changelog::ChangelogFormat::default();
-        changelog::Changelog::ensure_exists(
-            &changelog_path,
-            "0.1.0",
-            "Test User (test@example.com)",
-            Some(config),
-            Some(format),
-        )
-        .unwrap();
 
-        let _current_version = Version::read_from_project(project_path).unwrap();
+        // First minor version increment: 0.1.0 -> 0.2.0
         let new_version = Version::update_in_project(project_path, &VersionType::Minor).unwrap();
         assert_eq!(new_version.to_string(), "0.2.0");
 
-        let mut changelog = changelog::Changelog::new(&changelog_path).unwrap();
+        // Update changelog with the new version
+        let mut changelog =
+            changelog::Changelog::new(&changelog_path, config.clone(), format).unwrap();
         changelog
             .update_with_version(&new_version.to_string(), "Test User (test@example.com)")
             .unwrap();
 
+        // Verify the results
         let updated_version = Version::read_from_project(project_path).unwrap();
         assert_eq!(updated_version.to_string(), "0.2.0");
 

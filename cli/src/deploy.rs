@@ -2,6 +2,7 @@ use crate::cli::DeployType;
 use crate::error::{CliError, Result};
 use crate::progress::ProgressTracker;
 use crate::ui;
+use changelog::ChangelogFormat;
 use dialoguer::{Select, theme::ColorfulTheme};
 use git::{config::Config, repository::Repository};
 use std::path::{Path, PathBuf};
@@ -37,12 +38,9 @@ pub fn fix_changelog_for_release(repo: &impl Repository, verbose: bool) -> Resul
         ..changelog::ChangelogConfig::default()
     };
 
-    let mut changelog = changelog::Changelog::with_config(
-        changelog_path,
-        config,
-        changelog::ChangelogFormat::default(),
-    )
-    .map_err(|e| CliError::Other(e.to_string()).with_context("Failed to load changelog"))?;
+    let mut changelog =
+        changelog::Changelog::new(changelog_path, config, changelog::ChangelogFormat::Standard)
+            .map_err(|e| CliError::Other(e.to_string()).with_context("Failed to load changelog"))?;
 
     let (changes_made, entries_moved) = changelog
         .fix_with_diff(&diff)
@@ -135,9 +133,7 @@ pub fn write_version_to_files(new_version: &SemverVersion, verbose: bool) -> Res
         ))
     })?;
 
-    ui::success_message(&format!(
-        "Version {new_version} written to project files"
-    ));
+    ui::success_message(&format!("Version {new_version} written to project files"));
     Ok(())
 }
 
@@ -189,16 +185,10 @@ pub fn update_changelog(new_version: &SemverVersion, verbose: bool) -> Result<()
     let version_str = new_version.to_string();
     let changelog_path = Path::new("CHANGELOG.md");
 
-    let mut changelog = changelog::Changelog::ensure_exists(
-        changelog_path,
-        &version_str,
-        &author,
-        Some(config),
-        None,
-    )
-    .map_err(|e| {
-        CliError::Other(e.to_string()).with_context("Failed to ensure CHANGELOG.md exists")
-    })?;
+    let mut changelog =
+        changelog::Changelog::new(changelog_path, config, ChangelogFormat::Standard).map_err(
+            |e| CliError::Other(e.to_string()).with_context("Failed to ensure CHANGELOG.md exists"),
+        )?;
 
     changelog
         .update_with_version(&version_str, &author)

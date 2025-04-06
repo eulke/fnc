@@ -76,7 +76,7 @@ pub fn execute(verbose: bool) -> Result<()> {
 }
 
 fn fix_changelog(path: &PathBuf, diff: &str, config: ChangelogConfig) -> Result<FixResult> {
-    let mut changelog = Changelog::with_config(path, config, ChangelogFormat::default())
+    let mut changelog = Changelog::new(path, config, ChangelogFormat::Standard)
         .map_err(|e| CliError::Other(e.user_message()).with_context("Failed to load changelog"))?;
 
     let (entries_moved, entry_count) = changelog.fix_with_diff(diff).map_err(|e| {
