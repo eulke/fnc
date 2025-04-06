@@ -12,63 +12,63 @@ pub trait Repository {
     fn open() -> Result<Self>
     where
         Self: Sized;
-        
+
     /// Validates the status of the repository, checking for uncommitted changes
     ///
     /// # Errors
     ///
     /// Returns an error if the repository status cannot be determined
     fn validate_status(&self) -> Result<bool>;
-    
+
     /// Creates a new branch in the repository
     ///
     /// # Errors
     ///
     /// Returns an error if branch creation fails
     fn create_branch(&self, name: &str) -> Result<()>;
-    
+
     /// Checks out the specified branch
     ///
     /// # Errors
     ///
     /// Returns an error if the checkout operation fails
     fn checkout_branch(&self, branch_name: &str) -> Result<()>;
-    
+
     /// Pulls the latest changes from the remote
     ///
     /// # Errors
     ///
     /// Returns an error if the pull operation fails
     fn pull(&self) -> Result<()>;
-    
+
     /// Gets the default branch of the repository
     ///
     /// # Errors
     ///
     /// Returns an error if the default branch cannot be determined
     fn get_default_branch(&self) -> Result<String>;
-    
+
     /// Gets the main branch of the repository
     ///
     /// # Errors
     ///
     /// Returns an error if the main branch cannot be determined
     fn get_main_branch(&self) -> Result<String>;
-    
+
     /// Searches for text in a specific branch
     ///
     /// # Errors
     ///
     /// Returns an error if the search operation fails
     fn search_in_branch(&self, branch: &str, text: &str) -> Result<bool>;
-    
+
     /// Gets the diff between the current branch and the main branch
     ///
     /// # Errors
     ///
     /// Returns an error if the diff operation fails
     fn get_diff_from_main(&self) -> Result<String>;
-    
+
     /// Gets the name of the current branch
     ///
     /// # Errors
@@ -133,14 +133,12 @@ impl Repository for RealGitRepository {
                 GitError::RepositoryError(format!("Failed to peel HEAD to commit: {e}"))
             })?;
 
-        let branch_ref = repo.branch(name, &current_commit, false).map_err(|e| {
-            GitError::BranchError(format!("Failed to create branch '{name}': {e}"))
-        })?;
+        let branch_ref = repo
+            .branch(name, &current_commit, false)
+            .map_err(|e| GitError::BranchError(format!("Failed to create branch '{name}': {e}")))?;
 
         let mut branch = repo.find_branch(name, BranchType::Local).map_err(|e| {
-            GitError::BranchNotFound(format!(
-                "Failed to find newly created branch '{name}': {e}"
-            ))
+            GitError::BranchNotFound(format!("Failed to find newly created branch '{name}': {e}"))
         })?;
 
         let branch_name = branch_ref.name()?.ok_or_else(|| {
@@ -148,9 +146,7 @@ impl Repository for RealGitRepository {
         })?;
 
         branch.set_upstream(Some(branch_name)).map_err(|e| {
-            GitError::RepositoryError(format!(
-                "Failed to set upstream for branch '{name}': {e}"
-            ))
+            GitError::RepositoryError(format!("Failed to set upstream for branch '{name}': {e}"))
         })?;
 
         Ok(())

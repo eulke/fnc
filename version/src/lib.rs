@@ -273,12 +273,14 @@ impl Version {
                 projects.push((path.clone(), ecosystem));
             }
 
-            let should_recurse = path
-                .file_name()
-                .and_then(|name| name.to_str())
-                .is_some_and(|name_str| {
-                    !name_str.starts_with('.') && name_str != "node_modules" && name_str != "target"
-                });
+            let should_recurse =
+                path.file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name_str| {
+                        !name_str.starts_with('.')
+                            && name_str != "node_modules"
+                            && name_str != "target"
+                    });
 
             if should_recurse {
                 Self::discover_projects_recursive(&path, projects, current_depth + 1, max_depth)?;

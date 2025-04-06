@@ -1,11 +1,168 @@
-use std::collections::HashMap;
-
 use regex::Regex;
 
-use crate::utils::*;
-use crate::{config::ChangelogConfig, types::*};
+use crate::config::ChangelogConfig;
+use crate::error::ChangelogError;
+use crate::types::*;
 
-/// Defines the format of the changelog
+// --- Traits ---
+
+pub trait HeaderFormatter {
+    fn format(&self, version: &str, date: &str, author: &str) -> String;
+}
+
+pub trait SectionFormatter {
+    fn format(&self, title: &str, sections: &[ChangelogSection]) -> String;
+}
+
+pub trait ChangelogRewriter {
+    fn rewrite(
+        &self,
+        lines: &[&str],
+        insertion_idx: usize,
+        filter_start_idx: usize,
+        header_to_insert: Option<&str>,
+        formatted_content: &str,
+        entries_to_filter: &[ChangelogEntry],
+    ) -> Result<String>;
+}
+
+// --- Strategies / Implementations ---
+
+// Header Formatters
+#[derive(Debug, Clone)]
+pub struct StandardHeaderFormatter {
+    pub template: String,
+}
+
+impl HeaderFormatter for StandardHeaderFormatter {
+    fn format(&self, version: &str, date: &str, author: &str) -> String {
+        self.template
+            .replace("{0}", version)
+            .replace("{1}", date)
+            .replace("{2}", author)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct GitHubHeaderFormatter;
+
+impl HeaderFormatter for GitHubHeaderFormatter {
+    fn format(&self, version: &str, date: &str, _author: &str) -> String {
+        format!("## [{version}] - {date}")
+    }
+}
+
+// Section Formatter (Markdown)
+#[derive(Debug, Clone)]
+pub struct MarkdownSectionFormatter;
+
+impl SectionFormatter for MarkdownSectionFormatter {
+    fn format(&self, _title: &str, sections: &[ChangelogSection]) -> String {
+        let mut formatted = String::with_capacity(1024);
+        // Sort sections by title for consistent output
+        let mut sorted_sections = sections.to_vec();
+        sorted_sections.sort_by(|a, b| a.title.cmp(&b.title));
+
+        for section in sorted_sections {
+            if !section.items.is_empty() {
+                formatted.push_str("### ");
+                formatted.push_str(&section.title);
+                formatted.push('\n');
+                for item in &section.items {
+                    formatted.push_str("- ");
+                    formatted.push_str(&item.content);
+                    formatted.push('\n');
+                }
+                formatted.push('\n');
+            }
+        }
+        formatted.to_string()
+    }
+}
+
+// Changelog Rewriter
+#[derive(Debug, Clone)]
+pub struct DefaultChangelogRewriter;
+
+impl ChangelogRewriter for DefaultChangelogRewriter {
+    fn rewrite(
+        &self,
+        lines: &[&str],
+        insertion_idx: usize,
+        filter_start_idx: usize,
+        header_to_insert: Option<&str>,
+        formatted_content: &str,
+        entries_to_filter: &[ChangelogEntry],
+    ) -> Result<String> {
+        let filter_regex = self.build_filter_regex(entries_to_filter)?;
+        let mut new_content = String::with_capacity(lines.len() * 50 + formatted_content.len());
+
+        // 1. Add lines before the insertion point
+        for line in lines.iter().take(insertion_idx) {
+            new_content.push_str(line);
+            new_content.push('\n');
+        }
+
+        // 2. Add the optional new header
+        if let Some(header) = header_to_insert {
+            new_content.push_str(header);
+        }
+
+        // 3. Add the newly formatted content section
+        if !formatted_content.is_empty() {
+            new_content.push_str(formatted_content);
+        }
+
+        // 4. Add the remaining lines, filtering as needed
+        self.append_filtered_lines(
+            &mut new_content,
+            lines.iter().skip(filter_start_idx),
+            filter_regex.as_ref(),
+        );
+
+        Ok(new_content.to_string())
+    }
+}
+
+impl DefaultChangelogRewriter {
+    // Keep helper methods associated with the specific implementation
+    fn build_filter_regex(&self, entries_to_filter: &[ChangelogEntry]) -> Result<Option<Regex>> {
+        if entries_to_filter.is_empty() {
+            return Ok(None);
+        }
+        let pattern = entries_to_filter
+            .iter()
+            .map(|entry| regex::escape(&entry.content))
+            .collect::<Vec<_>>()
+            .join("|");
+        Regex::new(&format!(r"- ({pattern})"))
+            .map(Some)
+            .map_err(ChangelogError::from)
+    }
+
+    fn append_filtered_lines<'a, I>(
+        &self,
+        target_string: &mut String,
+        lines_iter: I,
+        filter_regex: Option<&Regex>,
+    ) where
+        I: Iterator<Item = &'a &'a str>,
+    {
+        for line in lines_iter {
+            if !self.should_exclude_line(filter_regex, line) {
+                target_string.push_str(line);
+                target_string.push('\n');
+            }
+        }
+    }
+
+    fn should_exclude_line(&self, filter_regex: Option<&Regex>, line: &str) -> bool {
+        filter_regex.is_some_and(|regex| regex.is_match(line))
+    }
+}
+
+// --- Public Enum for Format Selection (could replace original Enum) ---
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChangelogFormat {
     Standard,
@@ -18,136 +175,16 @@ impl Default for ChangelogFormat {
     }
 }
 
-pub struct Formatter {
-    config: ChangelogConfig,
+// --- Factory function (optional, provides convenience) ---
+
+pub fn create_header_formatter(
     format: ChangelogFormat,
-}
-
-impl Formatter {
-    pub fn new(config: ChangelogConfig, format: ChangelogFormat) -> Self {
-        Self { config, format }
-    }
-
-    pub fn format_header(&self, version: &str, date: &str, author: &str) -> String {
-        match self.format {
-            ChangelogFormat::Standard => self
-                .config
-                .version_header_format
-                .replace("{0}", version)
-                .replace("{1}", date)
-                .replace("{2}", author),
-            ChangelogFormat::GitHub => format!("## [{version}] - {date}"),
-        }
-    }
-
-    pub fn format_unreleased_section(&self, unreleased: &HashMap<String, Vec<String>>) -> String {
-        let mut formatted = String::with_capacity(1024); // Pre-allocate space to reduce reallocations
-
-        // Sort categories for consistent output
-        let mut categories: Vec<_> = unreleased.keys().collect();
-        categories.sort(); // Ensure consistent ordering
-
-        for category_key in categories {
-            if let Some(items) = unreleased.get(category_key) {
-                if !items.is_empty() {
-                    formatted.push_str("### ");
-                    formatted.push_str(category_key);
-                    formatted.push('\n');
-
-                    for item in items {
-                        formatted.push_str("- ");
-                        formatted.push_str(item);
-                        formatted.push('\n');
-                    }
-                    formatted.push('\n');
-                }
-            }
-        }
-
-        formatted
-    }
-
-    pub fn format_with_existing_unreleased(
-        &self,
-        lines: &[&str],
-        unreleased_idx: usize,
-        formatted_unreleased: &str,
-        entries_to_move: &[ChangelogEntry],
-    ) -> Result<String> {
-        let mut new_content = String::new();
-
-        // Add everything up to and including the unreleased header
-        for line in lines.iter().take(unreleased_idx + 1) {
-            new_content.push_str(line);
-            new_content.push('\n');
-        }
-
-        // Add the formatted unreleased section
-        new_content.push_str(formatted_unreleased);
-
-        // Find the next version section
-        let next_version_idx = lines
-            .iter()
-            .skip(unreleased_idx + 1)
-            .position(|&line| SEMVER_VERSION_PATTERN.is_match(line))
-            .map_or(lines.len(), |pos| pos + unreleased_idx + 1);
-
-        for line in lines.iter().skip(next_version_idx) {
-            let should_exclude = Self::should_exclude_line(entries_to_move, line)?;
-            if !should_exclude {
-                new_content.push_str(line);
-                new_content.push('\n');
-            }
-        }
-
-        Ok(new_content)
-    }
-
-    pub fn format_with_new_unreleased(
-        &self,
-        lines: &[&str],
-        formatted_unreleased: &str,
-        entries_to_move: &[ChangelogEntry],
-    ) -> Result<String> {
-        let mut new_content = String::new();
-
-        // Find the title (or use line 0)
-        let title_idx = lines
-            .iter()
-            .position(|&line| line.starts_with("# "))
-            .unwrap_or(0);
-
-        for line in lines.iter().take(title_idx + 1) {
-            new_content.push_str(line);
-            new_content.push('\n');
-        }
-
-        new_content.push_str("\n## [Unreleased]\n\n");
-        new_content.push_str(formatted_unreleased);
-
-        for line in lines.iter().skip(title_idx + 1) {
-            let should_exclude = Self::should_exclude_line(entries_to_move, line)?;
-            if !should_exclude {
-                new_content.push_str(line);
-                new_content.push('\n');
-            }
-        }
-
-        Ok(new_content)
-    }
-
-    fn should_exclude_line(entries_to_move: &[ChangelogEntry], line: &str) -> Result<bool> {
-        if entries_to_move.is_empty() {
-            return Ok(false);
-        }
-
-        let pattern = entries_to_move
-            .iter()
-            .map(|entry| regex::escape(&entry.content))
-            .collect::<Vec<_>>()
-            .join("|");
-
-        let regex = Regex::new(&format!(r"- ({pattern})"))?;
-        Ok(regex.is_match(line))
+    config: &ChangelogConfig,
+) -> Box<dyn HeaderFormatter> {
+    match format {
+        ChangelogFormat::Standard => Box::new(StandardHeaderFormatter {
+            template: config.version_header_format.clone(),
+        }),
+        ChangelogFormat::GitHub => Box::new(GitHubHeaderFormatter),
     }
 }

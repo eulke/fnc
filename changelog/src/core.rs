@@ -1,7 +1,8 @@
+use crate::error::ChangelogError;
 use crate::formatter::ChangelogFormat;
 use crate::types::*;
 use crate::utils::{SEMVER_VERSION_PATTERN, UNRELEASED_SECTION_PATTERN};
-use crate::{config::ChangelogConfig, error::ChangelogError, formatter::Formatter, parser::Parser};
+use crate::{config::ChangelogConfig, formatter::*, parser::Parser};
 use chrono::Local;
 use regex::Regex;
 use std::collections::HashMap;
@@ -16,7 +17,6 @@ pub struct Changelog {
     config: ChangelogConfig,
     format: ChangelogFormat,
     parser: Parser,
-    formatter: Formatter,
 }
 
 impl Changelog {
@@ -32,15 +32,8 @@ impl Changelog {
     ) -> Result<Self> {
         let path = path.into();
 
-        if !path.exists() {
-            return Err(ChangelogError::Other(format!(
-                "Changelog file not found at {path:?}"
-            )));
-        }
-
         let raw_content = fs::read_to_string(&path).map_err(ChangelogError::ReadError)?;
 
-        let formatter = Formatter::new(config.clone(), format);
         let parser = Parser::new(config.clone());
         let sections = parser.parse(&raw_content)?;
 
@@ -51,7 +44,6 @@ impl Changelog {
             config,
             format,
             parser,
-            formatter,
         })
     }
 
@@ -62,17 +54,32 @@ impl Changelog {
         unreleased_section: &HashMap<String, Vec<String>>,
         entries_to_move: &[ChangelogEntry],
     ) -> Result<String> {
-        let mut new_unreleased = unreleased_section.clone();
+        let mut new_unreleased_map = unreleased_section.clone();
 
         for entry in entries_to_move {
-            new_unreleased
+            new_unreleased_map
                 .entry(entry.category.clone())
                 .or_default()
                 .push(entry.content.clone());
         }
 
+        // Convert HashMap to Vec<ChangelogSection>
+        let new_unreleased_sections: Vec<ChangelogSection> = new_unreleased_map
+            .into_iter()
+            .map(|(title, items_str)| ChangelogSection {
+                title,
+                items: items_str
+                    .into_iter()
+                    .map(|content| ChangelogItem { content })
+                    .collect(),
+            })
+            .collect();
+
+        let section_formatter = MarkdownSectionFormatter;
+        let rewriter = DefaultChangelogRewriter;
+
         let lines: Vec<&str> = content.lines().collect();
-        let formatted_unreleased = self.formatter.format_unreleased_section(&new_unreleased);
+        let formatted_unreleased = section_formatter.format("Unreleased", &new_unreleased_sections);
 
         let unreleased_idx = lines
             .iter()
@@ -80,18 +87,37 @@ impl Changelog {
 
         unreleased_idx.map_or_else(
             || {
-                self.formatter.format_with_new_unreleased(
+                // Case: No existing [Unreleased] section
+                let title_idx = lines
+                    .iter()
+                    .position(|&line| line.starts_with("# "))
+                    .unwrap_or(0);
+                let insertion_idx = title_idx + 1;
+                rewriter.rewrite(
                     &lines,
-                    &formatted_unreleased,
-                    entries_to_move,
+                    insertion_idx,                 // Insert after title
+                    insertion_idx,                 // Filter after insertion
+                    Some("\n## [Unreleased]\n\n"), // Add header
+                    &formatted_unreleased,         // Content
+                    entries_to_move,               // Entries to filter out later
                 )
             },
             |idx| {
-                self.formatter.format_with_existing_unreleased(
+                // Case: Existing [Unreleased] section found
+                let content_start_idx = idx + 1;
+                let next_version_header_idx = lines
+                    .iter()
+                    .skip(content_start_idx)
+                    .position(|&line| SEMVER_VERSION_PATTERN.is_match(line))
+                    .map_or(lines.len(), |pos| pos + content_start_idx);
+
+                rewriter.rewrite(
                     &lines,
-                    idx,
-                    &formatted_unreleased,
-                    entries_to_move,
+                    content_start_idx,       // Insert content after header
+                    next_version_header_idx, // Filter from next version onwards
+                    None,                    // No new header needed
+                    &formatted_unreleased,   // Content
+                    entries_to_move,         // Entries to filter out
                 )
             },
         )
@@ -146,23 +172,71 @@ impl Changelog {
     ///
     /// Returns an error if changelog update operations fail
     pub fn update_with_version(&mut self, version: &str, author: &str) -> Result<()> {
-        let today = Local::now().format(&self.config.date_format).to_string();
-        let version_header = self.formatter.format_header(version, &today, author);
+        let date = Local::now().format("%Y-%m-%d").to_string();
+        let new_version_header =
+            create_header_formatter(self.format, &self.config).format(version, &date, author);
 
-        let new_content = if UNRELEASED_SECTION_PATTERN.is_match(&self.content) {
-            UNRELEASED_SECTION_PATTERN
-                .replace(&self.content, &version_header)
-                .to_string()
-        } else if let Some(first_match) = SEMVER_VERSION_PATTERN.find(&self.content) {
-            let (before, after) = self.content.split_at(first_match.start());
-            format!("{before}{version_header}\n\n{after}")
-        } else {
-            format!("{version_header}\n\n{}", self.content)
+        // Find the position of the ## [Unreleased] header
+        let unreleased_header_pos = self
+            .content
+            .lines()
+            .position(|line| UNRELEASED_SECTION_PATTERN.is_match(line));
+
+        let new_content_string = match unreleased_header_pos {
+            Some(pos) => {
+                // Found [Unreleased], replace its header line
+                // Ensure we handle potential trailing newline correctly
+                let lines: Vec<&str> = self.content.lines().collect();
+                let mut new_lines = Vec::with_capacity(lines.len() + 1);
+                for (i, line) in lines.iter().enumerate() {
+                    if i == pos {
+                        new_lines.push(new_version_header.as_str());
+                    } else {
+                        new_lines.push(line);
+                    }
+                }
+                // Find the position of the next version header, if any
+                let next_version_header_pos_option = new_lines
+                    .iter()
+                    .skip(pos + 1)
+                    .position(|line| SEMVER_VERSION_PATTERN.is_match(line));
+
+                // If a next version header exists, ensure a blank line precedes it
+                if let Some(relative_pos) = next_version_header_pos_option {
+                    let next_version_header_idx = relative_pos + pos + 1;
+                    // Check the line right before the next header
+                    if !new_lines[next_version_header_idx - 1].trim().is_empty() {
+                        new_lines.insert(next_version_header_idx, "");
+                    }
+                }
+
+                // Reconstruct the string, adding a final newline if the original had one
+                // or if the last line isn't empty
+                let mut result = new_lines.join("\n");
+                if self.content.ends_with('\n') || !new_lines.last().is_none_or(|l| l.is_empty()) {
+                    result.push('\n');
+                }
+                result
+            }
+            None => {
+                // No [Unreleased], insert after the main title
+                let title_pos = self
+                    .content
+                    .lines()
+                    .position(|line| line.starts_with("# "))
+                    .unwrap_or(0); // Assume title is first line if not found
+
+                let mut lines: Vec<&str> = self.content.lines().collect();
+                // Insert with appropriate spacing
+                lines.insert(title_pos + 1, ""); // Blank line
+                lines.insert(title_pos + 2, &new_version_header);
+                lines.insert(title_pos + 3, ""); // Blank line
+                lines.join("\n") + "\n" // Add trailing newline
+            }
         };
 
-        fs::write(&self.path, &new_content).map_err(ChangelogError::ReadError)?;
-        self.content = new_content;
-        // Use the stored parser instance
+        fs::write(&self.path, &new_content_string).map_err(ChangelogError::ReadError)?;
+        self.content = new_content_string;
         self.sections = self.parser.parse(&self.content)?;
 
         Ok(())
@@ -258,39 +332,6 @@ impl Changelog {
         Ok((true, entries_to_move.len()))
     }
 
-    /// Returns an iterator over all changelog entries
-    pub fn iter_entries(&self) -> impl Iterator<Item = (&str, &str, &str)> + '_ {
-        self.sections.iter().flat_map(|(version, categories)| {
-            categories.iter().flat_map(move |(category, items)| {
-                items
-                    .iter()
-                    .map(move |item| (version.as_str(), category.as_str(), item.as_str()))
-            })
-        })
-    }
-
-    /// Gets the format of the changelog
-    #[must_use]
-    pub const fn format(&self) -> ChangelogFormat {
-        self.format
-    }
-
-    /// Sets the format of the changelog
-    pub fn set_format(&mut self, format: ChangelogFormat) {
-        self.format = format;
-    }
-
-    /// Gets a reference to the changelog's configuration
-    #[must_use]
-    pub const fn config(&self) -> &ChangelogConfig {
-        &self.config
-    }
-
-    /// Sets the changelog's configuration
-    pub fn set_config(&mut self, config: ChangelogConfig) {
-        self.config = config;
-    }
-
     fn identify_entries_in_diff(
         diff: &str,
         version_sections: &ChangelogSections,
@@ -333,5 +374,38 @@ impl Changelog {
         }
 
         Ok(entries_to_move)
+    }
+
+    /// Returns an iterator over all changelog entries
+    pub fn iter_entries(&self) -> impl Iterator<Item = (&str, &str, &str)> + '_ {
+        self.sections.iter().flat_map(|(version, categories)| {
+            categories.iter().flat_map(move |(category, items)| {
+                items
+                    .iter()
+                    .map(move |item| (version.as_str(), category.as_str(), item.as_str()))
+            })
+        })
+    }
+
+    /// Gets the format of the changelog
+    #[must_use]
+    pub const fn format(&self) -> ChangelogFormat {
+        self.format
+    }
+
+    /// Sets the format of the changelog
+    pub fn set_format(&mut self, format: ChangelogFormat) {
+        self.format = format;
+    }
+
+    /// Gets a reference to the changelog's configuration
+    #[must_use]
+    pub const fn config(&self) -> &ChangelogConfig {
+        &self.config
+    }
+
+    /// Sets the changelog's configuration
+    pub fn set_config(&mut self, config: ChangelogConfig) {
+        self.config = config;
     }
 }

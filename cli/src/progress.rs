@@ -73,9 +73,17 @@ impl ProgressTracker {
         if seconds < 60 {
             format!("{seconds} seconds")
         } else if seconds < 3600 {
-            format!("{} minutes {seconds_remainder} seconds", seconds / 60, seconds_remainder = seconds % 60)
+            format!(
+                "{} minutes {seconds_remainder} seconds",
+                seconds / 60,
+                seconds_remainder = seconds % 60
+            )
         } else {
-            format!("{hours} hours {minutes} minutes", hours = seconds / 3600, minutes = (seconds % 3600) / 60)
+            format!(
+                "{hours} hours {minutes} minutes",
+                hours = seconds / 3600,
+                minutes = (seconds % 3600) / 60
+            )
         }
     }
 }
