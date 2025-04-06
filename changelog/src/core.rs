@@ -1,6 +1,6 @@
 use crate::error::ChangelogError;
 use crate::formatter::ChangelogFormat;
-use crate::types::*;
+use crate::types::{ChangelogEntry, ChangelogItem, ChangelogSection, ChangelogSections, Result};
 use crate::utils::{SEMVER_VERSION_PATTERN, UNRELEASED_SECTION_PATTERN};
 use crate::{config::ChangelogConfig, formatter::*, parser::Parser};
 use chrono::Local;
@@ -34,7 +34,7 @@ impl Changelog {
 
         let raw_content = fs::read_to_string(&path).map_err(ChangelogError::ReadError)?;
 
-        let parser = Parser::new(config.clone());
+        let parser = Parser::new(config.ignore_duplicates);
         let sections = parser.parse(&raw_content)?;
 
         Ok(Self {
