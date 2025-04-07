@@ -210,7 +210,7 @@ pub fn update_changelog(new_version: &SemverVersion, verbose: bool) -> Result<()
 
     // Get the updated content
     let new_content = changelog
-        .update_with_version(&version_str, &author)
+        .replace_unreleased(&version_str, &author)
         .map_err(|e| {
             CliError::Other(e.to_string()).with_context("Failed to update CHANGELOG.md")
         })?;

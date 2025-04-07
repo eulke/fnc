@@ -1,4 +1,22 @@
+use std::fmt::{self, Display, Formatter};
 use thiserror::Error;
+
+/// Error context to enrich error messages
+#[derive(Debug)]
+pub struct ErrorContext {
+    pub operation: String,
+    pub source: Option<String>,
+}
+
+impl Display for ErrorContext {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "Operation: {}", self.operation)?;
+        if let Some(source) = &self.source {
+            write!(f, " (source: {})", source)?;
+        }
+        Ok(())
+    }
+}
 
 /// Errors that can occur when working with changelogs
 #[derive(Error, Debug)]
@@ -32,12 +50,33 @@ pub enum ChangelogError {
 
     #[error("{0}: {1}")]
     WithContext(String, Box<ChangelogError>),
+
+    #[error("{context}: {source}")]
+    ContextualError {
+        context: ErrorContext,
+        source: Box<ChangelogError>,
+    },
 }
 
 impl ChangelogError {
     #[must_use]
     pub fn with_context<C: Into<String>>(self, context: C) -> Self {
         Self::WithContext(context.into(), Box::new(self))
+    }
+
+    #[must_use]
+    pub fn with_operation_context(
+        self,
+        operation: impl Into<String>,
+        source: Option<impl Into<String>>,
+    ) -> Self {
+        Self::ContextualError {
+            context: ErrorContext {
+                operation: operation.into(),
+                source: source.map(Into::into),
+            },
+            source: Box::new(self),
+        }
     }
 
     #[must_use]
@@ -59,6 +98,9 @@ impl ChangelogError {
             Self::RegexError(e) => format!("Regular expression error: {e}"),
             Self::Other(msg) => msg.clone(),
             Self::WithContext(ctx, err) => format!("{ctx}: {}", err.user_message()),
+            Self::ContextualError { context, source } => {
+                format!("{}: {}", context, source.user_message())
+            }
         }
     }
 }

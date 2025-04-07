@@ -1,9 +1,6 @@
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-pub static SEMVER_VERSION_PATTERN: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"## \[\d+\.\d+\.\d+\]").expect("Failed to compile semver regex"));
-
 pub static UNRELEASED_SECTION_PATTERN: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"(?i)## \[(un|un-)?released\]").expect("Failed to compile unreleased section regex")
 });

@@ -1,3 +1,7 @@
+[[bin]]
+name = "fnc"
+path = "src/main.rs"
+
 [dependencies]
 anyhow = "1.0"
 colored = "3.0.0"
@@ -31,8 +35,4 @@ path = "../version"
 [package]
 edition = "2024"
 name = "cli"
-version = "0.1.9"
-
-[[bin]]
-name = "fnc"
-path = "src/main.rs"
+version = "0.1.18"

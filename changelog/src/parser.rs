@@ -2,6 +2,10 @@ use std::collections::HashMap;
 
 use crate::{error::ChangelogError, types::*, utils::*};
 
+pub trait ChangelogParser {
+    fn parse(&self, content: &str) -> Result<ChangelogSections>;
+}
+
 #[derive(Debug, Clone)]
 struct ParserState {
     current_version: Option<String>,
@@ -26,8 +30,10 @@ impl Parser {
     pub fn new(ignore_duplicates: bool) -> Self {
         Self { ignore_duplicates }
     }
+}
 
-    pub fn parse(&self, content: &str) -> Result<ChangelogSections> {
+impl ChangelogParser for Parser {
+    fn parse(&self, content: &str) -> Result<ChangelogSections> {
         let mut sections: ChangelogSections = HashMap::new();
         let mut state = ParserState::new();
 
@@ -37,7 +43,9 @@ impl Parser {
 
         Ok(sections)
     }
+}
 
+impl Parser {
     fn parse_line(
         &self,
         line: &str,
@@ -117,17 +125,14 @@ impl Parser {
     }
 
     fn handle_other_line(&self, line: &str, state: &ParserState, line_num: usize) -> Result<()> {
-        if !line.is_empty()
-            && !line.starts_with('#') // Allow comment lines anywhere
+        let is_invalid_line = !line.is_empty()
+            && !line.starts_with('#')
             && state.current_version.is_some()
             && state.current_category.is_none()
-            && !VERSION_HEADER_PATTERN.is_match(line) // Ensure it's not another version header
-            && !CHANGELOG_CATEGORY_PATTERN.is_match(line)
-        // Ensure it's not a category header we missed
-        {
-            // This condition targets lines that appear *after* a version header
-            // but *before* any category header for that version, and are not
-            // empty, comments, or valid headers themselves.
+            && !VERSION_HEADER_PATTERN.is_match(line)
+            && !CHANGELOG_CATEGORY_PATTERN.is_match(line);
+
+        if is_invalid_line {
             return Err(ChangelogError::InvalidFormat(
                 line_num + 1,
                 format!(
@@ -135,8 +140,6 @@ impl Parser {
                 ),
             ));
         }
-        // Ignore empty lines, comments, lines before the first version,
-        // or lines within a category section that aren't items (e.g., blank lines).
         Ok(())
     }
 }

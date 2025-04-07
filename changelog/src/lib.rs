@@ -1,11 +1,22 @@
-pub mod config;
+mod config;
 mod core;
+mod diff;
 mod error;
-pub mod formatter;
-pub mod parser;
+mod formatter;
+mod parser;
+mod position;
+mod regex_utils;
+mod reorganizer;
 mod types;
 mod utils;
+mod version;
 
-pub use crate::config::ChangelogConfig;
-pub use crate::core::*;
-pub use crate::formatter::ChangelogFormat;
+pub use config::ChangelogConfig;
+pub use core::Changelog;
+pub use diff::DiffHandler;
+pub use error::ChangelogError;
+pub use formatter::ChangelogFormat;
+pub use parser::Parser;
+pub use reorganizer::ChangelogReorganizer;
+pub use types::{ChangelogEntry, ChangelogItem, ChangelogSection, ChangelogSections, Result};
+pub use version::VersionUpdater;

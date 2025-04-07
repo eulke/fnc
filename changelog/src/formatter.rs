@@ -1,19 +1,28 @@
 use regex::Regex;
 
-use crate::error::ChangelogError;
+use crate::regex_utils::build_entries_filter_pattern;
 use crate::types::*;
 
 // --- Traits ---
 
-pub trait HeaderFormatter {
+pub trait HeaderFormatter: Send + Sync {
     fn format(&self, version: &str, date: &str, author: &str) -> String;
+    fn format_with_config(
+        &self,
+        version: &str,
+        date: &str,
+        author: &str,
+        _template: Option<&str>,
+    ) -> String {
+        self.format(version, date, author)
+    }
 }
 
-pub trait SectionFormatter {
+pub trait SectionFormatter: Send + Sync {
     fn format(&self, title: &str, sections: &[ChangelogSection]) -> String;
 }
 
-pub trait ChangelogRewriter {
+pub trait ChangelogRewriter: Send + Sync {
     fn rewrite(
         &self,
         lines: &[&str],
@@ -24,8 +33,6 @@ pub trait ChangelogRewriter {
         entries_to_filter: &[ChangelogEntry],
     ) -> Result<String>;
 }
-
-// --- Strategies / Implementations ---
 
 // Header Formatters
 #[derive(Debug, Clone)]
@@ -124,19 +131,8 @@ impl ChangelogRewriter for DefaultChangelogRewriter {
 }
 
 impl DefaultChangelogRewriter {
-    // Keep helper methods associated with the specific implementation
     fn build_filter_regex(&self, entries_to_filter: &[ChangelogEntry]) -> Result<Option<Regex>> {
-        if entries_to_filter.is_empty() {
-            return Ok(None);
-        }
-        let pattern = entries_to_filter
-            .iter()
-            .map(|entry| regex::escape(&entry.content))
-            .collect::<Vec<_>>()
-            .join("|");
-        Regex::new(&format!(r"- ({pattern})"))
-            .map(Some)
-            .map_err(ChangelogError::from)
+        build_entries_filter_pattern(entries_to_filter)
     }
 
     fn append_filtered_lines<'a, I>(
@@ -159,8 +155,6 @@ impl DefaultChangelogRewriter {
         filter_regex.is_some_and(|regex| regex.is_match(line))
     }
 }
-
-// --- Public Enum for Format Selection (could replace original Enum) ---
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChangelogFormat {
