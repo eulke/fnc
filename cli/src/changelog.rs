@@ -76,12 +76,24 @@ pub fn execute(verbose: bool) -> Result<()> {
 }
 
 fn fix_changelog(path: &PathBuf, diff: &str, config: ChangelogConfig) -> Result<FixResult> {
-    let mut changelog = Changelog::new(path, config, ChangelogFormat::Standard)
-        .map_err(|e| CliError::Other(e.user_message()).with_context("Failed to load changelog"))?;
-
-    let (entries_moved, entry_count) = changelog.fix_with_diff(diff).map_err(|e| {
-        CliError::Other(e.user_message()).with_context("Failed to fix changelog entries")
+    // Read the file content first
+    let content = std::fs::read_to_string(path).map_err(|e| {
+        CliError::Other(e.to_string()).with_context("Failed to read changelog file")
     })?;
+
+    let changelog = Changelog::new(content, config, ChangelogFormat::Standard)
+        .map_err(|e| CliError::Other(e.to_string()).with_context("Failed to parse changelog"))?;
+
+    let (new_content, entries_moved, entry_count) = changelog.fix_with_diff(diff).map_err(|e| {
+        CliError::Other(e.to_string()).with_context("Failed to fix changelog entries")
+    })?;
+
+    // Write the updated content back to the file if changes were made
+    if entries_moved {
+        std::fs::write(path, new_content).map_err(|e| {
+            CliError::Other(e.to_string()).with_context("Failed to write changelog")
+        })?;
+    }
 
     Ok(FixResult {
         entries_moved,

@@ -1,6 +1,5 @@
 use regex::Regex;
 
-use crate::config::ChangelogConfig;
 use crate::error::ChangelogError;
 use crate::types::*;
 
@@ -172,19 +171,5 @@ pub enum ChangelogFormat {
 impl Default for ChangelogFormat {
     fn default() -> Self {
         Self::Standard
-    }
-}
-
-// --- Factory function (optional, provides convenience) ---
-
-pub fn create_header_formatter(
-    format: ChangelogFormat,
-    config: &ChangelogConfig,
-) -> Box<dyn HeaderFormatter> {
-    match format {
-        ChangelogFormat::Standard => Box::new(StandardHeaderFormatter {
-            template: config.version_header_format.clone(),
-        }),
-        ChangelogFormat::GitHub => Box::new(GitHubHeaderFormatter),
     }
 }

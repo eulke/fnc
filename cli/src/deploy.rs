@@ -32,21 +32,32 @@ pub fn fix_changelog_for_release(repo: &impl Repository, verbose: bool) -> Resul
         return Ok(());
     }
 
+    // Read the content from the file
+    let content = std::fs::read_to_string(&changelog_path).map_err(|e| {
+        CliError::Other(e.to_string()).with_context("Failed to read changelog file")
+    })?;
+
     let config = changelog::ChangelogConfig {
         verbose,
         ignore_duplicates: true,
         ..changelog::ChangelogConfig::default()
     };
 
-    let mut changelog =
-        changelog::Changelog::new(changelog_path, config, changelog::ChangelogFormat::Standard)
-            .map_err(|e| CliError::Other(e.to_string()).with_context("Failed to load changelog"))?;
+    let changelog =
+        changelog::Changelog::new(content, config, changelog::ChangelogFormat::Standard).map_err(
+            |e| CliError::Other(e.to_string()).with_context("Failed to parse changelog"),
+        )?;
 
-    let (changes_made, entries_moved) = changelog
+    let (new_content, changes_made, entries_moved) = changelog
         .fix_with_diff(&diff)
         .map_err(|e| CliError::Other(e.to_string()).with_context("Failed to fix changelog"))?;
 
     if changes_made {
+        // Write the changes back to the file
+        std::fs::write(&changelog_path, new_content).map_err(|e| {
+            CliError::Other(e.to_string()).with_context("Failed to write changelog")
+        })?;
+
         ui::success_message(&format!(
             "Fixed changelog: moved {entries_moved} entries to unreleased section"
         ));
@@ -185,16 +196,28 @@ pub fn update_changelog(new_version: &SemverVersion, verbose: bool) -> Result<()
     let version_str = new_version.to_string();
     let changelog_path = Path::new("CHANGELOG.md");
 
-    let mut changelog =
-        changelog::Changelog::new(changelog_path, config, ChangelogFormat::Standard).map_err(
-            |e| CliError::Other(e.to_string()).with_context("Failed to ensure CHANGELOG.md exists"),
-        )?;
+    // Read content or create empty file if it doesn't exist
+    let content = if changelog_path.exists() {
+        std::fs::read_to_string(changelog_path)
+            .map_err(|e| CliError::Other(e.to_string()).with_context("Failed to read changelog"))?
+    } else {
+        // Create an empty changelog if it doesn't exist
+        "# Changelog\n\n".to_string()
+    };
 
-    changelog
+    let changelog = changelog::Changelog::new(content, config, ChangelogFormat::Standard)
+        .map_err(|e| CliError::Other(e.to_string()).with_context("Failed to parse changelog"))?;
+
+    // Get the updated content
+    let new_content = changelog
         .update_with_version(&version_str, &author)
         .map_err(|e| {
             CliError::Other(e.to_string()).with_context("Failed to update CHANGELOG.md")
         })?;
+
+    // Write the updated content back to the file
+    std::fs::write(changelog_path, new_content)
+        .map_err(|e| CliError::Other(e.to_string()).with_context("Failed to write changelog"))?;
 
     ui::success_message("Updated CHANGELOG.md with new version");
     Ok(())
