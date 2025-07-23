@@ -78,6 +78,37 @@ pub enum Commands {
         #[clap(short, long, default_value_t = false)]
         verbose: bool,
     },
+
+    /// Execute HTTP requests across multiple environments and compare responses
+    HttpDiff {
+        /// Comma-separated list of environments to test (defaults to all configured environments)
+        #[clap(short, long)]
+        environments: Option<String>,
+
+        /// Include headers in response comparison (disabled by default)
+        #[clap(long, default_value_t = false)]
+        include_headers: bool,
+
+        /// Configuration file path (defaults to http-diff.toml)
+        #[clap(short, long, default_value = "http-diff.toml")]
+        config: String,
+
+        /// CSV file with test user data (defaults to users.csv)
+        #[clap(long, default_value = "users.csv")]
+        users_file: String,
+
+        /// Generate configuration files if they don't exist
+        #[clap(long, default_value_t = false)]
+        init: bool,
+
+        /// Enable verbose output with additional information
+        #[clap(short, long, default_value_t = false)]
+        verbose: bool,
+
+        /// Save curl commands to file for debugging
+        #[clap(long, default_value = "curl_commands.txt")]
+        output_file: String,
+    },
 }
 
 #[derive(Subcommand, Clone, Debug)]

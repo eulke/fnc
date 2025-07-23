@@ -7,4 +7,18 @@ publish = false
 [dependencies]
 changelog = { path = "../changelog" }
 version = { path = "../version" }
+http-diff = { path = "../http-diff" }
 tempfile = "3.9"
+tokio = { version = "1.0", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+wiremock = "0.6"
+reqwest = { version = "0.12", features = ["json"] }
+
+[[test]]
+name = "http_diff_integration"
+path = "http_diff_integration.rs"
+
+[[test]]
+name = "integration_test" 
+path = "integration_test.rs"

@@ -2,6 +2,7 @@ mod changelog;
 mod cli;
 mod deploy;
 mod error;
+mod http_diff;
 mod package_version;
 mod progress;
 mod sync_versions;
@@ -36,6 +37,23 @@ fn main() {
             verbose,
         } => sync_versions::execute(source, targets, discover, max_depth, verbose),
         Commands::Upgrade { force, verbose } => upgrade::execute(force, verbose),
+        Commands::HttpDiff {
+            environments,
+            include_headers,
+            config,
+            users_file,
+            init,
+            verbose,
+            output_file,
+        } => http_diff::execute(
+            environments,
+            include_headers,
+            config,
+            users_file,
+            init,
+            verbose,
+            output_file,
+        ),
     };
 
     if let Err(err) = result {
