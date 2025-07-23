@@ -5,10 +5,12 @@ use dialoguer::{Confirm, theme::ColorfulTheme};
 use http_diff::{
     config::{ensure_config_files_exist, load_user_data, HttpDiffConfig},
     output::CurlGenerator,
-    run_http_diff, ResponseComparator, TestRunner,
+    TestRunner,
 };
+use indicatif::{ProgressBar, ProgressStyle};
 use std::fs;
 use std::path::Path;
+use std::sync::Arc;
 use tokio::runtime::Runtime;
 
 pub fn execute(
@@ -163,18 +165,16 @@ async fn execute_async(
 
     // Initialize test runner with headers comparison setting
     progress.start_step();
-    let _comparator = if include_headers {
-        ResponseComparator::new().with_headers_comparison()
+    let runner = if include_headers {
+        TestRunner::with_headers_comparison(config.clone())
     } else {
-        ResponseComparator::new()
-    };
-
-    let _runner = TestRunner::new(config.clone()).map_err(|e| {
+        TestRunner::new(config.clone())
+    }.map_err(|e| {
         CliError::Other(format!("Failed to initialize test runner: {}", e))
     })?;
     progress.complete_step();
 
-    // Execute HTTP diff tests
+    // Execute HTTP diff tests with visual progress bar
     progress.start_step();
     if verbose {
         let env_names = env_list.as_ref()
@@ -184,9 +184,28 @@ async fn execute_async(
         ui::info_message(&format!("Headers comparison: {}", if include_headers { "enabled" } else { "disabled" }));
     }
 
-    let results = run_http_diff(config.clone(), env_list).await.map_err(|e| {
+    // Create progress bar for HTTP requests
+    let pb = Arc::new(ProgressBar::new(total_tests as u64));
+    let style = ProgressStyle::with_template(
+        "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} {msg} (ETA: {eta})"
+    ).unwrap_or_else(|_| ProgressStyle::default_bar())
+    .progress_chars("█▉▊▋▌▍▎▏  ");
+    pb.set_style(style);
+    pb.set_message("Executing HTTP requests...");
+
+    // Execute with progress callback
+    let pb_clone = Arc::clone(&pb);
+    let (results, _tracker) = runner.execute_with_progress(
+        env_list.clone(),
+        Some(Box::new(move |tracker| {
+            pb_clone.set_position(tracker.completed_requests as u64);
+            pb_clone.set_message(format!("Completed {}/{} requests", tracker.completed_requests, tracker.total_requests));
+        }))
+    ).await.map_err(|e| {
         CliError::Other(format!("HTTP diff tests failed: {}", e))
     })?;
+
+    pb.finish_with_message("✅ All HTTP requests completed!");
     progress.complete_step();
 
     // Analyze and display results

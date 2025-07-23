@@ -229,9 +229,14 @@ impl CurlGenerator {
         let total_tests = results.len();
         let identical_count = results.iter().filter(|r| r.is_identical).count();
         let different_count = total_tests - identical_count;
+        let success_rate = if total_tests > 0 {
+            (identical_count as f32 / total_tests as f32) * 100.0
+        } else {
+            0.0
+        };
         
-        output.push_str(&format!("🔍 Test Results Summary: {} total, {} identical, {} different\n", 
-                                total_tests, identical_count, different_count));
+        output.push_str(&format!("🔍 Test Results Summary: {} total, {} identical, {} different - Success Rate: {:.1}%\n", 
+                                total_tests, identical_count, different_count, success_rate));
         
         if different_count > 0 {
             output.push_str("\n❌ Differences Found:\n");
@@ -660,7 +665,7 @@ mod tests {
         let results = vec![identical_result, different_result];
         let output = CurlGenerator::format_comparison_results(&results);
         
-        assert!(output.contains("🔍 Test Results Summary: 2 total, 1 identical, 1 different"));
+        assert!(output.contains("🔍 Test Results Summary: 2 total, 1 identical, 1 different - Success Rate: 50.0%"));
         assert!(output.contains("❌ Differences Found:"));
         assert!(output.contains("📍 Route 'route2'"));
         assert!(output.contains("📄 Body content differs"));
@@ -688,7 +693,7 @@ mod tests {
         let results = vec![result];
         let output = CurlGenerator::format_comparison_results(&results);
         
-        assert!(output.contains("🔍 Test Results Summary: 1 total, 1 identical, 0 different"));
+        assert!(output.contains("🔍 Test Results Summary: 1 total, 1 identical, 0 different - Success Rate: 100.0%"));
         assert!(output.contains("✅ All responses are identical across environments!"));
         assert!(!output.contains("❌ Differences Found:"));
     }
