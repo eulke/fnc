@@ -325,7 +325,7 @@ impl CurlGenerator {
     fn format_failed_request_details(result: &ComparisonResult) -> String {
         let mut output = String::new();
         
-        output.push_str(&format!("\n📍 Route '{}'\n", result.route_name));
+        output.push_str(&format!("\n📍 Route '{}' (User: {:?})\n", result.route_name, result.user_context));
         
         // Display status codes
         output.push_str("  Status codes:\n");
