@@ -1,5 +1,5 @@
 // HttpResponse type is available in client module for future use
-use crate::comparator::{ComparisonResult, Difference, DifferenceCategory};
+use crate::comparator::{ComparisonResult, Difference, DifferenceCategory, ErrorSummary};
 use crate::config::{HttpDiffConfig, Route, UserData};
 use crate::error::Result;
 use std::collections::HashMap;
@@ -238,6 +238,12 @@ impl CurlGenerator {
         output.push_str(&format!("🔍 Test Results Summary: {} total, {} identical, {} different - Success Rate: {:.1}%\n", 
                                 total_tests, identical_count, different_count, success_rate));
         
+        // Generate error summary and add error analysis if there are failures
+        let error_summary = ErrorSummary::from_comparison_results(results);
+        if error_summary.failed_requests > 0 {
+            output.push_str(&Self::format_error_analysis(&error_summary, results));
+        }
+        
         if different_count > 0 {
             output.push_str("\n❌ Differences Found:\n");
             for result in results.iter().filter(|r| !r.is_identical) {
@@ -289,6 +295,63 @@ impl CurlGenerator {
         }
 
         output
+    }
+
+    /// Format error analysis section
+    fn format_error_analysis(error_summary: &ErrorSummary, results: &[ComparisonResult]) -> String {
+        let mut output = String::new();
+        
+        output.push_str("\n==== Error Analysis ====\n");
+        output.push_str(&format!("🚨 {} requests failed (non-2xx status codes)\n", error_summary.failed_requests));
+        
+        if error_summary.identical_failures > 0 {
+            output.push_str(&format!("⚠️  {} requests failed identically across environments\n", error_summary.identical_failures));
+        }
+        
+        if error_summary.mixed_responses > 0 {
+            output.push_str(&format!("🔄 {} requests had different status codes across environments\n", error_summary.mixed_responses));
+        }
+        
+        // Show detailed error information for failed requests
+        let failed_results: Vec<&ComparisonResult> = results.iter().filter(|r| r.has_errors).collect();
+        for result in failed_results {
+            output.push_str(&Self::format_failed_request_details(result));
+        }
+        
+        output
+    }
+
+    /// Format detailed information for a failed request
+    fn format_failed_request_details(result: &ComparisonResult) -> String {
+        let mut output = String::new();
+        
+        output.push_str(&format!("\n📍 Route '{}'\n", result.route_name));
+        
+        // Display status codes
+        output.push_str("  Status codes:\n");
+        for (env, status) in &result.status_codes {
+            output.push_str(&format!("    {}: {}\n", env, status));
+        }
+        
+        // Display error response bodies if available
+        if let Some(error_bodies) = &result.error_bodies {
+            output.push_str("  Response bodies:\n");
+            for (env, body) in error_bodies {
+                let truncated_body = Self::truncate_response_body(body, 500);
+                output.push_str(&format!("    {}: {}\n", env, truncated_body));
+            }
+        }
+        
+        output
+    }
+
+    /// Truncate response body for display
+    fn truncate_response_body(body: &str, max_length: usize) -> String {
+        if body.len() <= max_length {
+            body.to_string()
+        } else {
+            format!("{}... (truncated)", &body[..max_length])
+        }
     }
 
     /// Substitute path parameters like {userId} with actual values (same as HttpClient)
@@ -580,12 +643,19 @@ mod tests {
             curl_command: "curl 'https://test.example.com'".to_string(),
         });
 
+        let mut status_codes1 = HashMap::new();
+        status_codes1.insert("prod".to_string(), 200u16);
+        status_codes1.insert("staging".to_string(), 200u16);
+
         let result1 = ComparisonResult {
             route_name: "user-profile".to_string(),
             user_context: create_test_user_data().data,
             responses: responses.clone(),
             differences: vec![], // Identical
             is_identical: true,
+            status_codes: status_codes1,
+            has_errors: false,
+            error_bodies: None,
         };
 
         let mut different_responses = responses.clone();
@@ -597,6 +667,13 @@ mod tests {
             curl_command: "curl 'https://prod.example.com'".to_string(),
         });
 
+        let mut status_codes2 = HashMap::new();
+        status_codes2.insert("prod".to_string(), 404u16);
+        status_codes2.insert("staging".to_string(), 200u16);
+
+        let mut error_bodies2 = HashMap::new();
+        error_bodies2.insert("prod".to_string(), "Not found".to_string());
+
         let result2 = ComparisonResult {
             route_name: "health-check".to_string(),
             user_context: create_test_user_data().data,
@@ -607,6 +684,9 @@ mod tests {
                 diff_output: None,
             }],
             is_identical: false,
+            status_codes: status_codes2,
+            has_errors: true,
+            error_bodies: Some(error_bodies2),
         };
 
         let results = vec![result1, result2];
@@ -638,13 +718,22 @@ mod tests {
             curl_command: "curl 'https://test.example.com'".to_string(),
         });
 
+        let mut status_codes_identical = HashMap::new();
+        status_codes_identical.insert("test".to_string(), 200u16);
+
         let identical_result = ComparisonResult {
             route_name: "route1".to_string(),
             user_context: HashMap::new(),
             responses: responses.clone(),
             differences: vec![],
             is_identical: true,
+            status_codes: status_codes_identical,
+            has_errors: false,
+            error_bodies: None,
         };
+
+        let mut status_codes_different = HashMap::new();
+        status_codes_different.insert("test".to_string(), 200u16);
 
         let different_result = ComparisonResult {
             route_name: "route2".to_string(),
@@ -660,6 +749,9 @@ mod tests {
                 diff_output: None,
             }],
             is_identical: false,
+            status_codes: status_codes_different,
+            has_errors: false,
+            error_bodies: None,
         };
 
         let results = vec![identical_result, different_result];
@@ -682,12 +774,18 @@ mod tests {
             curl_command: "curl 'https://test.example.com'".to_string(),
         });
 
+        let mut status_codes_all_identical = HashMap::new();
+        status_codes_all_identical.insert("test".to_string(), 200u16);
+
         let result = ComparisonResult {
             route_name: "route1".to_string(),
             user_context: HashMap::new(),
             responses,
             differences: vec![],
             is_identical: true,
+            status_codes: status_codes_all_identical,
+            has_errors: false,
+            error_bodies: None,
         };
 
         let results = vec![result];

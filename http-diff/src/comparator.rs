@@ -11,6 +11,10 @@ pub struct ComparisonResult {
     pub responses: HashMap<String, HttpResponse>,
     pub differences: Vec<Difference>,
     pub is_identical: bool,
+    // New fields for error tracking
+    pub status_codes: HashMap<String, u16>,  // env_name -> status_code
+    pub has_errors: bool,                    // true if any non-2xx status
+    pub error_bodies: Option<HashMap<String, String>>, // env_name -> response_body (only for errors)
 }
 
 /// Represents a difference between responses
@@ -27,6 +31,62 @@ pub enum DifferenceCategory {
     Status,
     Headers,
     Body,
+}
+
+/// Summary of error statistics across all comparison results
+#[derive(Debug, Clone, PartialEq)]
+pub struct ErrorSummary {
+    pub total_requests: usize,
+    pub successful_requests: usize,  // 2xx status codes
+    pub failed_requests: usize,      // non-2xx status codes
+    pub identical_successes: usize,  // identical 2xx responses
+    pub identical_failures: usize,   // identical non-2xx responses
+    pub mixed_responses: usize,      // different status codes across envs
+}
+
+impl ErrorSummary {
+    pub fn new() -> Self {
+        Self {
+            total_requests: 0,
+            successful_requests: 0,
+            failed_requests: 0,
+            identical_successes: 0,
+            identical_failures: 0,
+            mixed_responses: 0,
+        }
+    }
+
+    pub fn from_comparison_results(results: &[ComparisonResult]) -> Self {
+        let mut summary = Self::new();
+        summary.total_requests = results.len();
+
+        for result in results {
+            let statuses: Vec<u16> = result.status_codes.values().cloned().collect();
+            let all_successful = statuses.iter().all(|&status| status >= 200 && status < 300);
+            let all_same_status = statuses.windows(2).all(|w| w[0] == w[1]);
+
+            // First check if all status codes are the same
+            if all_same_status {
+                if all_successful {
+                    summary.successful_requests += 1;
+                    if result.is_identical {
+                        summary.identical_successes += 1;
+                    }
+                } else {
+                    summary.failed_requests += 1;
+                    if result.is_identical {
+                        summary.identical_failures += 1;
+                    }
+                }
+            } else {
+                // Different status codes across environments = mixed responses
+                summary.failed_requests += 1;
+                summary.mixed_responses += 1;
+            }
+        }
+
+        summary
+    }
 }
 
 /// Response comparator with configurable comparison strategies
@@ -142,12 +202,32 @@ impl ResponseComparator {
 
         let is_identical = differences.is_empty();
 
+        // Extract status codes from responses
+        let mut status_codes = HashMap::new();
+        let mut error_bodies = HashMap::new();
+        let mut has_errors = false;
+
+        for (env_name, response) in &responses {
+            status_codes.insert(env_name.clone(), response.status);
+            
+            // Check if this is an error response (non-2xx)
+            if response.status < 200 || response.status >= 300 {
+                has_errors = true;
+                error_bodies.insert(env_name.clone(), response.body.clone());
+            }
+        }
+
+        let error_bodies = if error_bodies.is_empty() { None } else { Some(error_bodies) };
+
         Ok(ComparisonResult {
             route_name,
             user_context,
             responses,
             differences,
             is_identical,
+            status_codes,
+            has_errors,
+            error_bodies,
         })
     }
 
