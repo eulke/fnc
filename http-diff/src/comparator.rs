@@ -1,9 +1,12 @@
 use crate::client::HttpResponse;
 use crate::error::{HttpDiffError, Result};
-use std::collections::HashMap;
 use colored::*;
-use comfy_table::{Table, Cell, Color, Attribute, ContentArrangement, TableComponent, modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL};
+use comfy_table::{
+    modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL, Attribute, Cell, Color, ContentArrangement,
+    Table, TableComponent,
+};
 use prettydiff::basic::DiffOp;
+use std::collections::HashMap;
 
 /// Result of comparing two HTTP responses
 #[derive(Debug, Clone)]
@@ -14,8 +17,8 @@ pub struct ComparisonResult {
     pub differences: Vec<Difference>,
     pub is_identical: bool,
     // New fields for error tracking
-    pub status_codes: HashMap<String, u16>,  // env_name -> status_code
-    pub has_errors: bool,                    // true if any non-2xx status
+    pub status_codes: HashMap<String, u16>, // env_name -> status_code
+    pub has_errors: bool,                   // true if any non-2xx status
     pub error_bodies: Option<HashMap<String, String>>, // env_name -> response_body (only for errors)
 }
 
@@ -48,11 +51,11 @@ pub enum DiffViewStyle {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ErrorSummary {
     pub total_requests: usize,
-    pub successful_requests: usize,  // 2xx status codes
-    pub failed_requests: usize,      // non-2xx status codes
-    pub identical_successes: usize,  // identical 2xx responses
-    pub identical_failures: usize,   // identical non-2xx responses
-    pub mixed_responses: usize,      // different status codes across envs
+    pub successful_requests: usize, // 2xx status codes
+    pub failed_requests: usize,     // non-2xx status codes
+    pub identical_successes: usize, // identical 2xx responses
+    pub identical_failures: usize,  // identical non-2xx responses
+    pub mixed_responses: usize,     // different status codes across envs
 }
 
 impl ErrorSummary {
@@ -121,8 +124,8 @@ impl ResponseComparator {
                 "x-correlation-id".to_string(),
             ],
             ignore_whitespace: true,
-            large_response_threshold: 50_000, // 50KB
-            compare_headers: false, // Headers comparison disabled by default
+            large_response_threshold: 50_000,        // 50KB
+            compare_headers: false,                  // Headers comparison disabled by default
             diff_view_style: DiffViewStyle::Unified, // Backward compatible default
         }
     }
@@ -140,7 +143,7 @@ impl ResponseComparator {
 
     /// Create a comparator with full control over all settings
     pub fn with_full_settings(
-        ignore_headers: Vec<String>, 
+        ignore_headers: Vec<String>,
         ignore_whitespace: bool,
         compare_headers: bool,
         large_response_threshold: usize,
@@ -193,7 +196,7 @@ impl ResponseComparator {
             for j in i + 1..environments.len() {
                 let env1 = &environments[i];
                 let env2 = &environments[j];
-                
+
                 let response1 = &responses[env1];
                 let response2 = &responses[env2];
 
@@ -211,12 +214,15 @@ impl ResponseComparator {
 
                 // Compare headers only if enabled
                 if self.compare_headers {
-                    let header_diffs = self.compare_headers(&response1.headers, &response2.headers, env1, env2);
+                    let header_diffs =
+                        self.compare_headers(&response1.headers, &response2.headers, env1, env2);
                     differences.extend(header_diffs);
                 }
 
                 // Compare bodies
-                if let Some(body_diff) = self.compare_bodies(&response1.body, &response2.body, env1, env2)? {
+                if let Some(body_diff) =
+                    self.compare_bodies(&response1.body, &response2.body, env1, env2)?
+                {
                     differences.push(body_diff);
                 }
             }
@@ -231,7 +237,7 @@ impl ResponseComparator {
 
         for (env_name, response) in &responses {
             status_codes.insert(env_name.clone(), response.status);
-            
+
             // Check if this is an error response (non-2xx)
             if response.status < 200 || response.status >= 300 {
                 has_errors = true;
@@ -239,7 +245,11 @@ impl ResponseComparator {
             }
         }
 
-        let error_bodies = if error_bodies.is_empty() { None } else { Some(error_bodies) };
+        let error_bodies = if error_bodies.is_empty() {
+            None
+        } else {
+            Some(error_bodies)
+        };
 
         Ok(ComparisonResult {
             route_name,
@@ -264,13 +274,14 @@ impl ResponseComparator {
         let mut differences = Vec::new();
 
         // Normalize headers to lowercase for comparison while preserving original case for display
-        let normalize_headers = |headers: &HashMap<String, String>| -> HashMap<String, (String, String)> {
-            headers
-                .iter()
-                .filter(|(key, _)| !self.ignore_headers.contains(&key.to_lowercase()))
-                .map(|(k, v)| (k.to_lowercase(), (k.clone(), v.clone())))
-                .collect()
-        };
+        let normalize_headers =
+            |headers: &HashMap<String, String>| -> HashMap<String, (String, String)> {
+                headers
+                    .iter()
+                    .filter(|(key, _)| !self.ignore_headers.contains(&key.to_lowercase()))
+                    .map(|(k, v)| (k.to_lowercase(), (k.clone(), v.clone())))
+                    .collect()
+            };
 
         let normalized_headers1 = normalize_headers(headers1);
         let normalized_headers2 = normalize_headers(headers2);
@@ -306,7 +317,8 @@ impl ResponseComparator {
         for (lowercase_key, (original_key1, value1)) in &normalized_headers1 {
             if let Some((_original_key2, value2)) = normalized_headers2.get(lowercase_key) {
                 if value1 != value2 {
-                    let diff_output = self.generate_header_diff(original_key1, value1, value2, env1, env2);
+                    let diff_output =
+                        self.generate_header_diff(original_key1, value1, value2, env1, env2);
                     differences.push(Difference {
                         category: DifferenceCategory::Headers,
                         description: format!(
@@ -323,7 +335,14 @@ impl ResponseComparator {
     }
 
     /// Generate a formatted diff for header values
-    fn generate_header_diff(&self, header_name: &str, value1: &str, value2: &str, env1: &str, env2: &str) -> String {
+    fn generate_header_diff(
+        &self,
+        header_name: &str,
+        value1: &str,
+        value2: &str,
+        env1: &str,
+        env2: &str,
+    ) -> String {
         format!(
             "┌─ Header '{}' Comparison ─┐\n│ {}: {} │\n│ {}: {} │\n└{}┘",
             header_name,
@@ -344,7 +363,10 @@ impl ResponseComparator {
         env2: &str,
     ) -> Result<Option<Difference>> {
         let (normalized_body1, normalized_body2) = if self.ignore_whitespace {
-            (self.normalize_whitespace(body1), self.normalize_whitespace(body2))
+            (
+                self.normalize_whitespace(body1),
+                self.normalize_whitespace(body2),
+            )
         } else {
             (body1.to_string(), body2.to_string())
         };
@@ -355,8 +377,12 @@ impl ResponseComparator {
 
         // Generate diff output based on configured style
         let diff_output = match self.diff_view_style {
-            DiffViewStyle::Unified => self.generate_unified_diff(&normalized_body1, &normalized_body2, env1, env2),
-            DiffViewStyle::SideBySide => self.generate_side_by_side_diff(&normalized_body1, &normalized_body2, env1, env2),
+            DiffViewStyle::Unified => {
+                self.generate_unified_diff(&normalized_body1, &normalized_body2, env1, env2)
+            }
+            DiffViewStyle::SideBySide => {
+                self.generate_side_by_side_diff(&normalized_body1, &normalized_body2, env1, env2)
+            }
         };
 
         Ok(Some(Difference {
@@ -366,57 +392,81 @@ impl ResponseComparator {
         }))
     }
 
-    /// Generate unified diff using prettydiff's native output
+    /// Create a clean diff table with optimal sizing and ANSI support
+    fn create_diff_table(&self, headers: Vec<Cell>) -> Table {
+        let mut table = Table::new();
+
+        table
+            .load_preset(UTF8_FULL)
+            .apply_modifier(UTF8_ROUND_CORNERS)
+            .set_content_arrangement(ContentArrangement::Dynamic)
+            .remove_style(TableComponent::HorizontalLines)
+            .remove_style(TableComponent::LeftBorderIntersections)
+            .remove_style(TableComponent::RightBorderIntersections)
+            .remove_style(TableComponent::MiddleIntersections)
+            .set_header(headers);
+
+        table
+    }
+
+    /// Generate unified diff using prettydiff's native styling with proper table handling
     fn generate_unified_diff(&self, text1: &str, text2: &str, env1: &str, env2: &str) -> String {
         let total_size = text1.len() + text2.len();
-        
+
         // For very large responses, provide a summary instead of full diff
         if total_size > self.large_response_threshold {
             return self.generate_large_response_summary(text1, text2, env1, env2);
         }
-        
-        // Use prettydiff's native unified diff output
+
+        // Use prettydiff's native unified diff output with colors
         let diff = prettydiff::diff_lines(text1, text2);
-        let mut output = String::new();
-        
-        // Header
-        output.push_str("┌─────────────────────────────────────────────────────────────────────────────────────┐\n");
-        output.push_str(&format!("│ {} vs {} - Unified Response Body Comparison{}", 
-            env1.to_uppercase(), 
-            env2.to_uppercase(),
-            " ".repeat(38_usize.saturating_sub(env1.len()).saturating_sub(env2.len()))
-        ));
-        output.push_str("│\n");
-        output.push_str("├─────────────────────────────────────────────────────────────────────────────────────┤\n");
-        
-        // Add prettydiff's native output
         let prettydiff_output = diff.to_string();
+
+        // Create table using shared implementation
+        let mut table = self.create_diff_table(vec![Cell::new(format!(
+            "{} vs {} - Unified Response Body Comparison",
+            env1.to_uppercase(),
+            env2.to_uppercase()
+        ))
+        .add_attribute(Attribute::Bold)]);
+
+        // Add prettydiff's native output line by line, preserving ANSI codes
         for line in prettydiff_output.lines() {
-            output.push_str(&format!("│ {:<83}│\n", line));
+            // Create cell that preserves prettydiff's native styling
+            let cell = Cell::new(line);
+            table.add_row(vec![cell]);
         }
-        
-        output.push_str("└─────────────────────────────────────────────────────────────────────────────────────┘\n");
-        
+
+        let mut output = String::new();
+        output.push_str(&format!("\n{}\n", table.to_string()));
+
         // Add summary
         let lines1 = text1.lines().count();
         let lines2 = text2.lines().count();
         output.push_str(&format!("\n📊 Comparison Summary:\n"));
         output.push_str(&format!("   {} response: {} lines\n", env1, lines1));
         output.push_str(&format!("   {} response: {} lines\n", env2, lines2));
-        
+
         if lines1 != lines2 {
-            output.push_str(&format!("   Line count difference: {}\n", (lines1 as i32 - lines2 as i32).abs()));
+            output.push_str(&format!(
+                "   Line count difference: {}\n",
+                (lines1 as i32 - lines2 as i32).abs()
+            ));
         }
 
         output
     }
 
-
-
     /// Generate side-by-side diff using proper table rendering with automatic terminal width detection
-    fn generate_side_by_side_diff(&self, text1: &str, text2: &str, env1: &str, env2: &str) -> String {
+    fn generate_side_by_side_diff(
+        &self,
+        text1: &str,
+        text2: &str,
+        env1: &str,
+        env2: &str,
+    ) -> String {
         let total_size = text1.len() + text2.len();
-        
+
         // For very large responses, provide a summary instead of full diff
         if total_size > self.large_response_threshold {
             return self.generate_large_response_summary(text1, text2, env1, env2);
@@ -426,20 +476,11 @@ impl ResponseComparator {
         let diff = prettydiff::diff_lines(text1, text2);
         let diff_ops = diff.diff();
 
-        // Create table with proper styling and automatic width detection
-        let mut table = Table::new();
-        table
-            .load_preset(UTF8_FULL)
-            .apply_modifier(UTF8_ROUND_CORNERS)
-            .set_content_arrangement(ContentArrangement::Dynamic)
-            .remove_style(TableComponent::HorizontalLines) // Remove horizontal lines between rows
-            .remove_style(TableComponent::LeftBorderIntersections) // Remove left border intersections
-            .remove_style(TableComponent::RightBorderIntersections) // Remove right border intersections
-            .remove_style(TableComponent::MiddleIntersections) // Remove middle intersections
-            .set_header(vec![
-                Cell::new(format!("{}", env1.to_uppercase())).add_attribute(Attribute::Bold),
-                Cell::new(format!("{}", env2.to_uppercase())).add_attribute(Attribute::Bold),
-            ]);
+        // Create table using shared implementation
+        let mut table = self.create_diff_table(vec![
+            Cell::new(format!("{}", env1.to_uppercase())).add_attribute(Attribute::Bold),
+            Cell::new(format!("{}", env2.to_uppercase())).add_attribute(Attribute::Bold),
+        ]);
 
         // Process diff operations and add rows to table
         for op in diff_ops {
@@ -447,19 +488,16 @@ impl ResponseComparator {
                 DiffOp::Equal(lines) => {
                     // Both sides have the same content - no special styling
                     for line in lines {
-                        table.add_row(vec![
-                            Cell::new(line),
-                            Cell::new(line),
-                        ]);
+                        table.add_row(vec![Cell::new(line), Cell::new(line)]);
                     }
-                },
+                }
                 DiffOp::Replace(old_lines, new_lines) => {
                     // Handle replacements with proper color highlighting
                     let max_lines = old_lines.len().max(new_lines.len());
                     for i in 0..max_lines {
                         let left = old_lines.get(i).unwrap_or(&"");
                         let right = new_lines.get(i).unwrap_or(&"");
-                        
+
                         table.add_row(vec![
                             if !left.is_empty() {
                                 Cell::new(left).fg(Color::Red)
@@ -473,49 +511,46 @@ impl ResponseComparator {
                             },
                         ]);
                     }
-                },
+                }
                 DiffOp::Remove(lines) => {
                     // Lines only in left side - red for removed
                     for line in lines {
-                        table.add_row(vec![
-                            Cell::new(line).fg(Color::Red),
-                            Cell::new(""),
-                        ]);
+                        table.add_row(vec![Cell::new(line).fg(Color::Red), Cell::new("")]);
                     }
-                },
+                }
                 DiffOp::Insert(lines) => {
                     // Lines only in right side - green for added
                     for line in lines {
-                        table.add_row(vec![
-                            Cell::new(""),
-                            Cell::new(line).fg(Color::Green),
-                        ]);
+                        table.add_row(vec![Cell::new(""), Cell::new(line).fg(Color::Green)]);
                     }
                 }
             }
         }
 
         let mut output = String::new();
-        
+
         // Add descriptive header
-        output.push_str(&format!("\n📊 {} vs {} - Side-by-Side Response Body Comparison\n", 
-            env1.to_uppercase(), env2.to_uppercase()));
-        
+        output.push_str(&format!(
+            "\n📊 {} vs {} - Side-by-Side Response Body Comparison\n",
+            env1.to_uppercase(),
+            env2.to_uppercase()
+        ));
+
         // Add the properly formatted table
         output.push_str(&table.to_string());
-        
+
         // Add informative legend
         output.push_str("\n🎨 Color Legend:\n");
         output.push_str(&format!("   {} Lines removed from {}\n", "Red".red(), env1));
         output.push_str(&format!("   {} Lines added in {}\n", "Green".green(), env2));
-        
+
         // Add comparison summary
         let lines1 = text1.lines().count();
         let lines2 = text2.lines().count();
         output.push_str(&format!("\n📈 Comparison Summary:\n"));
         output.push_str(&format!("   {} response: {} lines\n", env1, lines1));
         output.push_str(&format!("   {} response: {} lines\n", env2, lines2));
-        
+
         if lines1 != lines2 {
             let diff_count = (lines1 as i32 - lines2 as i32).abs();
             output.push_str(&format!("   Line count difference: {} lines\n", diff_count));
@@ -525,12 +560,18 @@ impl ResponseComparator {
     }
 
     /// Generate summary for very large responses using proper table formatting
-    fn generate_large_response_summary(&self, text1: &str, text2: &str, env1: &str, env2: &str) -> String {
+    fn generate_large_response_summary(
+        &self,
+        text1: &str,
+        text2: &str,
+        env1: &str,
+        env2: &str,
+    ) -> String {
         let lines1 = text1.lines().count();
         let lines2 = text2.lines().count();
         let size1 = text1.len();
         let size2 = text2.len();
-        
+
         // Create a summary table for large responses
         let mut table = Table::new();
         table
@@ -542,54 +583,55 @@ impl ResponseComparator {
                 Cell::new("Response Size").add_attribute(Attribute::Bold),
                 Cell::new("Line Count").add_attribute(Attribute::Bold),
             ]);
-        
 
-        
         table.add_row(vec![
             Cell::new(env1),
             Cell::new(format!("{} bytes", size1)),
             Cell::new(lines1.to_string()),
         ]);
-        
+
         table.add_row(vec![
             Cell::new(env2),
             Cell::new(format!("{} bytes", size2)),
             Cell::new(lines2.to_string()),
         ]);
-        
+
         let mut output = String::new();
         output.push_str("\n🔍 Large Response Comparison Summary\n");
         output.push_str("⚠️  Responses are too large for detailed diff - showing summary only\n\n");
         output.push_str(&table.to_string());
-        
+
         // Add size difference analysis
         output.push_str("\n📈 Differences:\n");
         let size_diff = (size1 as i64 - size2 as i64).abs();
         output.push_str(&format!("   Size difference: {} bytes\n", size_diff));
-        
+
         if lines1 != lines2 {
             let line_diff = (lines1 as i64 - lines2 as i64).abs();
             output.push_str(&format!("   Line count difference: {} lines\n", line_diff));
         }
-        
+
         // Try to detect what kind of differences exist
         let first_lines1: Vec<_> = text1.lines().take(10).collect();
         let first_lines2: Vec<_> = text2.lines().take(10).collect();
-        
+
         if first_lines1 != first_lines2 {
             output.push_str("\n🔍 Sample Differences (first 10 lines):\n");
             for (i, (line1, line2)) in first_lines1.iter().zip(first_lines2.iter()).enumerate() {
                 if line1 != line2 {
                     output.push_str(&format!("   Line {}: content differs\n", i + 1));
-                    if output.lines().count() > 20 { // Limit output
+                    if output.lines().count() > 20 {
+                        // Limit output
                         output.push_str("   ... (more differences)\n");
                         break;
                     }
                 }
             }
         }
-        
-        output.push_str("\n💡 Tip: Use curl commands or reduce response size for detailed comparison\n");
+
+        output.push_str(
+            "\n💡 Tip: Use curl commands or reduce response size for detailed comparison\n",
+        );
         output
     }
 
@@ -614,18 +656,19 @@ impl ResponseComparator {
     /// Detect content type from text content
     fn detect_content_type(&self, text: &str) -> &str {
         let trimmed = text.trim();
-        
-        if (trimmed.starts_with('{') && trimmed.ends_with('}')) || 
-           (trimmed.starts_with('[') && trimmed.ends_with(']')) {
+
+        if (trimmed.starts_with('{') && trimmed.ends_with('}'))
+            || (trimmed.starts_with('[') && trimmed.ends_with(']'))
+        {
             if serde_json::from_str::<serde_json::Value>(trimmed).is_ok() {
                 return "application/json";
             }
         }
-        
+
         if trimmed.starts_with('<') && trimmed.contains('>') {
             return "application/xml";
         }
-        
+
         "text/plain"
     }
 
@@ -634,8 +677,7 @@ impl ResponseComparator {
         match serde_json::from_str::<serde_json::Value>(text) {
             Ok(json_value) => {
                 // Pretty print with consistent formatting
-                serde_json::to_string_pretty(&json_value)
-                    .unwrap_or_else(|_| text.to_string())
+                serde_json::to_string_pretty(&json_value).unwrap_or_else(|_| text.to_string())
             }
             Err(_) => {
                 // Fallback to plain text normalization if JSON parsing fails
@@ -672,8 +714,6 @@ impl ResponseComparator {
             .collect::<Vec<_>>()
             .join("\n")
     }
-
-
 }
 
 impl Default for ResponseComparator {
@@ -702,16 +742,20 @@ mod tests {
     #[test]
     fn test_identical_responses() {
         let comparator = ResponseComparator::new();
-        
-        let mut responses = HashMap::new();
-        responses.insert("test".to_string(), create_test_response(200, r#"{"status": "ok"}"#));
-        responses.insert("prod".to_string(), create_test_response(200, r#"{"status": "ok"}"#));
 
-        let result = comparator.compare_responses(
-            "test-route".to_string(),
-            HashMap::new(),
-            responses,
-        ).unwrap();
+        let mut responses = HashMap::new();
+        responses.insert(
+            "test".to_string(),
+            create_test_response(200, r#"{"status": "ok"}"#),
+        );
+        responses.insert(
+            "prod".to_string(),
+            create_test_response(200, r#"{"status": "ok"}"#),
+        );
+
+        let result = comparator
+            .compare_responses("test-route".to_string(), HashMap::new(), responses)
+            .unwrap();
 
         assert!(result.is_identical);
         assert!(result.differences.is_empty());
@@ -720,21 +764,27 @@ mod tests {
     #[test]
     fn test_different_status_codes() {
         let comparator = ResponseComparator::new();
-        
-        let mut responses = HashMap::new();
-        responses.insert("test".to_string(), create_test_response(200, r#"{"status": "ok"}"#));
-        responses.insert("prod".to_string(), create_test_response(404, r#"{"error": "not found"}"#));
 
-        let result = comparator.compare_responses(
-            "test-route".to_string(),
-            HashMap::new(),
-            responses,
-        ).unwrap();
+        let mut responses = HashMap::new();
+        responses.insert(
+            "test".to_string(),
+            create_test_response(200, r#"{"status": "ok"}"#),
+        );
+        responses.insert(
+            "prod".to_string(),
+            create_test_response(404, r#"{"error": "not found"}"#),
+        );
+
+        let result = comparator
+            .compare_responses("test-route".to_string(), HashMap::new(), responses)
+            .unwrap();
 
         assert!(!result.is_identical);
         assert_eq!(result.differences.len(), 2); // Status + body difference
-        
-        let status_diff = result.differences.iter()
+
+        let status_diff = result
+            .differences
+            .iter()
             .find(|d| d.category == DifferenceCategory::Status);
         assert!(status_diff.is_some());
     }
@@ -742,20 +792,26 @@ mod tests {
     #[test]
     fn test_different_bodies() {
         let comparator = ResponseComparator::new();
-        
-        let mut responses = HashMap::new();
-        responses.insert("test".to_string(), create_test_response(200, r#"{"status": "ok", "data": "test"}"#));
-        responses.insert("prod".to_string(), create_test_response(200, r#"{"status": "ok", "data": "prod"}"#));
 
-        let result = comparator.compare_responses(
-            "test-route".to_string(),
-            HashMap::new(),
-            responses,
-        ).unwrap();
+        let mut responses = HashMap::new();
+        responses.insert(
+            "test".to_string(),
+            create_test_response(200, r#"{"status": "ok", "data": "test"}"#),
+        );
+        responses.insert(
+            "prod".to_string(),
+            create_test_response(200, r#"{"status": "ok", "data": "prod"}"#),
+        );
+
+        let result = comparator
+            .compare_responses("test-route".to_string(), HashMap::new(), responses)
+            .unwrap();
 
         assert!(!result.is_identical);
-        
-        let body_diff = result.differences.iter()
+
+        let body_diff = result
+            .differences
+            .iter()
             .find(|d| d.category == DifferenceCategory::Body);
         assert!(body_diff.is_some());
         assert!(body_diff.unwrap().diff_output.is_some());
@@ -764,23 +820,25 @@ mod tests {
     #[test]
     fn test_header_case_insensitive_comparison() {
         let comparator = ResponseComparator::new().with_headers_comparison();
-        
+
         let mut response1 = create_test_response(200, r#"{"status": "ok"}"#);
         let mut response2 = create_test_response(200, r#"{"status": "ok"}"#);
-        
+
         // Add headers with different cases
-        response1.headers.insert("Content-Type".to_string(), "application/json".to_string());
-        response2.headers.insert("content-type".to_string(), "application/json".to_string());
+        response1
+            .headers
+            .insert("Content-Type".to_string(), "application/json".to_string());
+        response2
+            .headers
+            .insert("content-type".to_string(), "application/json".to_string());
 
         let mut responses = HashMap::new();
         responses.insert("test".to_string(), response1);
         responses.insert("prod".to_string(), response2);
 
-        let result = comparator.compare_responses(
-            "test-route".to_string(),
-            HashMap::new(),
-            responses,
-        ).unwrap();
+        let result = comparator
+            .compare_responses("test-route".to_string(), HashMap::new(), responses)
+            .unwrap();
 
         // Should be identical even with different header case
         assert!(result.is_identical);
@@ -789,29 +847,33 @@ mod tests {
     #[test]
     fn test_header_value_differences() {
         let comparator = ResponseComparator::new().with_headers_comparison();
-        
+
         let mut response1 = create_test_response(200, r#"{"status": "ok"}"#);
         let mut response2 = create_test_response(200, r#"{"status": "ok"}"#);
-        
-        response1.headers.insert("X-Version".to_string(), "1.0".to_string());
-        response2.headers.insert("X-Version".to_string(), "2.0".to_string());
+
+        response1
+            .headers
+            .insert("X-Version".to_string(), "1.0".to_string());
+        response2
+            .headers
+            .insert("X-Version".to_string(), "2.0".to_string());
 
         let mut responses = HashMap::new();
         responses.insert("test".to_string(), response1);
         responses.insert("prod".to_string(), response2);
 
-        let result = comparator.compare_responses(
-            "test-route".to_string(),
-            HashMap::new(),
-            responses,
-        ).unwrap();
+        let result = comparator
+            .compare_responses("test-route".to_string(), HashMap::new(), responses)
+            .unwrap();
 
         assert!(!result.is_identical);
-        
-        let header_diff = result.differences.iter()
+
+        let header_diff = result
+            .differences
+            .iter()
             .find(|d| d.category == DifferenceCategory::Headers);
         assert!(header_diff.is_some());
-        
+
         let diff = header_diff.unwrap();
         assert!(diff.description.contains("X-Version"));
         assert!(diff.description.contains("1.0"));
@@ -822,7 +884,7 @@ mod tests {
     #[test]
     fn test_json_semantic_comparison() {
         let comparator = ResponseComparator::new();
-        
+
         // Same JSON data but with different formatting
         let json1 = r#"{"name":"John","age":30,"city":"NYC"}"#;
         let json2 = r#"{
@@ -835,11 +897,9 @@ mod tests {
         responses.insert("test".to_string(), create_test_response(200, json1));
         responses.insert("prod".to_string(), create_test_response(200, json2));
 
-        let result = comparator.compare_responses(
-            "test-route".to_string(),
-            HashMap::new(),
-            responses,
-        ).unwrap();
+        let result = comparator
+            .compare_responses("test-route".to_string(), HashMap::new(), responses)
+            .unwrap();
 
         // Should be identical due to JSON semantic comparison
         assert!(result.is_identical);
@@ -848,28 +908,43 @@ mod tests {
     #[test]
     fn test_content_type_detection() {
         let comparator = ResponseComparator::new();
-        
+
         // Test JSON detection
-        assert_eq!(comparator.detect_content_type(r#"{"key": "value"}"#), "application/json");
-        assert_eq!(comparator.detect_content_type(r#"[1, 2, 3]"#), "application/json");
-        
+        assert_eq!(
+            comparator.detect_content_type(r#"{"key": "value"}"#),
+            "application/json"
+        );
+        assert_eq!(
+            comparator.detect_content_type(r#"[1, 2, 3]"#),
+            "application/json"
+        );
+
         // Test XML detection
-        assert_eq!(comparator.detect_content_type("<root><item>value</item></root>"), "application/xml");
-        
+        assert_eq!(
+            comparator.detect_content_type("<root><item>value</item></root>"),
+            "application/xml"
+        );
+
         // Test plain text fallback
-        assert_eq!(comparator.detect_content_type("This is plain text"), "text/plain");
-        assert_eq!(comparator.detect_content_type("{invalid json"), "text/plain");
+        assert_eq!(
+            comparator.detect_content_type("This is plain text"),
+            "text/plain"
+        );
+        assert_eq!(
+            comparator.detect_content_type("{invalid json"),
+            "text/plain"
+        );
     }
 
     #[test]
     fn test_github_style_diff_generation() {
         let comparator = ResponseComparator::new();
-        
+
         let text1 = "line1\nline2\nline3";
         let text2 = "line1\nmodified_line2\nline3";
-        
+
         let diff_output = comparator.generate_unified_diff(text1, text2, "test", "prod");
-        
+
         assert!(diff_output.contains("TEST vs PROD"));
         assert!(diff_output.contains("Unified Response Body Comparison"));
         assert!(diff_output.contains("line2"));
@@ -881,18 +956,26 @@ mod tests {
     #[test]
     fn test_large_response_handling() {
         let comparator = ResponseComparator::new();
-        
+
         // Create large JSON responses
         let mut large_json1 = serde_json::Map::new();
         let mut large_json2 = serde_json::Map::new();
-        
+
         for i in 0..1000 {
-            large_json1.insert(format!("key_{}", i), serde_json::Value::String(format!("value_{}", i)));
-            large_json2.insert(format!("key_{}", i), serde_json::Value::String(
-                if i == 500 { "different_value".to_string() } else { format!("value_{}", i) }
-            ));
+            large_json1.insert(
+                format!("key_{}", i),
+                serde_json::Value::String(format!("value_{}", i)),
+            );
+            large_json2.insert(
+                format!("key_{}", i),
+                serde_json::Value::String(if i == 500 {
+                    "different_value".to_string()
+                } else {
+                    format!("value_{}", i)
+                }),
+            );
         }
-        
+
         let json1 = serde_json::to_string(&large_json1).unwrap();
         let json2 = serde_json::to_string(&large_json2).unwrap();
 
@@ -900,11 +983,9 @@ mod tests {
         responses.insert("test".to_string(), create_test_response(200, &json1));
         responses.insert("prod".to_string(), create_test_response(200, &json2));
 
-        let result = comparator.compare_responses(
-            "test-route".to_string(),
-            HashMap::new(),
-            responses,
-        ).unwrap();
+        let result = comparator
+            .compare_responses("test-route".to_string(), HashMap::new(), responses)
+            .unwrap();
 
         assert!(!result.is_identical);
         assert_eq!(result.differences.len(), 1);
@@ -914,25 +995,33 @@ mod tests {
     #[test]
     fn test_ignored_headers() {
         let comparator = ResponseComparator::new().with_headers_comparison();
-        
+
         let mut response1 = create_test_response(200, r#"{"status": "ok"}"#);
         let mut response2 = create_test_response(200, r#"{"status": "ok"}"#);
-        
+
         // Add headers that should be ignored
-        response1.headers.insert("date".to_string(), "Mon, 01 Jan 2024 00:00:00 GMT".to_string());
-        response2.headers.insert("date".to_string(), "Tue, 02 Jan 2024 00:00:00 GMT".to_string());
-        response1.headers.insert("x-request-id".to_string(), "req-123".to_string());
-        response2.headers.insert("x-request-id".to_string(), "req-456".to_string());
+        response1.headers.insert(
+            "date".to_string(),
+            "Mon, 01 Jan 2024 00:00:00 GMT".to_string(),
+        );
+        response2.headers.insert(
+            "date".to_string(),
+            "Tue, 02 Jan 2024 00:00:00 GMT".to_string(),
+        );
+        response1
+            .headers
+            .insert("x-request-id".to_string(), "req-123".to_string());
+        response2
+            .headers
+            .insert("x-request-id".to_string(), "req-456".to_string());
 
         let mut responses = HashMap::new();
         responses.insert("test".to_string(), response1);
         responses.insert("prod".to_string(), response2);
 
-        let result = comparator.compare_responses(
-            "test-route".to_string(),
-            HashMap::new(),
-            responses,
-        ).unwrap();
+        let result = comparator
+            .compare_responses("test-route".to_string(), HashMap::new(), responses)
+            .unwrap();
 
         // Should be identical because ignored headers are not compared
         assert!(result.is_identical);
@@ -941,29 +1030,34 @@ mod tests {
     #[test]
     fn test_custom_comparator_settings() {
         let ignore_headers = vec!["custom-header".to_string()];
-        let comparator = ResponseComparator::with_full_settings(ignore_headers, false, true, 50_000);
-        
+        let comparator =
+            ResponseComparator::with_full_settings(ignore_headers, false, true, 50_000);
+
         let mut response1 = create_test_response(200, "  line1  \n  line2  ");
         let mut response2 = create_test_response(200, "line1\nline2");
-        
-        response1.headers.insert("custom-header".to_string(), "value1".to_string());
-        response2.headers.insert("custom-header".to_string(), "value2".to_string());
+
+        response1
+            .headers
+            .insert("custom-header".to_string(), "value1".to_string());
+        response2
+            .headers
+            .insert("custom-header".to_string(), "value2".to_string());
 
         let mut responses = HashMap::new();
         responses.insert("test".to_string(), response1);
         responses.insert("prod".to_string(), response2);
 
-        let result = comparator.compare_responses(
-            "test-route".to_string(),
-            HashMap::new(),
-            responses,
-        ).unwrap();
+        let result = comparator
+            .compare_responses("test-route".to_string(), HashMap::new(), responses)
+            .unwrap();
 
         // Should not be identical because whitespace normalization is disabled
         assert!(!result.is_identical);
-        
+
         // Custom header should be ignored (even with headers comparison enabled)
-        let header_diffs: Vec<_> = result.differences.iter()
+        let header_diffs: Vec<_> = result
+            .differences
+            .iter()
             .filter(|d| d.category == DifferenceCategory::Headers)
             .collect();
         assert!(header_diffs.is_empty());
@@ -972,29 +1066,33 @@ mod tests {
     #[test]
     fn test_headers_comparison_disabled_by_default() {
         let comparator = ResponseComparator::new();
-        
+
         let mut response1 = create_test_response(200, r#"{"status": "ok"}"#);
         let mut response2 = create_test_response(200, r#"{"status": "ok"}"#);
-        
+
         // Add different headers
-        response1.headers.insert("X-Version".to_string(), "1.0".to_string());
-        response2.headers.insert("X-Version".to_string(), "2.0".to_string());
+        response1
+            .headers
+            .insert("X-Version".to_string(), "1.0".to_string());
+        response2
+            .headers
+            .insert("X-Version".to_string(), "2.0".to_string());
 
         let mut responses = HashMap::new();
         responses.insert("test".to_string(), response1);
         responses.insert("prod".to_string(), response2);
 
-        let result = comparator.compare_responses(
-            "test-route".to_string(),
-            HashMap::new(),
-            responses,
-        ).unwrap();
+        let result = comparator
+            .compare_responses("test-route".to_string(), HashMap::new(), responses)
+            .unwrap();
 
         // Should be identical because headers comparison is disabled by default
         assert!(result.is_identical);
-        
+
         // No header differences should be reported
-        let header_diffs: Vec<_> = result.differences.iter()
+        let header_diffs: Vec<_> = result
+            .differences
+            .iter()
             .filter(|d| d.category == DifferenceCategory::Headers)
             .collect();
         assert!(header_diffs.is_empty());
@@ -1003,39 +1101,47 @@ mod tests {
     #[test]
     fn test_default_comparison_scope() {
         let comparator = ResponseComparator::new();
-        
+
         let mut response1 = create_test_response(200, r#"{"status": "ok"}"#);
         let mut response2 = create_test_response(404, r#"{"error": "not found"}"#);
-        
+
         // Add different headers (should be ignored)
-        response1.headers.insert("X-Version".to_string(), "1.0".to_string());
-        response2.headers.insert("X-Version".to_string(), "2.0".to_string());
+        response1
+            .headers
+            .insert("X-Version".to_string(), "1.0".to_string());
+        response2
+            .headers
+            .insert("X-Version".to_string(), "2.0".to_string());
 
         let mut responses = HashMap::new();
         responses.insert("test".to_string(), response1);
         responses.insert("prod".to_string(), response2);
 
-        let result = comparator.compare_responses(
-            "test-route".to_string(),
-            HashMap::new(),
-            responses,
-        ).unwrap();
+        let result = comparator
+            .compare_responses("test-route".to_string(), HashMap::new(), responses)
+            .unwrap();
 
         // Should not be identical due to status and body differences
         assert!(!result.is_identical);
-        
+
         // Should have status and body differences, but no header differences
-        let status_diffs: Vec<_> = result.differences.iter()
+        let status_diffs: Vec<_> = result
+            .differences
+            .iter()
             .filter(|d| d.category == DifferenceCategory::Status)
             .collect();
         assert!(!status_diffs.is_empty());
-        
-        let body_diffs: Vec<_> = result.differences.iter()
+
+        let body_diffs: Vec<_> = result
+            .differences
+            .iter()
             .filter(|d| d.category == DifferenceCategory::Body)
             .collect();
         assert!(!body_diffs.is_empty());
-        
-        let header_diffs: Vec<_> = result.differences.iter()
+
+        let header_diffs: Vec<_> = result
+            .differences
+            .iter()
             .filter(|d| d.category == DifferenceCategory::Headers)
             .collect();
         assert!(header_diffs.is_empty()); // Headers not compared by default
@@ -1048,31 +1154,35 @@ mod tests {
         assert_eq!(default_comparator.diff_view_style, DiffViewStyle::Unified);
 
         // Test explicit unified setting
-        let unified_comparator = ResponseComparator::new()
-            .with_diff_view_style(DiffViewStyle::Unified);
+        let unified_comparator =
+            ResponseComparator::new().with_diff_view_style(DiffViewStyle::Unified);
         assert_eq!(unified_comparator.diff_view_style, DiffViewStyle::Unified);
 
         // Test side-by-side setting
-        let side_by_side_comparator = ResponseComparator::new()
-            .with_diff_view_style(DiffViewStyle::SideBySide);
-        assert_eq!(side_by_side_comparator.diff_view_style, DiffViewStyle::SideBySide);
+        let side_by_side_comparator =
+            ResponseComparator::new().with_diff_view_style(DiffViewStyle::SideBySide);
+        assert_eq!(
+            side_by_side_comparator.diff_view_style,
+            DiffViewStyle::SideBySide
+        );
 
         // Test convenience method
-        let convenient_comparator = ResponseComparator::new()
-            .with_side_by_side_diff();
-        assert_eq!(convenient_comparator.diff_view_style, DiffViewStyle::SideBySide);
+        let convenient_comparator = ResponseComparator::new().with_side_by_side_diff();
+        assert_eq!(
+            convenient_comparator.diff_view_style,
+            DiffViewStyle::SideBySide
+        );
     }
 
     #[test]
     fn test_unified_diff_generation() {
-        let comparator = ResponseComparator::new()
-            .with_diff_view_style(DiffViewStyle::Unified);
-        
+        let comparator = ResponseComparator::new().with_diff_view_style(DiffViewStyle::Unified);
+
         let text1 = "line1\nline2\nline3";
         let text2 = "line1\nmodified_line2\nline3";
-        
+
         let diff_output = comparator.generate_unified_diff(text1, text2, "test", "prod");
-        
+
         // Should contain unified diff markers (prettydiff format)
         assert!(diff_output.contains("TEST vs PROD"));
         assert!(diff_output.contains("Unified Response Body Comparison"));
@@ -1084,35 +1194,34 @@ mod tests {
 
     #[test]
     fn test_side_by_side_diff_generation() {
-        let comparator = ResponseComparator::new()
-            .with_diff_view_style(DiffViewStyle::SideBySide);
-        
+        let comparator = ResponseComparator::new().with_diff_view_style(DiffViewStyle::SideBySide);
+
         let text1 = "line1\nline2\nline3";
         let text2 = "line1\nmodified_line2\nline3";
-        
+
         let diff_output = comparator.generate_side_by_side_diff(text1, text2, "test", "prod");
-        
+
         // Should contain side-by-side diff formatting
         assert!(diff_output.contains("TEST vs PROD"));
         assert!(diff_output.contains("Side-by-Side"));
         assert!(diff_output.contains("📈 Comparison Summary"));
         assert!(diff_output.contains("test response: 3 lines"));
         assert!(diff_output.contains("prod response: 3 lines"));
-        
+
         // Should have proper table formatting with UTF8 borders and rounded corners
-        assert!(diff_output.contains("│"));  // Vertical separators
-        assert!(diff_output.contains("╭"));  // Rounded top corners
-        assert!(diff_output.contains("╰"));  // Rounded bottom corners
-        assert!(diff_output.contains("┆"));  // Vertical column separator
-        // Note: Horizontal lines between content rows are removed for cleaner appearance
-        assert!(!diff_output.contains("├╌╌"));  // Should NOT have horizontal row separators
-        assert!(!diff_output.contains("├ "));   // Should NOT have left border intersections
-        
+        assert!(diff_output.contains("│")); // Vertical separators
+        assert!(diff_output.contains("╭")); // Rounded top corners
+        assert!(diff_output.contains("╰")); // Rounded bottom corners
+        assert!(diff_output.contains("┆")); // Vertical column separator
+                                            // Note: Horizontal lines between content rows are removed for cleaner appearance
+        assert!(!diff_output.contains("├╌╌")); // Should NOT have horizontal row separators
+        assert!(!diff_output.contains("├ ")); // Should NOT have left border intersections
+
         // Should show proper color legend
         assert!(diff_output.contains("🎨 Color Legend"));
         assert!(diff_output.contains("Lines removed from"));
         assert!(diff_output.contains("Lines added in"));
-        
+
         // Should contain the header with environment names
         assert!(diff_output.contains("TEST"));
         assert!(diff_output.contains("PROD"));
@@ -1120,31 +1229,36 @@ mod tests {
 
     #[test]
     fn test_diff_view_style_affects_comparison_result() {
-        let unified_comparator = ResponseComparator::new()
-            .with_diff_view_style(DiffViewStyle::Unified);
-        let side_by_side_comparator = ResponseComparator::new()
-            .with_diff_view_style(DiffViewStyle::SideBySide);
-        
+        let unified_comparator =
+            ResponseComparator::new().with_diff_view_style(DiffViewStyle::Unified);
+        let side_by_side_comparator =
+            ResponseComparator::new().with_diff_view_style(DiffViewStyle::SideBySide);
+
         let mut responses = HashMap::new();
-        responses.insert("test".to_string(), create_test_response(200, "line1\nline2\nline3"));
-        responses.insert("prod".to_string(), create_test_response(200, "line1\nmodified_line2\nline3"));
+        responses.insert(
+            "test".to_string(),
+            create_test_response(200, "line1\nline2\nline3"),
+        );
+        responses.insert(
+            "prod".to_string(),
+            create_test_response(200, "line1\nmodified_line2\nline3"),
+        );
 
-        let unified_result = unified_comparator.compare_responses(
-            "test-route".to_string(),
-            HashMap::new(),
-            responses.clone(),
-        ).unwrap();
+        let unified_result = unified_comparator
+            .compare_responses("test-route".to_string(), HashMap::new(), responses.clone())
+            .unwrap();
 
-        let side_by_side_result = side_by_side_comparator.compare_responses(
-            "test-route".to_string(),
-            HashMap::new(),
-            responses,
-        ).unwrap();
+        let side_by_side_result = side_by_side_comparator
+            .compare_responses("test-route".to_string(), HashMap::new(), responses)
+            .unwrap();
 
         // Both should detect the difference
         assert!(!unified_result.is_identical);
         assert!(!side_by_side_result.is_identical);
-        assert_eq!(unified_result.differences.len(), side_by_side_result.differences.len());
+        assert_eq!(
+            unified_result.differences.len(),
+            side_by_side_result.differences.len()
+        );
 
         // But should have different diff output formats
         let unified_diff = &unified_result.differences[0].diff_output;
@@ -1154,13 +1268,22 @@ mod tests {
         assert!(side_by_side_diff.is_some());
 
         // Unified should contain prettydiff-style formatting
-        assert!(unified_diff.as_ref().unwrap().contains("Unified Response Body Comparison"));
+        assert!(unified_diff
+            .as_ref()
+            .unwrap()
+            .contains("Unified Response Body Comparison"));
         // prettydiff uses colored - and + markers (we can't easily test ANSI colors in unit tests)
 
         // Side-by-side should contain its specific formatting
         assert!(side_by_side_diff.as_ref().unwrap().contains("Side-by-Side"));
-        assert!(side_by_side_diff.as_ref().unwrap().contains("📈 Comparison Summary"));
-        assert!(side_by_side_diff.as_ref().unwrap().contains("🎨 Color Legend"));
+        assert!(side_by_side_diff
+            .as_ref()
+            .unwrap()
+            .contains("📈 Comparison Summary"));
+        assert!(side_by_side_diff
+            .as_ref()
+            .unwrap()
+            .contains("🎨 Color Legend"));
     }
 
     #[test]
@@ -1170,10 +1293,17 @@ mod tests {
         assert_eq!(default_comparator.diff_view_style, DiffViewStyle::Unified);
 
         let with_settings_comparator = ResponseComparator::with_settings(vec![], true);
-        assert_eq!(with_settings_comparator.diff_view_style, DiffViewStyle::Unified);
+        assert_eq!(
+            with_settings_comparator.diff_view_style,
+            DiffViewStyle::Unified
+        );
 
-        let full_settings_comparator = ResponseComparator::with_full_settings(vec![], true, false, 50_000);
-        assert_eq!(full_settings_comparator.diff_view_style, DiffViewStyle::Unified);
+        let full_settings_comparator =
+            ResponseComparator::with_full_settings(vec![], true, false, 50_000);
+        assert_eq!(
+            full_settings_comparator.diff_view_style,
+            DiffViewStyle::Unified
+        );
     }
 
     #[test]
@@ -1182,13 +1312,23 @@ mod tests {
         let large_content = "x".repeat(60_000); // Larger than threshold
         let large_content_modified = "y".repeat(60_000);
 
-        let unified_comparator = ResponseComparator::new()
-            .with_diff_view_style(DiffViewStyle::Unified);
-        let side_by_side_comparator = ResponseComparator::new()
-            .with_diff_view_style(DiffViewStyle::SideBySide);
+        let unified_comparator =
+            ResponseComparator::new().with_diff_view_style(DiffViewStyle::Unified);
+        let side_by_side_comparator =
+            ResponseComparator::new().with_diff_view_style(DiffViewStyle::SideBySide);
 
-        let unified_output = unified_comparator.generate_unified_diff(&large_content, &large_content_modified, "test", "prod");
-        let side_by_side_output = side_by_side_comparator.generate_side_by_side_diff(&large_content, &large_content_modified, "test", "prod");
+        let unified_output = unified_comparator.generate_unified_diff(
+            &large_content,
+            &large_content_modified,
+            "test",
+            "prod",
+        );
+        let side_by_side_output = side_by_side_comparator.generate_side_by_side_diff(
+            &large_content,
+            &large_content_modified,
+            "test",
+            "prod",
+        );
 
         // Both should provide large response summaries
         assert!(unified_output.contains("Large Response Comparison Summary"));
@@ -1198,4 +1338,4 @@ mod tests {
         assert!(unified_output.contains("Response Size"));
         assert!(side_by_side_output.contains("Response Size"));
     }
-} 
+}
