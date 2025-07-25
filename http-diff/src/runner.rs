@@ -94,6 +94,26 @@ impl TestRunner {
         })
     }
 
+    /// Create a new test runner with custom comparator settings
+    pub fn with_comparator_settings(
+        config: HttpDiffConfig,
+        include_headers: bool,
+        diff_view_style: crate::comparator::DiffViewStyle,
+    ) -> Result<Self> {
+        let client = HttpClient::new(config.clone())?;
+        let mut comparator = ResponseComparator::new().with_diff_view_style(diff_view_style);
+        
+        if include_headers {
+            comparator = comparator.with_headers_comparison();
+        }
+        
+        Ok(Self {
+            config,
+            client,
+            comparator,
+        })
+    }
+
     /// Execute HTTP diff tests with concurrent request execution and progress tracking
     pub async fn execute(&self, environments: Option<Vec<String>>) -> Result<Vec<ComparisonResult>> {
         self.execute_with_progress(environments, None).await.map(|(results, _)| results)

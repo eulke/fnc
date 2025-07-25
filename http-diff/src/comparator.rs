@@ -33,6 +33,15 @@ pub enum DifferenceCategory {
     Body,
 }
 
+/// Diff view style configuration for text differences
+#[derive(Debug, Clone, PartialEq)]
+pub enum DiffViewStyle {
+    /// Traditional unified diff (up/down) - default, backward compatible
+    Unified,
+    /// Side-by-side diff view for easier comparison
+    SideBySide,
+}
+
 /// Summary of error statistics across all comparison results
 #[derive(Debug, Clone, PartialEq)]
 pub struct ErrorSummary {
@@ -96,6 +105,7 @@ pub struct ResponseComparator {
     max_diff_lines: usize,
     large_response_threshold: usize,
     compare_headers: bool,
+    diff_view_style: DiffViewStyle,
 }
 
 impl ResponseComparator {
@@ -113,6 +123,7 @@ impl ResponseComparator {
             max_diff_lines: 100,
             large_response_threshold: 50_000, // 50KB
             compare_headers: false, // Headers comparison disabled by default
+            diff_view_style: DiffViewStyle::Unified, // Backward compatible default
         }
     }
 
@@ -124,6 +135,7 @@ impl ResponseComparator {
             max_diff_lines: 100,
             large_response_threshold: 50_000,
             compare_headers: false, // Headers comparison disabled by default
+            diff_view_style: DiffViewStyle::Unified, // Backward compatible default
         }
     }
 
@@ -141,12 +153,25 @@ impl ResponseComparator {
             max_diff_lines,
             large_response_threshold,
             compare_headers,
+            diff_view_style: DiffViewStyle::Unified, // Backward compatible default
         }
     }
 
     /// Enable headers comparison (disabled by default)
     pub fn with_headers_comparison(mut self) -> Self {
         self.compare_headers = true;
+        self
+    }
+
+    /// Set the diff view style (unified or side-by-side)
+    pub fn with_diff_view_style(mut self, style: DiffViewStyle) -> Self {
+        self.diff_view_style = style;
+        self
+    }
+
+    /// Enable side-by-side diff view for easier comparison
+    pub fn with_side_by_side_diff(mut self) -> Self {
+        self.diff_view_style = DiffViewStyle::SideBySide;
         self
     }
 
@@ -331,8 +356,11 @@ impl ResponseComparator {
             return Ok(None);
         }
 
-        // Generate GitHub-style side-by-side diff output
-        let diff_output = self.generate_github_style_diff(&normalized_body1, &normalized_body2, env1, env2);
+        // Generate diff output based on configured style
+        let diff_output = match self.diff_view_style {
+            DiffViewStyle::Unified => self.generate_unified_diff(&normalized_body1, &normalized_body2, env1, env2),
+            DiffViewStyle::SideBySide => self.generate_side_by_side_diff(&normalized_body1, &normalized_body2, env1, env2),
+        };
 
         Ok(Some(Difference {
             category: DifferenceCategory::Body,
@@ -341,8 +369,8 @@ impl ResponseComparator {
         }))
     }
 
-    /// Generate GitHub-style side-by-side diff with line numbers and context
-    fn generate_github_style_diff(&self, text1: &str, text2: &str, env1: &str, env2: &str) -> String {
+    /// Generate unified diff with line numbers and context (original implementation)
+    fn generate_unified_diff(&self, text1: &str, text2: &str, env1: &str, env2: &str) -> String {
         let total_size = text1.len() + text2.len();
         
         // For very large responses, provide a summary instead of full diff
@@ -420,6 +448,60 @@ impl ResponseComparator {
                     output.push_str(&format!("{}{} {:<85}│\n", prefix, line_indicator, truncated_content));
                 }
             }
+        }
+
+        output.push_str("└─────────────────────────────────────────────────────────────────────────────────────┘\n");
+        
+        // Add summary
+        let lines1 = text1.lines().count();
+        let lines2 = text2.lines().count();
+        output.push_str(&format!("\n📊 Comparison Summary:\n"));
+        output.push_str(&format!("   {} response: {} lines\n", env1, lines1));
+        output.push_str(&format!("   {} response: {} lines\n", env2, lines2));
+        
+        if lines1 != lines2 {
+            output.push_str(&format!("   Line count difference: {}\n", (lines1 as i32 - lines2 as i32).abs()));
+        }
+
+        output
+    }
+
+    /// Generate side-by-side diff using prettydiff for easier comparison
+    fn generate_side_by_side_diff(&self, text1: &str, text2: &str, env1: &str, env2: &str) -> String {
+        let total_size = text1.len() + text2.len();
+        
+        // For very large responses, provide a summary instead of full diff
+        if total_size > self.large_response_threshold {
+            return self.generate_large_response_summary(text1, text2, env1, env2);
+        }
+
+        // Use prettydiff for side-by-side comparison
+        let diff = prettydiff::diff_lines(text1, text2);
+
+        let mut output = String::new();
+        
+        // Header
+        output.push_str("┌─────────────────────────────────────────────────────────────────────────────────────┐\n");
+        output.push_str(&format!("│ {} vs {} - Side-by-Side Response Body Comparison{}", 
+            env1.to_uppercase(), 
+            env2.to_uppercase(),
+            " ".repeat(32_usize.saturating_sub(env1.len()).saturating_sub(env2.len()))
+        ));
+        output.push_str("│\n");
+        output.push_str("├─────────────────────────────────────────────────────────────────────────────────────┤\n");
+
+        // Convert prettydiff output to string and format it nicely
+        let diff_str = diff.to_string();
+        
+        // Add the diff content with proper indentation
+        for line in diff_str.lines() {
+            let formatted_line = if line.len() > 83 {
+                format!("│ {:<83}│", format!("{}...", &line[..80]))
+            } else {
+                format!("│ {:<83}│", line)
+            };
+            output.push_str(&formatted_line);
+            output.push('\n');
         }
 
         output.push_str("└─────────────────────────────────────────────────────────────────────────────────────┘\n");
@@ -758,7 +840,7 @@ mod tests {
         let text1 = "line1\nline2\nline3";
         let text2 = "line1\nmodified_line2\nline3";
         
-        let diff_output = comparator.generate_github_style_diff(text1, text2, "test", "prod");
+        let diff_output = comparator.generate_unified_diff(text1, text2, "test", "prod");
         
         assert!(diff_output.contains("TEST vs PROD"));
         assert!(diff_output.contains("🔴"));  // Delete indicator
@@ -929,5 +1011,141 @@ mod tests {
             .filter(|d| d.category == DifferenceCategory::Headers)
             .collect();
         assert!(header_diffs.is_empty()); // Headers not compared by default
+    }
+
+    #[test]
+    fn test_diff_view_style_configuration() {
+        // Test default is unified
+        let default_comparator = ResponseComparator::new();
+        assert_eq!(default_comparator.diff_view_style, DiffViewStyle::Unified);
+
+        // Test explicit unified setting
+        let unified_comparator = ResponseComparator::new()
+            .with_diff_view_style(DiffViewStyle::Unified);
+        assert_eq!(unified_comparator.diff_view_style, DiffViewStyle::Unified);
+
+        // Test side-by-side setting
+        let side_by_side_comparator = ResponseComparator::new()
+            .with_diff_view_style(DiffViewStyle::SideBySide);
+        assert_eq!(side_by_side_comparator.diff_view_style, DiffViewStyle::SideBySide);
+
+        // Test convenience method
+        let convenient_comparator = ResponseComparator::new()
+            .with_side_by_side_diff();
+        assert_eq!(convenient_comparator.diff_view_style, DiffViewStyle::SideBySide);
+    }
+
+    #[test]
+    fn test_unified_diff_generation() {
+        let comparator = ResponseComparator::new()
+            .with_diff_view_style(DiffViewStyle::Unified);
+        
+        let text1 = "line1\nline2\nline3";
+        let text2 = "line1\nmodified_line2\nline3";
+        
+        let diff_output = comparator.generate_unified_diff(text1, text2, "test", "prod");
+        
+        // Should contain unified diff markers
+        assert!(diff_output.contains("TEST vs PROD"));
+        assert!(diff_output.contains("🔴"));  // Delete indicator
+        assert!(diff_output.contains("🟢"));  // Insert indicator
+        assert!(diff_output.contains("line2"));
+        assert!(diff_output.contains("modified_line2"));
+        assert!(diff_output.contains("📊 Comparison Summary"));
+    }
+
+    #[test]
+    fn test_side_by_side_diff_generation() {
+        let comparator = ResponseComparator::new()
+            .with_diff_view_style(DiffViewStyle::SideBySide);
+        
+        let text1 = "line1\nline2\nline3";
+        let text2 = "line1\nmodified_line2\nline3";
+        
+        let diff_output = comparator.generate_side_by_side_diff(text1, text2, "test", "prod");
+        
+        // Should contain side-by-side diff formatting
+        assert!(diff_output.contains("TEST vs PROD"));
+        assert!(diff_output.contains("Side-by-Side"));
+        assert!(diff_output.contains("📊 Comparison Summary"));
+        assert!(diff_output.contains("test response: 3 lines"));
+        assert!(diff_output.contains("prod response: 3 lines"));
+    }
+
+    #[test]
+    fn test_diff_view_style_affects_comparison_result() {
+        let unified_comparator = ResponseComparator::new()
+            .with_diff_view_style(DiffViewStyle::Unified);
+        let side_by_side_comparator = ResponseComparator::new()
+            .with_diff_view_style(DiffViewStyle::SideBySide);
+        
+        let mut responses = HashMap::new();
+        responses.insert("test".to_string(), create_test_response(200, "line1\nline2\nline3"));
+        responses.insert("prod".to_string(), create_test_response(200, "line1\nmodified_line2\nline3"));
+
+        let unified_result = unified_comparator.compare_responses(
+            "test-route".to_string(),
+            HashMap::new(),
+            responses.clone(),
+        ).unwrap();
+
+        let side_by_side_result = side_by_side_comparator.compare_responses(
+            "test-route".to_string(),
+            HashMap::new(),
+            responses,
+        ).unwrap();
+
+        // Both should detect the difference
+        assert!(!unified_result.is_identical);
+        assert!(!side_by_side_result.is_identical);
+        assert_eq!(unified_result.differences.len(), side_by_side_result.differences.len());
+
+        // But should have different diff output formats
+        let unified_diff = &unified_result.differences[0].diff_output;
+        let side_by_side_diff = &side_by_side_result.differences[0].diff_output;
+
+        assert!(unified_diff.is_some());
+        assert!(side_by_side_diff.is_some());
+
+        // Unified should contain github-style diff markers
+        assert!(unified_diff.as_ref().unwrap().contains("🔴"));
+        assert!(unified_diff.as_ref().unwrap().contains("🟢"));
+
+        // Side-by-side should contain its specific formatting
+        assert!(side_by_side_diff.as_ref().unwrap().contains("Side-by-Side"));
+    }
+
+    #[test]
+    fn test_backward_compatibility_with_existing_constructors() {
+        // Test that all existing constructors default to unified diff
+        let default_comparator = ResponseComparator::new();
+        assert_eq!(default_comparator.diff_view_style, DiffViewStyle::Unified);
+
+        let with_settings_comparator = ResponseComparator::with_settings(vec![], true);
+        assert_eq!(with_settings_comparator.diff_view_style, DiffViewStyle::Unified);
+
+        let full_settings_comparator = ResponseComparator::with_full_settings(vec![], true, false, 100, 50_000);
+        assert_eq!(full_settings_comparator.diff_view_style, DiffViewStyle::Unified);
+    }
+
+    #[test]
+    fn test_large_response_handling_both_diff_styles() {
+        // Test that large responses are handled properly with both diff styles
+        let large_content = "x".repeat(60_000); // Larger than threshold
+        let large_content_modified = "y".repeat(60_000);
+
+        let unified_comparator = ResponseComparator::new()
+            .with_diff_view_style(DiffViewStyle::Unified);
+        let side_by_side_comparator = ResponseComparator::new()
+            .with_diff_view_style(DiffViewStyle::SideBySide);
+
+        let unified_output = unified_comparator.generate_unified_diff(&large_content, &large_content_modified, "test", "prod");
+        let side_by_side_output = side_by_side_comparator.generate_side_by_side_diff(&large_content, &large_content_modified, "test", "prod");
+
+        // Both should provide large response summaries
+        assert!(unified_output.contains("Large Response Comparison Summary"));
+        assert!(side_by_side_output.contains("Large Response Comparison Summary"));
+        assert!(unified_output.contains("Size Comparison"));
+        assert!(side_by_side_output.contains("Size Comparison"));
     }
 } 

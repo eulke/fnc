@@ -14,7 +14,7 @@ pub mod error;
 pub use config::{HttpDiffConfig, Environment, Route, UserData};
 pub use client::HttpClient;
 pub use runner::TestRunner;
-pub use comparator::{ResponseComparator, ComparisonResult};
+pub use comparator::{ResponseComparator, ComparisonResult, DiffViewStyle};
 pub use output::CurlGenerator;
 pub use error::{HttpDiffError, Result};
 

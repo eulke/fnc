@@ -89,6 +89,10 @@ pub enum Commands {
         #[clap(long, default_value_t = false)]
         include_headers: bool,
 
+        /// Diff view style for response comparison
+        #[clap(long, value_enum, default_value_t = DiffViewType::Unified)]
+        diff_view: DiffViewType,
+
         /// Configuration file path (defaults to http-diff.toml)
         #[clap(short, long, default_value = "http-diff.toml")]
         config: String,
@@ -141,4 +145,13 @@ pub enum DeployType {
 
     /// Create a release branch from the default branch
     Release,
+}
+
+#[derive(ValueEnum, Clone, Debug)]
+pub enum DiffViewType {
+    /// Traditional unified diff (up/down view) - default
+    Unified,
+
+    /// Side-by-side diff view for easier comparison
+    SideBySide,
 }

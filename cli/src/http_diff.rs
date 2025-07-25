@@ -16,6 +16,7 @@ use tokio::runtime::Runtime;
 pub fn execute(
     environments: Option<String>,
     include_headers: bool,
+    diff_view: crate::cli::DiffViewType,
     config_path: String,
     users_file: String,
     init: bool,
@@ -31,6 +32,7 @@ pub fn execute(
         execute_async(
             environments,
             include_headers,
+            diff_view,
             config_path,
             users_file,
             init,
@@ -44,6 +46,7 @@ pub fn execute(
 async fn execute_async(
     environments: Option<String>,
     include_headers: bool,
+    diff_view: crate::cli::DiffViewType,
     config_path: String,
     users_file: String,
     init: bool,
@@ -163,13 +166,20 @@ async fn execute_async(
         "Generating output files".to_string(),
     ]);
 
-    // Initialize test runner with headers comparison setting
+    // Initialize test runner with headers comparison and diff view settings
     progress.start_step();
-    let runner = if include_headers {
-        TestRunner::with_headers_comparison(config.clone())
-    } else {
-        TestRunner::new(config.clone())
-    }.map_err(|e| {
+    
+    // Convert CLI DiffViewType to http-diff DiffViewStyle
+    let diff_view_style = match diff_view {
+        crate::cli::DiffViewType::Unified => http_diff::DiffViewStyle::Unified,
+        crate::cli::DiffViewType::SideBySide => http_diff::DiffViewStyle::SideBySide,
+    };
+    
+    let runner = TestRunner::with_comparator_settings(
+        config.clone(),
+        include_headers,
+        diff_view_style,
+    ).map_err(|e| {
         CliError::Other(format!("Failed to initialize test runner: {}", e))
     })?;
     progress.complete_step();
@@ -182,6 +192,11 @@ async fn execute_async(
             .unwrap_or_else(|| config.environments.keys().cloned().collect::<Vec<_>>().join(", "));
         ui::info_message(&format!("Testing environments: {}", env_names));
         ui::info_message(&format!("Headers comparison: {}", if include_headers { "enabled" } else { "disabled" }));
+        let diff_view_name = match diff_view {
+            crate::cli::DiffViewType::Unified => "unified",
+            crate::cli::DiffViewType::SideBySide => "side-by-side",
+        };
+        ui::info_message(&format!("Diff view style: {}", diff_view_name));
     }
 
     // Create progress bar for HTTP requests
@@ -342,6 +357,7 @@ path = "/api/test"
         let result = execute_async(
             Some("invalid_env".to_string()),
             false,
+            crate::cli::DiffViewType::Unified,
             config_path.to_string_lossy().to_string(),
             users_path.to_string_lossy().to_string(),
             false,
@@ -382,7 +398,8 @@ path = "/api/test"
         
         if let Commands::HttpDiff { 
             environments, 
-            include_headers, 
+            include_headers,
+            diff_view: _,
             config,
             users_file,
             init,
