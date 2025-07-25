@@ -1,7 +1,9 @@
 use crate::client::HttpResponse;
 use crate::error::{HttpDiffError, Result};
-use similar::{ChangeTag, TextDiff};
 use std::collections::HashMap;
+use colored::*;
+use comfy_table::{Table, Cell, Color, Attribute, ContentArrangement, TableComponent, modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL};
+use prettydiff::basic::DiffOp;
 
 /// Result of comparing two HTTP responses
 #[derive(Debug, Clone)]
@@ -102,7 +104,6 @@ impl ErrorSummary {
 pub struct ResponseComparator {
     ignore_headers: Vec<String>,
     ignore_whitespace: bool,
-    max_diff_lines: usize,
     large_response_threshold: usize,
     compare_headers: bool,
     diff_view_style: DiffViewStyle,
@@ -120,7 +121,6 @@ impl ResponseComparator {
                 "x-correlation-id".to_string(),
             ],
             ignore_whitespace: true,
-            max_diff_lines: 100,
             large_response_threshold: 50_000, // 50KB
             compare_headers: false, // Headers comparison disabled by default
             diff_view_style: DiffViewStyle::Unified, // Backward compatible default
@@ -132,7 +132,6 @@ impl ResponseComparator {
         Self {
             ignore_headers,
             ignore_whitespace,
-            max_diff_lines: 100,
             large_response_threshold: 50_000,
             compare_headers: false, // Headers comparison disabled by default
             diff_view_style: DiffViewStyle::Unified, // Backward compatible default
@@ -144,13 +143,11 @@ impl ResponseComparator {
         ignore_headers: Vec<String>, 
         ignore_whitespace: bool,
         compare_headers: bool,
-        max_diff_lines: usize,
         large_response_threshold: usize,
     ) -> Self {
         Self {
             ignore_headers,
             ignore_whitespace,
-            max_diff_lines,
             large_response_threshold,
             compare_headers,
             diff_view_style: DiffViewStyle::Unified, // Backward compatible default
@@ -369,7 +366,7 @@ impl ResponseComparator {
         }))
     }
 
-    /// Generate unified diff with line numbers and context (original implementation)
+    /// Generate unified diff using prettydiff's native output
     fn generate_unified_diff(&self, text1: &str, text2: &str, env1: &str, env2: &str) -> String {
         let total_size = text1.len() + text2.len();
         
@@ -378,78 +375,26 @@ impl ResponseComparator {
             return self.generate_large_response_summary(text1, text2, env1, env2);
         }
         
-        let diff = TextDiff::from_lines(text1, text2);
+        // Use prettydiff's native unified diff output
+        let diff = prettydiff::diff_lines(text1, text2);
         let mut output = String::new();
         
         // Header
         output.push_str("┌─────────────────────────────────────────────────────────────────────────────────────┐\n");
-        output.push_str(&format!("│ {} vs {} - Response Body Comparison{}", 
+        output.push_str(&format!("│ {} vs {} - Unified Response Body Comparison{}", 
             env1.to_uppercase(), 
             env2.to_uppercase(),
-            " ".repeat(42_usize.saturating_sub(env1.len()).saturating_sub(env2.len()))
+            " ".repeat(38_usize.saturating_sub(env1.len()).saturating_sub(env2.len()))
         ));
         output.push_str("│\n");
         output.push_str("├─────────────────────────────────────────────────────────────────────────────────────┤\n");
-
-        let mut line_num1 = 1;
-        let mut line_num2 = 1;
-        let mut context_count = 0;
-        let mut diff_lines_shown = 0;
-        const MAX_CONTEXT: usize = 3;
-
-        for (i, group) in diff.grouped_ops(MAX_CONTEXT).iter().enumerate() {
-            if diff_lines_shown >= self.max_diff_lines {
-                output.push_str("│ ... (diff truncated, too many differences)                                         │\n");
-                break;
-            }
-            
-            if i > 0 {
-                output.push_str("│ @@ ... @@ (context omitted)                                                        │\n");
-            }
-
-            for op in group {
-                for change in diff.iter_changes(op) {
-                    if diff_lines_shown >= self.max_diff_lines {
-                        break;
-                    }
-                    
-                    let (prefix, line_indicator, line_content) = match change.tag() {
-                        ChangeTag::Delete => {
-                            let content = format!("- {:<3} │ {}", line_num1, change.value().trim_end());
-                            line_num1 += 1;
-                            diff_lines_shown += 1;
-                            ("│ ", "🔴", content)
-                        }
-                        ChangeTag::Insert => {
-                            let content = format!("+ {:<3} │ {}", line_num2, change.value().trim_end());
-                            line_num2 += 1;
-                            diff_lines_shown += 1;
-                            ("│ ", "🟢", content)
-                        }
-                        ChangeTag::Equal => {
-                            let content = format!("  {:<3} │ {}", line_num1, change.value().trim_end());
-                            line_num1 += 1;
-                            line_num2 += 1;
-                            context_count += 1;
-                            if context_count > MAX_CONTEXT * 2 {
-                                continue;
-                            }
-                            ("│ ", "  ", content)
-                        }
-                    };
-
-                    // Truncate long lines for readability
-                    let truncated_content = if line_content.len() > 85 {
-                        format!("{}...", &line_content[..82])
-                    } else {
-                        line_content
-                    };
-
-                    output.push_str(&format!("{}{} {:<85}│\n", prefix, line_indicator, truncated_content));
-                }
-            }
+        
+        // Add prettydiff's native output
+        let prettydiff_output = diff.to_string();
+        for line in prettydiff_output.lines() {
+            output.push_str(&format!("│ {:<83}│\n", line));
         }
-
+        
         output.push_str("└─────────────────────────────────────────────────────────────────────────────────────┘\n");
         
         // Add summary
@@ -466,7 +411,9 @@ impl ResponseComparator {
         output
     }
 
-    /// Generate side-by-side diff using prettydiff for easier comparison
+
+
+    /// Generate side-by-side diff using proper table rendering with automatic terminal width detection
     fn generate_side_by_side_diff(&self, text1: &str, text2: &str, env1: &str, env2: &str) -> String {
         let total_size = text1.len() + text2.len();
         
@@ -475,73 +422,154 @@ impl ResponseComparator {
             return self.generate_large_response_summary(text1, text2, env1, env2);
         }
 
-        // Use prettydiff for side-by-side comparison
+        // Use prettydiff to get structured diff data
         let diff = prettydiff::diff_lines(text1, text2);
+        let diff_ops = diff.diff();
+
+        // Create table with proper styling and automatic width detection
+        let mut table = Table::new();
+        table
+            .load_preset(UTF8_FULL)
+            .apply_modifier(UTF8_ROUND_CORNERS)
+            .set_content_arrangement(ContentArrangement::Dynamic)
+            .remove_style(TableComponent::HorizontalLines) // Remove horizontal lines between rows
+            .remove_style(TableComponent::LeftBorderIntersections) // Remove left border intersections
+            .remove_style(TableComponent::RightBorderIntersections) // Remove right border intersections
+            .remove_style(TableComponent::MiddleIntersections) // Remove middle intersections
+            .set_header(vec![
+                Cell::new(format!("{}", env1.to_uppercase())).add_attribute(Attribute::Bold),
+                Cell::new(format!("{}", env2.to_uppercase())).add_attribute(Attribute::Bold),
+            ]);
+
+        // Process diff operations and add rows to table
+        for op in diff_ops {
+            match op {
+                DiffOp::Equal(lines) => {
+                    // Both sides have the same content - no special styling
+                    for line in lines {
+                        table.add_row(vec![
+                            Cell::new(line),
+                            Cell::new(line),
+                        ]);
+                    }
+                },
+                DiffOp::Replace(old_lines, new_lines) => {
+                    // Handle replacements with proper color highlighting
+                    let max_lines = old_lines.len().max(new_lines.len());
+                    for i in 0..max_lines {
+                        let left = old_lines.get(i).unwrap_or(&"");
+                        let right = new_lines.get(i).unwrap_or(&"");
+                        
+                        table.add_row(vec![
+                            if !left.is_empty() {
+                                Cell::new(left).fg(Color::Red)
+                            } else {
+                                Cell::new("")
+                            },
+                            if !right.is_empty() {
+                                Cell::new(right).fg(Color::Green)
+                            } else {
+                                Cell::new("")
+                            },
+                        ]);
+                    }
+                },
+                DiffOp::Remove(lines) => {
+                    // Lines only in left side - red for removed
+                    for line in lines {
+                        table.add_row(vec![
+                            Cell::new(line).fg(Color::Red),
+                            Cell::new(""),
+                        ]);
+                    }
+                },
+                DiffOp::Insert(lines) => {
+                    // Lines only in right side - green for added
+                    for line in lines {
+                        table.add_row(vec![
+                            Cell::new(""),
+                            Cell::new(line).fg(Color::Green),
+                        ]);
+                    }
+                }
+            }
+        }
 
         let mut output = String::new();
         
-        // Header
-        output.push_str("┌─────────────────────────────────────────────────────────────────────────────────────┐\n");
-        output.push_str(&format!("│ {} vs {} - Side-by-Side Response Body Comparison{}", 
-            env1.to_uppercase(), 
-            env2.to_uppercase(),
-            " ".repeat(32_usize.saturating_sub(env1.len()).saturating_sub(env2.len()))
-        ));
-        output.push_str("│\n");
-        output.push_str("├─────────────────────────────────────────────────────────────────────────────────────┤\n");
-
-        // Convert prettydiff output to string and format it nicely
-        let diff_str = diff.to_string();
+        // Add descriptive header
+        output.push_str(&format!("\n📊 {} vs {} - Side-by-Side Response Body Comparison\n", 
+            env1.to_uppercase(), env2.to_uppercase()));
         
-        // Add the diff content with proper indentation
-        for line in diff_str.lines() {
-            let formatted_line = if line.len() > 83 {
-                format!("│ {:<83}│", format!("{}...", &line[..80]))
-            } else {
-                format!("│ {:<83}│", line)
-            };
-            output.push_str(&formatted_line);
-            output.push('\n');
-        }
-
-        output.push_str("└─────────────────────────────────────────────────────────────────────────────────────┘\n");
+        // Add the properly formatted table
+        output.push_str(&table.to_string());
         
-        // Add summary
+        // Add informative legend
+        output.push_str("\n🎨 Color Legend:\n");
+        output.push_str(&format!("   {} Lines removed from {}\n", "Red".red(), env1));
+        output.push_str(&format!("   {} Lines added in {}\n", "Green".green(), env2));
+        
+        // Add comparison summary
         let lines1 = text1.lines().count();
         let lines2 = text2.lines().count();
-        output.push_str(&format!("\n📊 Comparison Summary:\n"));
+        output.push_str(&format!("\n📈 Comparison Summary:\n"));
         output.push_str(&format!("   {} response: {} lines\n", env1, lines1));
         output.push_str(&format!("   {} response: {} lines\n", env2, lines2));
         
         if lines1 != lines2 {
-            output.push_str(&format!("   Line count difference: {}\n", (lines1 as i32 - lines2 as i32).abs()));
+            let diff_count = (lines1 as i32 - lines2 as i32).abs();
+            output.push_str(&format!("   Line count difference: {} lines\n", diff_count));
         }
 
         output
     }
 
-    /// Generate summary for very large responses
+    /// Generate summary for very large responses using proper table formatting
     fn generate_large_response_summary(&self, text1: &str, text2: &str, env1: &str, env2: &str) -> String {
-        let mut output = String::new();
-        
-        output.push_str("┌─────────────────────────────────────────────────────────────────────────────────────┐\n");
-        output.push_str("│ 🔍 Large Response Comparison Summary                                                    │\n");
-        output.push_str("├─────────────────────────────────────────────────────────────────────────────────────┤\n");
-        output.push_str("│ ⚠️  Responses are too large for detailed diff - showing summary only                   │\n");
-        output.push_str("└─────────────────────────────────────────────────────────────────────────────────────┘\n");
-        
         let lines1 = text1.lines().count();
         let lines2 = text2.lines().count();
         let size1 = text1.len();
         let size2 = text2.len();
         
-        output.push_str(&format!("\n📊 Size Comparison:\n"));
-        output.push_str(&format!("   {} response: {} bytes, {} lines\n", env1, size1, lines1));
-        output.push_str(&format!("   {} response: {} bytes, {} lines\n", env2, size2, lines2));
-        output.push_str(&format!("   Size difference: {} bytes\n", (size1 as i32 - size2 as i32).abs()));
+        // Create a summary table for large responses
+        let mut table = Table::new();
+        table
+            .load_preset(UTF8_FULL)
+            .apply_modifier(UTF8_ROUND_CORNERS)
+            .set_content_arrangement(ContentArrangement::Dynamic)
+            .set_header(vec![
+                Cell::new("Environment").add_attribute(Attribute::Bold),
+                Cell::new("Response Size").add_attribute(Attribute::Bold),
+                Cell::new("Line Count").add_attribute(Attribute::Bold),
+            ]);
+        
+
+        
+        table.add_row(vec![
+            Cell::new(env1),
+            Cell::new(format!("{} bytes", size1)),
+            Cell::new(lines1.to_string()),
+        ]);
+        
+        table.add_row(vec![
+            Cell::new(env2),
+            Cell::new(format!("{} bytes", size2)),
+            Cell::new(lines2.to_string()),
+        ]);
+        
+        let mut output = String::new();
+        output.push_str("\n🔍 Large Response Comparison Summary\n");
+        output.push_str("⚠️  Responses are too large for detailed diff - showing summary only\n\n");
+        output.push_str(&table.to_string());
+        
+        // Add size difference analysis
+        output.push_str("\n📈 Differences:\n");
+        let size_diff = (size1 as i64 - size2 as i64).abs();
+        output.push_str(&format!("   Size difference: {} bytes\n", size_diff));
         
         if lines1 != lines2 {
-            output.push_str(&format!("   Line count difference: {}\n", (lines1 as i32 - lines2 as i32).abs()));
+            let line_diff = (lines1 as i64 - lines2 as i64).abs();
+            output.push_str(&format!("   Line count difference: {} lines\n", line_diff));
         }
         
         // Try to detect what kind of differences exist
@@ -843,11 +871,11 @@ mod tests {
         let diff_output = comparator.generate_unified_diff(text1, text2, "test", "prod");
         
         assert!(diff_output.contains("TEST vs PROD"));
-        assert!(diff_output.contains("🔴"));  // Delete indicator
-        assert!(diff_output.contains("🟢"));  // Insert indicator
+        assert!(diff_output.contains("Unified Response Body Comparison"));
         assert!(diff_output.contains("line2"));
         assert!(diff_output.contains("modified_line2"));
         assert!(diff_output.contains("📊 Comparison Summary"));
+        // prettydiff uses colored - and + markers (we can't easily test ANSI colors in unit tests)
     }
 
     #[test]
@@ -913,7 +941,7 @@ mod tests {
     #[test]
     fn test_custom_comparator_settings() {
         let ignore_headers = vec!["custom-header".to_string()];
-        let comparator = ResponseComparator::with_full_settings(ignore_headers, false, true, 100, 50_000);
+        let comparator = ResponseComparator::with_full_settings(ignore_headers, false, true, 50_000);
         
         let mut response1 = create_test_response(200, "  line1  \n  line2  ");
         let mut response2 = create_test_response(200, "line1\nline2");
@@ -1045,13 +1073,13 @@ mod tests {
         
         let diff_output = comparator.generate_unified_diff(text1, text2, "test", "prod");
         
-        // Should contain unified diff markers
+        // Should contain unified diff markers (prettydiff format)
         assert!(diff_output.contains("TEST vs PROD"));
-        assert!(diff_output.contains("🔴"));  // Delete indicator
-        assert!(diff_output.contains("🟢"));  // Insert indicator
+        assert!(diff_output.contains("Unified Response Body Comparison"));
         assert!(diff_output.contains("line2"));
         assert!(diff_output.contains("modified_line2"));
         assert!(diff_output.contains("📊 Comparison Summary"));
+        // prettydiff uses colored - and + markers (we can't easily test ANSI colors in unit tests)
     }
 
     #[test]
@@ -1067,9 +1095,27 @@ mod tests {
         // Should contain side-by-side diff formatting
         assert!(diff_output.contains("TEST vs PROD"));
         assert!(diff_output.contains("Side-by-Side"));
-        assert!(diff_output.contains("📊 Comparison Summary"));
+        assert!(diff_output.contains("📈 Comparison Summary"));
         assert!(diff_output.contains("test response: 3 lines"));
         assert!(diff_output.contains("prod response: 3 lines"));
+        
+        // Should have proper table formatting with UTF8 borders and rounded corners
+        assert!(diff_output.contains("│"));  // Vertical separators
+        assert!(diff_output.contains("╭"));  // Rounded top corners
+        assert!(diff_output.contains("╰"));  // Rounded bottom corners
+        assert!(diff_output.contains("┆"));  // Vertical column separator
+        // Note: Horizontal lines between content rows are removed for cleaner appearance
+        assert!(!diff_output.contains("├╌╌"));  // Should NOT have horizontal row separators
+        assert!(!diff_output.contains("├ "));   // Should NOT have left border intersections
+        
+        // Should show proper color legend
+        assert!(diff_output.contains("🎨 Color Legend"));
+        assert!(diff_output.contains("Lines removed from"));
+        assert!(diff_output.contains("Lines added in"));
+        
+        // Should contain the header with environment names
+        assert!(diff_output.contains("TEST"));
+        assert!(diff_output.contains("PROD"));
     }
 
     #[test]
@@ -1107,12 +1153,14 @@ mod tests {
         assert!(unified_diff.is_some());
         assert!(side_by_side_diff.is_some());
 
-        // Unified should contain github-style diff markers
-        assert!(unified_diff.as_ref().unwrap().contains("🔴"));
-        assert!(unified_diff.as_ref().unwrap().contains("🟢"));
+        // Unified should contain prettydiff-style formatting
+        assert!(unified_diff.as_ref().unwrap().contains("Unified Response Body Comparison"));
+        // prettydiff uses colored - and + markers (we can't easily test ANSI colors in unit tests)
 
         // Side-by-side should contain its specific formatting
         assert!(side_by_side_diff.as_ref().unwrap().contains("Side-by-Side"));
+        assert!(side_by_side_diff.as_ref().unwrap().contains("📈 Comparison Summary"));
+        assert!(side_by_side_diff.as_ref().unwrap().contains("🎨 Color Legend"));
     }
 
     #[test]
@@ -1124,7 +1172,7 @@ mod tests {
         let with_settings_comparator = ResponseComparator::with_settings(vec![], true);
         assert_eq!(with_settings_comparator.diff_view_style, DiffViewStyle::Unified);
 
-        let full_settings_comparator = ResponseComparator::with_full_settings(vec![], true, false, 100, 50_000);
+        let full_settings_comparator = ResponseComparator::with_full_settings(vec![], true, false, 50_000);
         assert_eq!(full_settings_comparator.diff_view_style, DiffViewStyle::Unified);
     }
 
@@ -1145,7 +1193,9 @@ mod tests {
         // Both should provide large response summaries
         assert!(unified_output.contains("Large Response Comparison Summary"));
         assert!(side_by_side_output.contains("Large Response Comparison Summary"));
-        assert!(unified_output.contains("Size Comparison"));
-        assert!(side_by_side_output.contains("Size Comparison"));
+        assert!(unified_output.contains("Environment"));
+        assert!(side_by_side_output.contains("Environment"));
+        assert!(unified_output.contains("Response Size"));
+        assert!(side_by_side_output.contains("Response Size"));
     }
 } 

@@ -25,6 +25,12 @@ url = "2.5"
 anyhow = "1.0"
 thiserror = "2.0"
 
+# Terminal colors for prettydiff-style formatting
+colored = "2.0"
+
+# Table rendering with proper alignment and terminal width detection
+comfy-table = "7.1"
+
 # Additional utilities
 chrono = { version = "0.4", features = ["serde"] }
 urlencoding = "2.1"
