@@ -1,5 +1,5 @@
 // HttpResponse type is available in client module for future use
-use crate::comparator::{ComparisonResult, Difference, DifferenceCategory, ErrorSummary};
+use crate::types::{ComparisonResult, Difference, DifferenceCategory, ErrorSummary};
 use crate::config::{HttpDiffConfig, Route, UserData};
 use crate::error::Result;
 use std::collections::HashMap;
@@ -654,7 +654,7 @@ mod tests {
 
         // Create mock comparison results
         let mut responses = HashMap::new();
-        responses.insert("test".to_string(), crate::client::HttpResponse {
+        responses.insert("test".to_string(), crate::types::HttpResponse {
             status: 200,
             headers: HashMap::new(),
             body: "{}".to_string(),
@@ -678,7 +678,7 @@ mod tests {
         };
 
         let mut different_responses = responses.clone();
-        different_responses.insert("prod".to_string(), crate::client::HttpResponse {
+        different_responses.insert("prod".to_string(), crate::types::HttpResponse {
             status: 404,
             headers: HashMap::new(),
             body: "Not found".to_string(),
@@ -729,7 +729,7 @@ mod tests {
     fn test_format_comparison_results() {
         // Create test results with mixed outcomes
         let mut responses = HashMap::new();
-        responses.insert("test".to_string(), crate::client::HttpResponse {
+        responses.insert("test".to_string(), crate::types::HttpResponse {
             status: 200,
             headers: HashMap::new(),
             body: "{}".to_string(),
@@ -785,7 +785,7 @@ mod tests {
     #[test]
     fn test_format_comparison_results_all_identical() {
         let mut responses = HashMap::new();
-        responses.insert("test".to_string(), crate::client::HttpResponse {
+        responses.insert("test".to_string(), crate::types::HttpResponse {
             status: 200,
             headers: HashMap::new(),
             body: "{}".to_string(),

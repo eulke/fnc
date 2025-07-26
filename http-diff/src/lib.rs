@@ -3,20 +3,38 @@
 //! This crate provides functionality to execute HTTP requests across multiple
 //! configurable environments and compare responses to identify differences.
 
+// Core modules
 pub mod config;
+pub mod error;
+pub mod types;
+
+// Shared utility modules
+pub mod url_builder;
+pub mod table_builder;
+pub mod formatter;
+
+// Main functionality modules
 pub mod client;
 pub mod runner;
 pub mod comparator;
 pub mod output;
-pub mod error;
 
 // Re-export main types for convenience
 pub use config::{HttpDiffConfig, Environment, Route, UserData};
+pub use types::{
+    HttpResponse, ComparisonResult, Difference, DifferenceCategory, 
+    DiffViewStyle, ErrorSummary, CurlCommand, ProgressConfig, ProgressInfo
+};
 pub use client::HttpClient;
 pub use runner::TestRunner;
-pub use comparator::{ResponseComparator, ComparisonResult, DiffViewStyle};
+pub use comparator::ResponseComparator;
 pub use output::CurlGenerator;
 pub use error::{HttpDiffError, Result};
+
+// Re-export utility modules for advanced usage
+pub use url_builder::UrlBuilder;
+pub use table_builder::{TableBuilder, TableStyle};
+pub use formatter::{TextFormatter, FormatterConfig, DiffStyle};
 
 /// Execute HTTP diff testing with the given configuration
 pub async fn run_http_diff(
@@ -70,5 +88,53 @@ mod tests {
         
         assert_eq!(user_data.data.get("userId"), Some(&"123".to_string()));
         assert_eq!(user_data.data.get("siteId"), Some(&"MCO".to_string()));
+    }
+
+    /// Test that shared utilities work
+    #[test]
+    fn test_shared_utilities() {
+        // Test formatter utilities
+        use formatter::{shell, text};
+        
+        assert_eq!(shell::escape_argument("simple"), "simple");
+        assert_eq!(text::line_count("line1\nline2"), 2);
+        
+        // Test table builder
+        let mut builder = TableBuilder::new();
+        builder.headers(vec!["Name", "Value"]);
+        builder.row(vec!["test", "123"]);
+        let table = builder.build();
+        
+        assert!(!table.is_empty());
+        
+        // Test URL builder utilities
+        use url_builder::utils;
+        
+        assert!(utils::has_path_parameters("/api/users/{userId}"));
+        assert!(!utils::has_path_parameters("/api/users"));
+    }
+
+    /// Test type construction and methods
+    #[test] 
+    fn test_types() {
+        let response = types::HttpResponse::new(
+            200,
+            HashMap::new(),
+            "test body".to_string(),
+            "https://api.example.com/test".to_string(),
+            "curl command".to_string(),
+        );
+
+        assert!(response.is_success());
+        assert!(!response.is_error());
+
+        let mut comparison_result = types::ComparisonResult::new(
+            "test_route".to_string(),
+            HashMap::new(),
+        );
+
+        comparison_result.add_response("dev".to_string(), response);
+        assert!(!comparison_result.has_errors);
+        assert!(comparison_result.is_identical);
     }
 } 

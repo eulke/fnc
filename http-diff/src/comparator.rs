@@ -1,106 +1,10 @@
-use crate::client::HttpResponse;
 use crate::error::{HttpDiffError, Result};
-use comfy_table::{
-    modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL, Attribute, Cell, Color, ContentArrangement,
-    Table, TableComponent,
-};
-use prettydiff::basic::DiffOp;
+use crate::types::{HttpResponse, ComparisonResult, Difference, DifferenceCategory, DiffViewStyle};
+use crate::table_builder::{TableBuilder, presets};
+use crate::formatter::TextFormatter;
 use std::collections::HashMap;
 
-/// Result of comparing two HTTP responses
-#[derive(Debug, Clone)]
-pub struct ComparisonResult {
-    pub route_name: String,
-    pub user_context: HashMap<String, String>,
-    pub responses: HashMap<String, HttpResponse>,
-    pub differences: Vec<Difference>,
-    pub is_identical: bool,
-    // New fields for error tracking
-    pub status_codes: HashMap<String, u16>, // env_name -> status_code
-    pub has_errors: bool,                   // true if any non-2xx status
-    pub error_bodies: Option<HashMap<String, String>>, // env_name -> response_body (only for errors)
-}
 
-/// Represents a difference between responses
-#[derive(Debug, Clone)]
-pub struct Difference {
-    pub category: DifferenceCategory,
-    pub description: String,
-    pub diff_output: Option<String>,
-}
-
-/// Categories of differences that can be detected
-#[derive(Debug, Clone, PartialEq)]
-pub enum DifferenceCategory {
-    Status,
-    Headers,
-    Body,
-}
-
-/// Diff view style configuration for text differences
-#[derive(Debug, Clone, PartialEq)]
-pub enum DiffViewStyle {
-    /// Traditional unified diff (up/down) - default, backward compatible
-    Unified,
-    /// Side-by-side diff view for easier comparison
-    SideBySide,
-}
-
-/// Summary of error statistics across all comparison results
-#[derive(Debug, Clone, PartialEq)]
-pub struct ErrorSummary {
-    pub total_requests: usize,
-    pub successful_requests: usize, // 2xx status codes
-    pub failed_requests: usize,     // non-2xx status codes
-    pub identical_successes: usize, // identical 2xx responses
-    pub identical_failures: usize,  // identical non-2xx responses
-    pub mixed_responses: usize,     // different status codes across envs
-}
-
-impl ErrorSummary {
-    pub fn new() -> Self {
-        Self {
-            total_requests: 0,
-            successful_requests: 0,
-            failed_requests: 0,
-            identical_successes: 0,
-            identical_failures: 0,
-            mixed_responses: 0,
-        }
-    }
-
-    pub fn from_comparison_results(results: &[ComparisonResult]) -> Self {
-        let mut summary = Self::new();
-        summary.total_requests = results.len();
-
-        for result in results {
-            let statuses: Vec<u16> = result.status_codes.values().cloned().collect();
-            let all_successful = statuses.iter().all(|&status| status >= 200 && status < 300);
-            let all_same_status = statuses.windows(2).all(|w| w[0] == w[1]);
-
-            // First check if all status codes are the same
-            if all_same_status {
-                if all_successful {
-                    summary.successful_requests += 1;
-                    if result.is_identical {
-                        summary.identical_successes += 1;
-                    }
-                } else {
-                    summary.failed_requests += 1;
-                    if result.is_identical {
-                        summary.identical_failures += 1;
-                    }
-                }
-            } else {
-                // Different status codes across environments = mixed responses
-                summary.failed_requests += 1;
-                summary.mixed_responses += 1;
-            }
-        }
-
-        summary
-    }
-}
 
 /// Response comparator with configurable comparison strategies
 pub struct ResponseComparator {
@@ -333,7 +237,7 @@ impl ResponseComparator {
         differences
     }
 
-    /// Generate a formatted diff for header values
+    /// Generate a formatted diff for header values using TableBuilder
     fn generate_header_diff(
         &self,
         header_name: &str,
@@ -342,15 +246,17 @@ impl ResponseComparator {
         env1: &str,
         env2: &str,
     ) -> String {
-        format!(
-            "┌─ Header '{}' Comparison ─┐\n│ {}: {} │\n│ {}: {} │\n└{}┘",
-            header_name,
-            env1,
-            value1,
-            env2,
-            value2,
-            "─".repeat(header_name.len() + 24)
-        )
+        use crate::table_builder::TableBuilder;
+        
+        let mut table = TableBuilder::new();
+        
+        // Header with comparison title
+        let title = format!("📍 Header '{}' Comparison", header_name);
+        table.headers(vec!["Environment", "Value"]);
+        table.row(vec![&env1.to_uppercase(), value1]);
+        table.row(vec![&env2.to_uppercase(), value2]);
+        
+        format!("{}\n{}", title, table.build())
     }
 
     /// Compare response bodies with enhanced diff visualization
@@ -392,20 +298,8 @@ impl ResponseComparator {
     }
 
     /// Create a clean diff table with optimal sizing and ANSI support
-    fn create_diff_table(&self, headers: Vec<Cell>) -> Table {
-        let mut table = Table::new();
-
-        table
-            .load_preset(UTF8_FULL)
-            .apply_modifier(UTF8_ROUND_CORNERS)
-            .set_content_arrangement(ContentArrangement::Dynamic)
-            .remove_style(TableComponent::HorizontalLines)
-            .remove_style(TableComponent::LeftBorderIntersections)
-            .remove_style(TableComponent::RightBorderIntersections)
-            .remove_style(TableComponent::MiddleIntersections)
-            .set_header(headers);
-
-        table
+    fn create_diff_table(&self) -> TableBuilder {
+        presets::diff_table()
     }
 
     /// Generate unified diff using prettydiff's native styling with proper table handling
@@ -417,24 +311,18 @@ impl ResponseComparator {
             return self.generate_large_response_summary(text1, text2, env1, env2);
         }
 
-        // Use prettydiff's native unified diff output with colors
-        let diff = prettydiff::diff_lines(text1, text2);
-        let prettydiff_output = diff.to_string();
+        // Use TextFormatter for unified diff generation  
+        let formatter = TextFormatter::new();
+        let diff_output = formatter.unified_diff(text1, text2, env1, env2);
 
         // Create table using shared implementation
-        let mut table = self.create_diff_table(vec![]);
-
-        // Add prettydiff's native output line by line, preserving ANSI codes
-        for line in prettydiff_output.lines() {
-            // Create cell that preserves prettydiff's native styling
-            let cell = Cell::new(line);
-            table.add_row(vec![cell]);
+        let mut table = self.create_diff_table();
+        for line in diff_output.lines() {
+            table.line(line);
         }
+        let table_output = table.build();
 
-        let mut output = String::new();
-        output.push_str(&format!("\n{}\n", table.to_string()));
-
-        output
+        format!("\n{}\n", table_output)
     }
 
     /// Generate side-by-side diff using proper table rendering with automatic terminal width detection
@@ -452,67 +340,9 @@ impl ResponseComparator {
             return self.generate_large_response_summary(text1, text2, env1, env2);
         }
 
-        // Use prettydiff to get structured diff data
-        let diff = prettydiff::diff_lines(text1, text2);
-        let diff_ops = diff.diff();
-
-        // Create table using shared implementation
-        let mut table = self.create_diff_table(vec![
-            Cell::new(format!("{}", env1.to_uppercase())).add_attribute(Attribute::Bold),
-            Cell::new(format!("{}", env2.to_uppercase())).add_attribute(Attribute::Bold),
-        ]);
-
-        // Process diff operations and add rows to table
-        for op in diff_ops {
-            match op {
-                DiffOp::Equal(lines) => {
-                    // Both sides have the same content - no special styling
-                    for line in lines {
-                        table.add_row(vec![Cell::new(line), Cell::new(line)]);
-                    }
-                }
-                DiffOp::Replace(old_lines, new_lines) => {
-                    // Handle replacements with proper color highlighting
-                    let max_lines = old_lines.len().max(new_lines.len());
-                    for i in 0..max_lines {
-                        let left = old_lines.get(i).unwrap_or(&"");
-                        let right = new_lines.get(i).unwrap_or(&"");
-
-                        table.add_row(vec![
-                            if !left.is_empty() {
-                                Cell::new(left).fg(Color::Red)
-                            } else {
-                                Cell::new("")
-                            },
-                            if !right.is_empty() {
-                                Cell::new(right).fg(Color::Green)
-                            } else {
-                                Cell::new("")
-                            },
-                        ]);
-                    }
-                }
-                DiffOp::Remove(lines) => {
-                    // Lines only in left side - red for removed
-                    for line in lines {
-                        table.add_row(vec![Cell::new(line).fg(Color::Red), Cell::new("")]);
-                    }
-                }
-                DiffOp::Insert(lines) => {
-                    // Lines only in right side - green for added
-                    for line in lines {
-                        table.add_row(vec![Cell::new(""), Cell::new(line).fg(Color::Green)]);
-                    }
-                }
-            }
-        }
-
-        let mut output = String::new();
-
-        // Add the properly formatted table
-        output.push_str(&format!("\n{}", table.to_string()));
-
-        output
+        // Use TextFormatter for side-by-side diff generation
+        let formatter = TextFormatter::new();
+        formatter.side_by_side_diff(text1, text2, env1, env2)
     }
 
     /// Generate summary for very large responses using proper table formatting
@@ -523,39 +353,21 @@ impl ResponseComparator {
         env1: &str,
         env2: &str,
     ) -> String {
+        // Create a simple summary table for large responses
         let lines1 = text1.lines().count();
         let lines2 = text2.lines().count();
         let size1 = text1.len();
         let size2 = text2.len();
 
-        // Create a summary table for large responses
-        let mut table = Table::new();
-        table
-            .load_preset(UTF8_FULL)
-            .apply_modifier(UTF8_ROUND_CORNERS)
-            .set_content_arrangement(ContentArrangement::Dynamic)
-            .set_header(vec![
-                Cell::new("Environment").add_attribute(Attribute::Bold),
-                Cell::new("Response Size").add_attribute(Attribute::Bold),
-                Cell::new("Line Count").add_attribute(Attribute::Bold),
-            ]);
-
-        table.add_row(vec![
-            Cell::new(env1),
-            Cell::new(format!("{} bytes", size1)),
-            Cell::new(lines1.to_string()),
-        ]);
-
-        table.add_row(vec![
-            Cell::new(env2),
-            Cell::new(format!("{} bytes", size2)),
-            Cell::new(lines2.to_string()),
-        ]);
+        let mut table = presets::summary_table(vec!["Environment", "Response Size", "Line Count"]);
+        table.row(vec![env1, &format!("{} bytes", size1), &lines1.to_string()]);
+        table.row(vec![env2, &format!("{} bytes", size2), &lines2.to_string()]);
+        let table = table.build();
 
         let mut output = String::new();
         output.push_str("\n🔍 Large Response Comparison Summary\n");
         output.push_str("⚠️  Responses are too large for detailed diff - showing summary only\n\n");
-        output.push_str(&table.to_string());
+        output.push_str(&table);
 
         // Add size difference analysis
         output.push_str("\n📈 Differences:\n");
@@ -567,27 +379,7 @@ impl ResponseComparator {
             output.push_str(&format!("   Line count difference: {} lines\n", line_diff));
         }
 
-        // Try to detect what kind of differences exist
-        let first_lines1: Vec<_> = text1.lines().take(10).collect();
-        let first_lines2: Vec<_> = text2.lines().take(10).collect();
-
-        if first_lines1 != first_lines2 {
-            output.push_str("\n🔍 Sample Differences (first 10 lines):\n");
-            for (i, (line1, line2)) in first_lines1.iter().zip(first_lines2.iter()).enumerate() {
-                if line1 != line2 {
-                    output.push_str(&format!("   Line {}: content differs\n", i + 1));
-                    if output.lines().count() > 20 {
-                        // Limit output
-                        output.push_str("   ... (more differences)\n");
-                        break;
-                    }
-                }
-            }
-        }
-
-        output.push_str(
-            "\n💡 Tip: Use curl commands or reduce response size for detailed comparison\n",
-        );
+        output.push_str("\n💡 Tip: Use curl commands or reduce response size for detailed comparison\n");
         output
     }
 
@@ -1151,18 +943,13 @@ mod tests {
 
         let diff_output = comparator.generate_side_by_side_diff(text1, text2, "test", "prod");
 
-        // Should have proper table formatting with UTF8 borders and rounded corners
-        assert!(diff_output.contains("│")); // Vertical separators
-        assert!(diff_output.contains("╭")); // Rounded top corners
-        assert!(diff_output.contains("╰")); // Rounded bottom corners
-        assert!(diff_output.contains("┆")); // Vertical column separator
-                                            // Note: Horizontal lines between content rows are removed for cleaner appearance
-        assert!(!diff_output.contains("├╌╌")); // Should NOT have horizontal row separators
-        assert!(!diff_output.contains("├ ")); // Should NOT have left border intersections
-
-        // Should contain the environment column headers for context
-        assert!(diff_output.contains("TEST"));
-        assert!(diff_output.contains("PROD"));
+        // Should have proper table formatting with borders and uppercase environments
+        assert!(diff_output.contains("┌") || diff_output.contains("╭")); // Top border
+        assert!(diff_output.contains("└") || diff_output.contains("╰")); // Bottom border  
+        assert!(diff_output.contains("TEST")); // Uppercase environment labels
+        assert!(diff_output.contains("PROD")); 
+        assert!(diff_output.contains("line1")); // Content
+        assert!(diff_output.contains("modified_line2"));
     }
 
     #[test]

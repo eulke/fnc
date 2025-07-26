@@ -1,5 +1,6 @@
 use crate::client::HttpClient;
-use crate::comparator::{ResponseComparator, ComparisonResult};
+use crate::comparator::ResponseComparator;
+use crate::types::ComparisonResult;
 use crate::config::{HttpDiffConfig, load_user_data};
 use crate::error::{Result, HttpDiffError};
 use std::collections::HashMap;
@@ -98,7 +99,7 @@ impl TestRunner {
     pub fn with_comparator_settings(
         config: HttpDiffConfig,
         include_headers: bool,
-        diff_view_style: crate::comparator::DiffViewStyle,
+        diff_view_style: crate::types::DiffViewStyle,
     ) -> Result<Self> {
         let client = HttpClient::new(config.clone())?;
         let mut comparator = ResponseComparator::new().with_diff_view_style(diff_view_style);
