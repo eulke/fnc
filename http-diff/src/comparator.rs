@@ -197,7 +197,6 @@ impl ResponseComparator {
 
         // Collect all header differences for grouped display
         let mut header_differences = Vec::new();
-        let mut missing_descriptions = Vec::new();
 
         // Check for headers present in one but not the other
         for (lowercase_key, (original_key, value)) in &normalized_headers1 {
@@ -207,10 +206,6 @@ impl ResponseComparator {
                     value1: Some(value.clone()),
                     value2: None,
                 });
-                missing_descriptions.push(format!(
-                    "Header '{}' present in {} but missing in {}",
-                    original_key, env1, env2
-                ));
             }
         }
 
@@ -221,10 +216,6 @@ impl ResponseComparator {
                     value1: None,
                     value2: Some(value.clone()),
                 });
-                missing_descriptions.push(format!(
-                    "Header '{}' present in {} but missing in {}",
-                    original_key, env2, env1
-                ));
             }
         }
 
@@ -244,22 +235,10 @@ impl ResponseComparator {
         // Generate grouped output if there are any header differences
         if !header_differences.is_empty() {
             let diff_output = self.generate_headers_diff_table(&header_differences, env1, env2);
-            
-            let mut descriptions = missing_descriptions;
-            for diff in &header_differences {
-                if diff.value1.is_some() && diff.value2.is_some() {
-                    descriptions.push(format!(
-                        "Header '{}' differs between {} and {}: '{}' vs '{}'",
-                        diff.name, env1, env2,
-                        diff.value1.as_ref().unwrap(),
-                        diff.value2.as_ref().unwrap()
-                    ));
-                }
-            }
 
             vec![Difference {
                 category: DifferenceCategory::Headers,
-                description: format!("{} header difference(s) found", header_differences.len()),
+                description: String::new(),
                 diff_output: Some(diff_output),
             }]
         } else {
@@ -389,7 +368,7 @@ impl ResponseComparator {
 
         Ok(Some(Difference {
             category: DifferenceCategory::Body,
-            description: format!("Response body differs between {} and {}", env1, env2),
+            description: format!("Body Comparison"),
             diff_output: Some(diff_output),
         }))
     }
@@ -720,7 +699,7 @@ mod tests {
         assert!(header_diff.is_some());
 
         let diff = header_diff.unwrap();
-        assert!(diff.description.contains("header difference"));
+        assert_eq!(diff.description, "");
         assert!(diff.diff_output.is_some());
         
         // Check that the grouped header output contains the expected information

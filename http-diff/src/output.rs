@@ -285,10 +285,16 @@ impl CurlGenerator {
             DifferenceCategory::Body => "📄",
         };
         
-        output.push_str(&format!("  {} {}\n", icon, difference.description));
+        // Only show description if it's not empty
+        if !difference.description.is_empty() {
+            output.push_str(&format!("  {} {}\n", icon, difference.description));
+        }
         
         if let Some(diff_output) = &difference.diff_output {
-            output.push_str("\n");
+            // Add newline before diff output only if we had a description
+            if !difference.description.is_empty() {
+                output.push_str("\n");
+            }
             // Display diff output without additional indentation since it's already formatted
             output.push_str(diff_output);
             output.push_str("\n");
