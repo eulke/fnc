@@ -1,6 +1,5 @@
 use crate::client::HttpResponse;
 use crate::error::{HttpDiffError, Result};
-use colored::*;
 use comfy_table::{
     modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL, Attribute, Cell, Color, ContentArrangement,
     Table, TableComponent,
@@ -440,20 +439,6 @@ impl ResponseComparator {
         let mut output = String::new();
         output.push_str(&format!("\n{}\n", table.to_string()));
 
-        // Add summary
-        let lines1 = text1.lines().count();
-        let lines2 = text2.lines().count();
-        output.push_str(&format!("\n📊 Comparison Summary:\n"));
-        output.push_str(&format!("   {} response: {} lines\n", env1, lines1));
-        output.push_str(&format!("   {} response: {} lines\n", env2, lines2));
-
-        if lines1 != lines2 {
-            output.push_str(&format!(
-                "   Line count difference: {}\n",
-                (lines1 as i32 - lines2 as i32).abs()
-            ));
-        }
-
         output
     }
 
@@ -538,23 +523,6 @@ impl ResponseComparator {
 
         // Add the properly formatted table
         output.push_str(&table.to_string());
-
-        // Add informative legend
-        output.push_str("\n🎨 Color Legend:\n");
-        output.push_str(&format!("   {} Lines removed from {}\n", "Red".red(), env1));
-        output.push_str(&format!("   {} Lines added in {}\n", "Green".green(), env2));
-
-        // Add comparison summary
-        let lines1 = text1.lines().count();
-        let lines2 = text2.lines().count();
-        output.push_str(&format!("\n📈 Comparison Summary:\n"));
-        output.push_str(&format!("   {} response: {} lines\n", env1, lines1));
-        output.push_str(&format!("   {} response: {} lines\n", env2, lines2));
-
-        if lines1 != lines2 {
-            let diff_count = (lines1 as i32 - lines2 as i32).abs();
-            output.push_str(&format!("   Line count difference: {} lines\n", diff_count));
-        }
 
         output
     }
@@ -949,7 +917,6 @@ mod tests {
         assert!(diff_output.contains("Unified Response Body Comparison"));
         assert!(diff_output.contains("line2"));
         assert!(diff_output.contains("modified_line2"));
-        assert!(diff_output.contains("📊 Comparison Summary"));
         // prettydiff uses colored - and + markers (we can't easily test ANSI colors in unit tests)
     }
 
@@ -1188,7 +1155,6 @@ mod tests {
         assert!(diff_output.contains("Unified Response Body Comparison"));
         assert!(diff_output.contains("line2"));
         assert!(diff_output.contains("modified_line2"));
-        assert!(diff_output.contains("📊 Comparison Summary"));
         // prettydiff uses colored - and + markers (we can't easily test ANSI colors in unit tests)
     }
 
@@ -1204,9 +1170,6 @@ mod tests {
         // Should contain side-by-side diff formatting
         assert!(diff_output.contains("TEST vs PROD"));
         assert!(diff_output.contains("Side-by-Side"));
-        assert!(diff_output.contains("📈 Comparison Summary"));
-        assert!(diff_output.contains("test response: 3 lines"));
-        assert!(diff_output.contains("prod response: 3 lines"));
 
         // Should have proper table formatting with UTF8 borders and rounded corners
         assert!(diff_output.contains("│")); // Vertical separators
@@ -1216,11 +1179,6 @@ mod tests {
                                             // Note: Horizontal lines between content rows are removed for cleaner appearance
         assert!(!diff_output.contains("├╌╌")); // Should NOT have horizontal row separators
         assert!(!diff_output.contains("├ ")); // Should NOT have left border intersections
-
-        // Should show proper color legend
-        assert!(diff_output.contains("🎨 Color Legend"));
-        assert!(diff_output.contains("Lines removed from"));
-        assert!(diff_output.contains("Lines added in"));
 
         // Should contain the header with environment names
         assert!(diff_output.contains("TEST"));
@@ -1276,14 +1234,6 @@ mod tests {
 
         // Side-by-side should contain its specific formatting
         assert!(side_by_side_diff.as_ref().unwrap().contains("Side-by-Side"));
-        assert!(side_by_side_diff
-            .as_ref()
-            .unwrap()
-            .contains("📈 Comparison Summary"));
-        assert!(side_by_side_diff
-            .as_ref()
-            .unwrap()
-            .contains("🎨 Color Legend"));
     }
 
     #[test]

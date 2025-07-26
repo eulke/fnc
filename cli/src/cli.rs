@@ -86,11 +86,11 @@ pub enum Commands {
         environments: Option<String>,
 
         /// Include headers in response comparison (disabled by default)
-        #[clap(long, default_value_t = false)]
+        #[clap(short = 'H', long, default_value_t = false)]
         include_headers: bool,
 
         /// Diff view style for response comparison
-        #[clap(long, value_enum, default_value_t = DiffViewType::Unified)]
+        #[clap(short = 'd', long, value_enum, default_value_t = DiffViewType::Unified)]
         diff_view: DiffViewType,
 
         /// Configuration file path (defaults to http-diff.toml)

@@ -385,7 +385,6 @@ path = "/api/users/{{userId}}/balance"
     assert!(formatted_output.contains("🟢")); // Insert lines
     assert!(formatted_output.contains("1000.5")); // Original value
     assert!(formatted_output.contains("850.75")); // Changed value
-    assert!(formatted_output.contains("📊 Comparison Summary"));
 
     // Also test individual result formatting
     let single_result_output = CurlGenerator::format_single_result(&comparison_result);

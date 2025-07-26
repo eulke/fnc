@@ -525,7 +525,6 @@ async fn test_github_style_diff_output() {
     assert!(formatted_output.contains("🟢")); // Insert lines
     assert!(formatted_output.contains("1000.50"));
     assert!(formatted_output.contains("850.75"));
-    assert!(formatted_output.contains("📊 Comparison Summary"));
 
     // Also test individual result formatting
     let single_result_output = CurlGenerator::format_single_result(&result);
