@@ -1,5 +1,13 @@
 use crate::error::{HttpDiffError, Result};
 use crate::types::{HttpResponse, ComparisonResult, Difference, DifferenceCategory, DiffViewStyle};
+
+/// Represents a header difference for grouped display
+#[derive(Debug, Clone)]
+struct HeaderDiff {
+    name: String,
+    value1: Option<String>, // Value in first environment
+    value2: Option<String>, // Value in second environment  
+}
 use crate::table_builder::{TableBuilder, presets};
 use crate::formatter::TextFormatter;
 use std::collections::HashMap;
@@ -166,7 +174,7 @@ impl ResponseComparator {
         })
     }
 
-    /// Compare response headers with case-insensitive handling
+    /// Compare response headers with case-insensitive handling and grouped output
     fn compare_headers(
         &self,
         headers1: &HashMap<String, String>,
@@ -174,8 +182,6 @@ impl ResponseComparator {
         env1: &str,
         env2: &str,
     ) -> Vec<Difference> {
-        let mut differences = Vec::new();
-
         // Normalize headers to lowercase for comparison while preserving original case for display
         let normalize_headers =
             |headers: &HashMap<String, String>| -> HashMap<String, (String, String)> {
@@ -189,30 +195,36 @@ impl ResponseComparator {
         let normalized_headers1 = normalize_headers(headers1);
         let normalized_headers2 = normalize_headers(headers2);
 
+        // Collect all header differences for grouped display
+        let mut header_differences = Vec::new();
+        let mut missing_descriptions = Vec::new();
+
         // Check for headers present in one but not the other
-        for (lowercase_key, (original_key, _)) in &normalized_headers1 {
+        for (lowercase_key, (original_key, value)) in &normalized_headers1 {
             if !normalized_headers2.contains_key(lowercase_key) {
-                differences.push(Difference {
-                    category: DifferenceCategory::Headers,
-                    description: format!(
-                        "Header '{}' present in {} but missing in {}",
-                        original_key, env1, env2
-                    ),
-                    diff_output: None,
+                header_differences.push(HeaderDiff {
+                    name: original_key.clone(),
+                    value1: Some(value.clone()),
+                    value2: None,
                 });
+                missing_descriptions.push(format!(
+                    "Header '{}' present in {} but missing in {}",
+                    original_key, env1, env2
+                ));
             }
         }
 
-        for (lowercase_key, (original_key, _)) in &normalized_headers2 {
+        for (lowercase_key, (original_key, value)) in &normalized_headers2 {
             if !normalized_headers1.contains_key(lowercase_key) {
-                differences.push(Difference {
-                    category: DifferenceCategory::Headers,
-                    description: format!(
-                        "Header '{}' present in {} but missing in {}",
-                        original_key, env2, env1
-                    ),
-                    diff_output: None,
+                header_differences.push(HeaderDiff {
+                    name: original_key.clone(),
+                    value1: None,
+                    value2: Some(value.clone()),
                 });
+                missing_descriptions.push(format!(
+                    "Header '{}' present in {} but missing in {}",
+                    original_key, env2, env1
+                ));
             }
         }
 
@@ -220,44 +232,129 @@ impl ResponseComparator {
         for (lowercase_key, (original_key1, value1)) in &normalized_headers1 {
             if let Some((_original_key2, value2)) = normalized_headers2.get(lowercase_key) {
                 if value1 != value2 {
-                    let diff_output =
-                        self.generate_header_diff(original_key1, value1, value2, env1, env2);
-                    differences.push(Difference {
-                        category: DifferenceCategory::Headers,
-                        description: format!(
-                            "Header '{}' differs between {} and {}: '{}' vs '{}'",
-                            original_key1, env1, env2, value1, value2
-                        ),
-                        diff_output: Some(diff_output),
+                    header_differences.push(HeaderDiff {
+                        name: original_key1.clone(),
+                        value1: Some(value1.clone()),
+                        value2: Some(value2.clone()),
                     });
                 }
             }
         }
 
-        differences
+        // Generate grouped output if there are any header differences
+        if !header_differences.is_empty() {
+            let diff_output = self.generate_headers_diff_table(&header_differences, env1, env2);
+            
+            let mut descriptions = missing_descriptions;
+            for diff in &header_differences {
+                if diff.value1.is_some() && diff.value2.is_some() {
+                    descriptions.push(format!(
+                        "Header '{}' differs between {} and {}: '{}' vs '{}'",
+                        diff.name, env1, env2,
+                        diff.value1.as_ref().unwrap(),
+                        diff.value2.as_ref().unwrap()
+                    ));
+                }
+            }
+
+            vec![Difference {
+                category: DifferenceCategory::Headers,
+                description: format!("{} header difference(s) found", header_differences.len()),
+                diff_output: Some(diff_output),
+            }]
+        } else {
+            Vec::new()
+        }
     }
 
-    /// Generate a formatted diff for header values using TableBuilder
-    fn generate_header_diff(
+    /// Generate a grouped table for all header differences respecting diff view style
+    fn generate_headers_diff_table(
         &self,
-        header_name: &str,
-        value1: &str,
-        value2: &str,
+        header_differences: &[HeaderDiff],
         env1: &str,
         env2: &str,
     ) -> String {
-        use crate::table_builder::TableBuilder;
+        match self.diff_view_style {
+            DiffViewStyle::Unified => {
+                self.generate_headers_unified_table(header_differences, env1, env2)
+            }
+            DiffViewStyle::SideBySide => {
+                self.generate_headers_side_by_side_table(header_differences, env1, env2)
+            }
+        }
+    }
+
+    /// Generate unified diff table for headers 
+    fn generate_headers_unified_table(
+        &self,
+        header_differences: &[HeaderDiff],
+        env1: &str,
+        env2: &str,
+    ) -> String {
+        use crate::table_builder::{TableBuilder, TableStyle, cells};
         
         let mut table = TableBuilder::new();
+        table.apply_style(TableStyle::Diff); // Remove horizontal lines
+        table.headers(vec!["Header", "Environment", "Value"]);
         
-        // Header with comparison title
-        let title = format!("📍 Header '{}' Comparison", header_name);
-        table.headers(vec!["Environment", "Value"]);
-        table.row(vec![&env1.to_uppercase(), value1]);
-        table.row(vec![&env2.to_uppercase(), value2]);
+        for diff in header_differences {
+            if let Some(value1) = &diff.value1 {
+                table.styled_row(vec![
+                    cells::normal(&diff.name),
+                    cells::removed(&format!("- {}", env1.to_uppercase())),
+                    cells::removed(value1)
+                ]);
+            }
+            if let Some(value2) = &diff.value2 {
+                table.styled_row(vec![
+                    cells::normal(&diff.name),
+                    cells::added(&format!("+ {}", env2.to_uppercase())),
+                    cells::added(value2)
+                ]);
+            }
+        }
         
-        format!("{}\n{}", title, table.build())
+        format!("📋 Headers Comparison\n{}", table.build())
     }
+
+    /// Generate side-by-side diff table for headers
+    fn generate_headers_side_by_side_table(
+        &self,
+        header_differences: &[HeaderDiff],
+        env1: &str,
+        env2: &str,
+    ) -> String {
+        use crate::table_builder::{TableBuilder, TableStyle, cells};
+        
+        let mut table = TableBuilder::new();
+        table.apply_style(TableStyle::Diff);
+        table.headers(vec!["Header", &env1.to_uppercase(), &env2.to_uppercase()]);
+        
+        for diff in header_differences {
+            let left_value = match &diff.value1 {
+                Some(value) => cells::normal(value),
+                None => cells::muted("(missing)")
+            };
+            
+            let right_value = match &diff.value2 {
+                Some(value) => cells::normal(value),
+                None => cells::muted("(missing)")
+            };
+            
+            // Color the header name if values are different
+            let header_cell = if diff.value1 != diff.value2 {
+                cells::bold(&diff.name)
+            } else {
+                cells::normal(&diff.name)
+            };
+            
+            table.styled_row(vec![header_cell, left_value, right_value]);
+        }
+        
+        format!("📋 Headers Comparison\n{}", table.build())
+    }
+
+
 
     /// Compare response bodies with enhanced diff visualization
     fn compare_bodies(
@@ -623,10 +720,80 @@ mod tests {
         assert!(header_diff.is_some());
 
         let diff = header_diff.unwrap();
-        assert!(diff.description.contains("X-Version"));
-        assert!(diff.description.contains("1.0"));
-        assert!(diff.description.contains("2.0"));
+        assert!(diff.description.contains("header difference"));
         assert!(diff.diff_output.is_some());
+        
+        // Check that the grouped header output contains the expected information
+        let diff_output = diff.diff_output.as_ref().unwrap();
+        assert!(diff_output.contains("📋 Headers Comparison"));
+        assert!(diff_output.contains("X-Version"));
+        assert!(diff_output.contains("1.0"));
+        assert!(diff_output.contains("2.0"));
+    }
+
+    #[test]
+    fn test_grouped_headers_diff_styles() {
+        // Test that headers are properly grouped in both unified and side-by-side styles
+        let unified_comparator = ResponseComparator::new()
+            .with_headers_comparison()
+            .with_diff_view_style(DiffViewStyle::Unified);
+        
+        let side_by_side_comparator = ResponseComparator::new()
+            .with_headers_comparison()
+            .with_diff_view_style(DiffViewStyle::SideBySide);
+
+        let mut response1 = create_test_response(200, r#"{"status": "ok"}"#);
+        let mut response2 = create_test_response(200, r#"{"status": "ok"}"#);
+
+        // Add multiple header differences
+        response1.headers.insert("X-Version".to_string(), "1.0".to_string());
+        response1.headers.insert("X-Environment".to_string(), "prod".to_string());
+        response2.headers.insert("X-Version".to_string(), "2.0".to_string());
+        response2.headers.insert("X-Environment".to_string(), "staging".to_string());
+        response2.headers.insert("X-New-Header".to_string(), "new-value".to_string());
+
+        let mut responses = HashMap::new();
+        responses.insert("prod".to_string(), response1);
+        responses.insert("test".to_string(), response2);
+
+        // Test unified format
+        let unified_result = unified_comparator
+            .compare_responses("test-route".to_string(), HashMap::new(), responses.clone())
+            .unwrap();
+
+        let unified_header_diff = unified_result
+            .differences
+            .iter()
+            .find(|d| d.category == DifferenceCategory::Headers)
+            .unwrap();
+
+        let unified_output = unified_header_diff.diff_output.as_ref().unwrap();
+        assert!(unified_output.contains("📋 Headers Comparison"));
+        assert!(unified_output.contains("X-Version"));
+        assert!(unified_output.contains("X-Environment"));
+        assert!(unified_output.contains("X-New-Header"));
+
+        // Test side-by-side format
+        let side_by_side_result = side_by_side_comparator
+            .compare_responses("test-route".to_string(), HashMap::new(), responses)
+            .unwrap();
+
+        let side_by_side_header_diff = side_by_side_result
+            .differences
+            .iter()
+            .find(|d| d.category == DifferenceCategory::Headers)
+            .unwrap();
+
+        let side_by_side_output = side_by_side_header_diff.diff_output.as_ref().unwrap();
+        assert!(side_by_side_output.contains("📋 Headers Comparison"));
+        assert!(side_by_side_output.contains("PROD"));
+        assert!(side_by_side_output.contains("TEST"));
+        assert!(side_by_side_output.contains("X-Version"));
+        assert!(side_by_side_output.contains("(missing)"));
+
+        // Verify both formats group all headers in a single table (not multiple tables)
+        assert_eq!(unified_output.matches("📋 Headers Comparison").count(), 1);
+        assert_eq!(side_by_side_output.matches("📋 Headers Comparison").count(), 1);
     }
 
     #[test]
