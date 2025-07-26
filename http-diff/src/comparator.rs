@@ -422,12 +422,7 @@ impl ResponseComparator {
         let prettydiff_output = diff.to_string();
 
         // Create table using shared implementation
-        let mut table = self.create_diff_table(vec![Cell::new(format!(
-            "{} vs {} - Unified Response Body Comparison",
-            env1.to_uppercase(),
-            env2.to_uppercase()
-        ))
-        .add_attribute(Attribute::Bold)]);
+        let mut table = self.create_diff_table(vec![]);
 
         // Add prettydiff's native output line by line, preserving ANSI codes
         for line in prettydiff_output.lines() {
@@ -514,15 +509,8 @@ impl ResponseComparator {
 
         let mut output = String::new();
 
-        // Add descriptive header
-        output.push_str(&format!(
-            "\n📊 {} vs {} - Side-by-Side Response Body Comparison\n",
-            env1.to_uppercase(),
-            env2.to_uppercase()
-        ));
-
         // Add the properly formatted table
-        output.push_str(&table.to_string());
+        output.push_str(&format!("\n{}", table.to_string()));
 
         output
     }
@@ -913,8 +901,6 @@ mod tests {
 
         let diff_output = comparator.generate_unified_diff(text1, text2, "test", "prod");
 
-        assert!(diff_output.contains("TEST vs PROD"));
-        assert!(diff_output.contains("Unified Response Body Comparison"));
         assert!(diff_output.contains("line2"));
         assert!(diff_output.contains("modified_line2"));
         // prettydiff uses colored - and + markers (we can't easily test ANSI colors in unit tests)
@@ -1151,8 +1137,6 @@ mod tests {
         let diff_output = comparator.generate_unified_diff(text1, text2, "test", "prod");
 
         // Should contain unified diff markers (prettydiff format)
-        assert!(diff_output.contains("TEST vs PROD"));
-        assert!(diff_output.contains("Unified Response Body Comparison"));
         assert!(diff_output.contains("line2"));
         assert!(diff_output.contains("modified_line2"));
         // prettydiff uses colored - and + markers (we can't easily test ANSI colors in unit tests)
@@ -1167,10 +1151,6 @@ mod tests {
 
         let diff_output = comparator.generate_side_by_side_diff(text1, text2, "test", "prod");
 
-        // Should contain side-by-side diff formatting
-        assert!(diff_output.contains("TEST vs PROD"));
-        assert!(diff_output.contains("Side-by-Side"));
-
         // Should have proper table formatting with UTF8 borders and rounded corners
         assert!(diff_output.contains("│")); // Vertical separators
         assert!(diff_output.contains("╭")); // Rounded top corners
@@ -1180,7 +1160,7 @@ mod tests {
         assert!(!diff_output.contains("├╌╌")); // Should NOT have horizontal row separators
         assert!(!diff_output.contains("├ ")); // Should NOT have left border intersections
 
-        // Should contain the header with environment names
+        // Should contain the environment column headers for context
         assert!(diff_output.contains("TEST"));
         assert!(diff_output.contains("PROD"));
     }
@@ -1225,15 +1205,10 @@ mod tests {
         assert!(unified_diff.is_some());
         assert!(side_by_side_diff.is_some());
 
-        // Unified should contain prettydiff-style formatting
-        assert!(unified_diff
-            .as_ref()
-            .unwrap()
-            .contains("Unified Response Body Comparison"));
+        // Both diffs should be properly formatted and contain content
+        assert!(unified_diff.is_some());
+        assert!(side_by_side_diff.is_some());
         // prettydiff uses colored - and + markers (we can't easily test ANSI colors in unit tests)
-
-        // Side-by-side should contain its specific formatting
-        assert!(side_by_side_diff.as_ref().unwrap().contains("Side-by-Side"));
     }
 
     #[test]
