@@ -327,18 +327,37 @@ impl CurlGenerator {
         
         output.push_str(&format!("\n📍 Route '{}' (User: {:?})\n", result.route_name, result.user_context));
         
-        // Display status codes
-        output.push_str("  Status codes:\n");
-        for (env, status) in &result.status_codes {
-            output.push_str(&format!("    {}: {}\n", env, status));
+        // Check if all status codes are identical
+        let status_values: Vec<u16> = result.status_codes.values().cloned().collect();
+        let all_same_status = status_values.windows(2).all(|w| w[0] == w[1]);
+        
+        // Display status codes - if all same, show once; otherwise show per environment
+        if all_same_status && !status_values.is_empty() {
+            output.push_str(&format!("  Status code: {}\n", status_values[0]));
+        } else {
+            output.push_str("  Status codes:\n");
+            for (env, status) in &result.status_codes {
+                output.push_str(&format!("    {}: {}\n", env, status));
+            }
         }
         
         // Display error response bodies if available
         if let Some(error_bodies) = &result.error_bodies {
-            output.push_str("  Response bodies:\n");
-            for (env, body) in error_bodies {
-                let truncated_body = Self::truncate_response_body(body, 500);
-                output.push_str(&format!("    {}: {}\n", env, truncated_body));
+            // Check if all error response bodies are identical
+            let body_values: Vec<&String> = error_bodies.values().collect();
+            let all_same_bodies = body_values.windows(2).all(|w| w[0] == w[1]);
+            
+            if all_same_bodies && !body_values.is_empty() {
+                // All error responses are identical - show once
+                let truncated_body = Self::truncate_response_body(body_values[0], 500);
+                output.push_str(&format!("  Response body: {}\n", truncated_body));
+            } else {
+                // Different error responses - show per environment
+                output.push_str("  Response bodies:\n");
+                for (env, body) in error_bodies {
+                    let truncated_body = Self::truncate_response_body(body, 500);
+                    output.push_str(&format!("    {}: {}\n", env, truncated_body));
+                }
             }
         }
         
