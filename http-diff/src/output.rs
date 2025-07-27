@@ -227,20 +227,16 @@ impl CurlGenerator {
         let mut output = String::new();
         
         let total_tests = results.len();
-        let identical_count = results.iter().filter(|r| r.is_identical).count();
+        // Make categories mutually exclusive: Failed > Identical > Different
         let failed_count = results.iter().filter(|r| r.has_errors).count();
+        let identical_count = results.iter().filter(|r| r.is_identical && !r.has_errors).count();
         let different_count = results.iter().filter(|r| !r.is_identical && !r.has_errors).count();
-        
-        let success_rate = if total_tests > 0 {
-            (identical_count as f32 / total_tests as f32) * 100.0
-        } else {
-            0.0
-        };
         
         // Priority 1: Enhanced Summary Format - structured multi-line format
         if total_tests > 0 {
+            let identical_rate = (identical_count as f32 / total_tests as f32) * 100.0;
             output.push_str(&format!("✅ Identical:     {}/{} ({:.1}%)\n", 
-                                    identical_count, total_tests, success_rate));
+                                    identical_count, total_tests, identical_rate));
             if different_count > 0 {
                 output.push_str(&format!("❌ Different:     {}/{} ({:.1}%)\n", 
                                         different_count, total_tests, 
@@ -927,4 +923,5 @@ mod tests {
         assert_eq!(user_12345_commands.len(), 2);
         assert_eq!(user_67890_commands.len(), 2);
     }
+
 } 
