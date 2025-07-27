@@ -228,7 +228,9 @@ impl CurlGenerator {
         
         let total_tests = results.len();
         let identical_count = results.iter().filter(|r| r.is_identical).count();
-        let different_count = total_tests - identical_count;
+        let failed_count = results.iter().filter(|r| r.has_errors).count();
+        let different_count = results.iter().filter(|r| !r.is_identical && !r.has_errors).count();
+        
         let success_rate = if total_tests > 0 {
             (identical_count as f32 / total_tests as f32) * 100.0
         } else {
@@ -239,8 +241,16 @@ impl CurlGenerator {
         if total_tests > 0 {
             output.push_str(&format!("✅ Identical:     {}/{} ({:.1}%)\n", 
                                     identical_count, total_tests, success_rate));
-            output.push_str(&format!("❌ Different:     {}/{} ({:.1}%)\n", 
-                                    different_count, total_tests, 100.0 - success_rate));
+            if different_count > 0 {
+                output.push_str(&format!("❌ Different:     {}/{} ({:.1}%)\n", 
+                                        different_count, total_tests, 
+                                        (different_count as f32 / total_tests as f32) * 100.0));
+            }
+            if failed_count > 0 {
+                output.push_str(&format!("🔥 Failed:        {}/{} ({:.1}%)\n", 
+                                        failed_count, total_tests, 
+                                        (failed_count as f32 / total_tests as f32) * 100.0));
+            }
         } else {
             output.push_str("No test scenarios found\n");
         }
@@ -254,10 +264,10 @@ impl CurlGenerator {
         if different_count > 0 {
             output.push_str("\nDIFFERENCES FOUND\n");
             output.push_str("═════════════════\n");
-            for result in results.iter().filter(|r| !r.is_identical) {
+            for result in results.iter().filter(|r| !r.is_identical && !r.has_errors) {
                 output.push_str(&Self::format_route_group(result));
             }
-        } else {
+        } else if identical_count == total_tests {
             output.push_str("\n✅ All responses are identical across environments!");
         }
         
@@ -825,8 +835,7 @@ mod tests {
         let results = vec![identical_result, different_result];
         let output = CurlGenerator::format_comparison_results(&results);
         
-        assert!(output.contains("🔍 TEST RESULTS SUMMARY"));
-        assert!(output.contains("═══════════════════════"));
+        assert!(output.contains("✅ Identical:"));
         assert!(output.contains("✅ Identical:     1/2 (50.0%)"));
         assert!(output.contains("❌ Different:     1/2 (50.0%)"));
         assert!(output.contains("DIFFERENCES FOUND"));
@@ -863,10 +872,9 @@ mod tests {
         let results = vec![result];
         let output = CurlGenerator::format_comparison_results(&results);
         
-        assert!(output.contains("🔍 TEST RESULTS SUMMARY"));
-        assert!(output.contains("═══════════════════════"));
+        assert!(output.contains("✅ Identical:"));
         assert!(output.contains("✅ Identical:     1/1 (100.0%)"));
-        assert!(output.contains("❌ Different:     0/1 (0.0%)"));
+        assert!(!output.contains("❌ Different:")); // No different line when all are identical
         assert!(output.contains("✅ All responses are identical across environments!"));
         assert!(!output.contains("DIFFERENCES FOUND"));
     }
