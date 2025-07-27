@@ -1,5 +1,5 @@
 // HttpResponse type is available in client module for future use
-use crate::types::{ComparisonResult, Difference, DifferenceCategory, ErrorSummary};
+use crate::types::{ComparisonResult, Difference, DifferenceCategory, ErrorSummary, ErrorSeverity};
 use crate::config::{HttpDiffConfig, Route, UserData};
 use crate::error::Result;
 use std::collections::HashMap;
@@ -363,60 +363,227 @@ impl CurlGenerator {
                                 error_summary.failed_requests, total_requests, 
                                 (error_summary.failed_requests as f32 / total_requests as f32) * 100.0));
         
-        // Show detailed error information for failed requests
+        // Group failed requests by error type and show them organized
         let failed_results: Vec<&ComparisonResult> = results.iter().filter(|r| r.has_errors).collect();
         if !failed_results.is_empty() {
-            output.push_str("\nFAILED REQUESTS DETAILS\n");
-            output.push_str("═══════════════════════\n");
-            for result in failed_results {
-                output.push_str(&Self::format_failed_request_details(result));
-            }
+            output.push_str(&Self::format_grouped_failed_requests(&failed_results));
         }
         
         output
     }
-
-    /// Format detailed information for a failed request
-    fn format_failed_request_details(result: &ComparisonResult) -> String {
+    
+    /// Group and format failed requests by error type
+    fn format_grouped_failed_requests(failed_results: &[&ComparisonResult]) -> String {
         let mut output = String::new();
         
-        output.push_str(&format!("\n📍 Route '{}' (User: {:?})\n", result.route_name, result.user_context));
+        // Group by error type
+        let mut error_groups: HashMap<String, Vec<&ComparisonResult>> = HashMap::new();
         
-        // Check if all status codes are identical
-        let status_values: Vec<u16> = result.status_codes.values().cloned().collect();
-        let all_same_status = status_values.windows(2).all(|w| w[0] == w[1]);
-        
-        // Display status codes - if all same, show once; otherwise show per environment
-        if all_same_status && !status_values.is_empty() {
-            output.push_str(&format!("  Status code: {}\n", status_values[0]));
-        } else {
-            output.push_str("  Status codes:\n");
-            for (env, status) in &result.status_codes {
-                output.push_str(&format!("    {}: {}\n", env, status));
-            }
+        for result in failed_results {
+            let error_type = if let Some(error_bodies) = &result.error_bodies {
+                if let Some(first_body) = error_bodies.values().next() {
+                    Self::extract_error_type(first_body)
+                } else {
+                    "Unknown".to_string()
+                }
+            } else {
+                "Unknown".to_string()
+            };
+            
+            error_groups.entry(error_type).or_insert_with(Vec::new).push(result);
         }
         
-        // Display error response bodies if available
-        if let Some(error_bodies) = &result.error_bodies {
-            // Check if all error response bodies are identical
-            let body_values: Vec<&String> = error_bodies.values().collect();
-            let all_same_bodies = body_values.windows(2).all(|w| w[0] == w[1]);
+        output.push_str("\nFAILED REQUESTS BY ERROR TYPE\n");
+        output.push_str("═══════════════════════════════\n");
+        
+        // Sort groups by severity: Critical > Dependency > Client > Unknown
+        let mut sorted_groups: Vec<_> = error_groups.into_iter().collect();
+        sorted_groups.sort_by(|(error_type_a, results_a), (error_type_b, results_b)| {
+            let severity_a = Self::get_error_type_severity(error_type_a, results_a);
+            let severity_b = Self::get_error_type_severity(error_type_b, results_b);
+            severity_a.cmp(&severity_b)
+        });
+        
+                 for (error_type, group_results) in sorted_groups {
+             let severity_score = Self::get_error_type_severity(&error_type, &group_results);
+             let severity = Self::score_to_severity(severity_score);
+             let icon = Self::get_error_icon(&severity);
             
-            if all_same_bodies && !body_values.is_empty() {
-                // All error responses are identical - show once
-                let truncated_body = Self::truncate_response_body(body_values[0], 500);
-                output.push_str(&format!("  Response body: {}\n", truncated_body));
-            } else {
-                // Different error responses - show per environment
-                output.push_str("  Response bodies:\n");
-                for (env, body) in error_bodies {
-                    let truncated_body = Self::truncate_response_body(body, 500);
-                    output.push_str(&format!("    {}: {}\n", env, truncated_body));
+            output.push_str(&format!("\n{} {} errors ({} route{})\n", 
+                icon, 
+                error_type, 
+                group_results.len(),
+                if group_results.len() == 1 { "" } else { "s" }
+            ));
+            
+            // Show affected routes
+            for result in &group_results {
+                let user_context = if result.user_context.is_empty() {
+                    "default".to_string()
+                } else {
+                    result.user_context.iter()
+                        .map(|(k, v)| format!("{}={}", k, v))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                };
+                
+                let status_values: Vec<u16> = result.status_codes.values().cloned().collect();
+                let status_display = if !status_values.is_empty() && (status_values.len() == 1 || status_values.windows(2).all(|w| w[0] == w[1])) {
+                    // All statuses are the same, show just one
+                    status_values[0].to_string()
+                } else if !status_values.is_empty() {
+                    // Different statuses across environments
+                    format!("{:?}", status_values)
+                } else {
+                    // Fallback case (shouldn't happen)
+                    "unknown".to_string()
+                };
+                
+                output.push_str(&format!("  └─ {} [{}] | Status: {}\n", 
+                    result.route_name, user_context, status_display));
+            }
+            
+            // Show error details for each unique error message in this group
+            let mut unique_errors: std::collections::HashSet<String> = std::collections::HashSet::new();
+            
+            for result in &group_results {
+                if let Some(error_bodies) = &result.error_bodies {
+                    for body in error_bodies.values() {
+                        let formatted_body = Self::format_error_body(body);
+                        if unique_errors.insert(formatted_body.clone()) {
+                            output.push_str(&format!("     Issue: {}\n", formatted_body));
+                        }
+                    }
+                }
+            }
+            
+            // Add debugging suggestion for this error type
+            if let Some(sample_result) = group_results.first() {
+                if let Some(status) = sample_result.status_codes.values().next() {
+                    if let Some(suggestion) = Self::get_debugging_suggestion(&error_type, status) {
+                        output.push_str(&format!("     💡 Suggestion: {}\n", suggestion));
+                    }
                 }
             }
         }
         
         output
+    }
+    
+    /// Get error type severity for sorting
+    fn get_error_type_severity(error_type: &str, results: &[&ComparisonResult]) -> u8 {
+        // Get max status code from this error group
+        let max_status = results.iter()
+            .flat_map(|r| r.status_codes.values())
+            .max()
+            .unwrap_or(&0);
+            
+        match (error_type, max_status) {
+            (_, status) if *status >= 500 => 1, // Critical
+            ("DependencyError", _) | (_, 424) | (_, 502) | (_, 503) => 2, // Dependency
+            (_, status) if *status >= 400 => 3, // Client
+            _ => 4, // Unknown
+        }
+    }
+    
+    /// Convert severity score to ErrorSeverity enum
+    fn score_to_severity(score: u8) -> ErrorSeverity {
+        match score {
+            1 => ErrorSeverity::Critical,
+            2 => ErrorSeverity::Dependency,
+            _ => ErrorSeverity::Client,
+        }
+    }
+    
+    /// Get icon for error severity
+    fn get_error_icon(severity: &ErrorSeverity) -> &'static str {
+        match severity {
+            ErrorSeverity::Critical => "🔥",
+            ErrorSeverity::Dependency => "🔗",
+            ErrorSeverity::Client => "⚠️",
+        }
+    }
+    
+    /// Get human-readable status description
+    fn get_status_description(status: u16) -> &'static str {
+        match status {
+            400 => "Bad Request",
+            401 => "Unauthorized", 
+            403 => "Forbidden",
+            404 => "Not Found",
+            424 => "Failed Dependency",
+            500 => "Internal Server Error",
+            502 => "Bad Gateway",
+            503 => "Service Unavailable",
+            _ => "",
+        }
+    }
+    
+    /// Format error response body for better readability
+    fn format_error_body(body: &str) -> String {
+        // Try to parse as JSON for better formatting
+        if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(body) {
+            if let Some(obj) = json_value.as_object() {
+                let mut parts = Vec::new();
+                
+                if let Some(error) = obj.get("error").and_then(|v| v.as_str()) {
+                    parts.push(format!("Type: {}", error));
+                }
+                
+                if let Some(message) = obj.get("message").and_then(|v| v.as_str()) {
+                    // Truncate long messages
+                    let truncated = if message.len() > 100 {
+                        format!("{}...", &message[..100])
+                    } else {
+                        message.to_string()
+                    };
+                    parts.push(format!("Message: {}", truncated));
+                }
+                
+                if let Some(status_code) = obj.get("statusCode").and_then(|v| v.as_u64()) {
+                    parts.push(format!("Code: {}", status_code));
+                }
+                
+                if !parts.is_empty() {
+                    return parts.join(" | ");
+                }
+            }
+        }
+        
+        // Fallback to truncated original body
+        Self::truncate_response_body(body, 150)
+    }
+    
+    /// Extract error type from response body
+    fn extract_error_type(body: &str) -> String {
+        if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(body) {
+            if let Some(error) = json_value.get("error").and_then(|v| v.as_str()) {
+                return error.to_string();
+            }
+        }
+        
+        // Fallback: try to extract from common patterns
+        if body.contains("DependencyError") || body.contains("dependency") {
+            "DependencyError".to_string()
+        } else if body.contains("UnhandledError") || body.contains("unhandled") {
+            "UnhandledError".to_string()
+        } else if body.contains("ValidationError") || body.contains("validation") {
+            "ValidationError".to_string()
+        } else {
+            "Unknown".to_string()
+        }
+    }
+    
+    /// Get debugging suggestion based on error type and status
+    fn get_debugging_suggestion(error_type: &str, status: &u16) -> Option<String> {
+        match (error_type, status) {
+            ("DependencyError", 424) => Some("Check dependent service health and connectivity".to_string()),
+            ("UnhandledError", 500) => Some("Review request payload structure and required fields".to_string()),
+            ("ValidationError", 400) => Some("Verify request parameters and data format".to_string()),
+            (_, 500) => Some("Check application logs for internal errors".to_string()),
+            (_, 424) => Some("Verify dependent services are operational".to_string()),
+            _ => None,
+        }
     }
 
     /// Truncate response body for display

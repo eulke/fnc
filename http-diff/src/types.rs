@@ -179,6 +179,14 @@ impl DifferenceCategory {
     }
 }
 
+/// Error severity classification for failed requests
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ErrorSeverity {
+    Critical,    // 5xx errors
+    Dependency,  // 424, 502, 503 errors
+    Client,      // 4xx errors
+}
+
 /// Diff view style configuration for text differences
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DiffViewStyle {
