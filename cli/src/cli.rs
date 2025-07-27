@@ -89,6 +89,10 @@ pub enum Commands {
         #[clap(short = 'H', long, default_value_t = false)]
         include_headers: bool,
 
+        /// Include error analysis in output (disabled by default)
+        #[clap(short = 'E', long, default_value_t = false)]
+        include_errors: bool,
+
         /// Diff view style for response comparison
         #[clap(short = 'd', long, value_enum, default_value_t = DiffViewType::Unified)]
         diff_view: DiffViewType,

@@ -223,7 +223,7 @@ impl CurlGenerator {
     }
 
     /// Format comparison results for display
-    pub fn format_comparison_results(results: &[ComparisonResult]) -> String {
+    pub fn format_comparison_results(results: &[ComparisonResult], include_errors: bool) -> String {
         let mut output = String::new();
         
         let total_tests = results.len();
@@ -251,12 +251,12 @@ impl CurlGenerator {
             output.push_str("No test scenarios found\n");
         }
         
-        // Generate error summary and add error analysis if there are failures
+        // Generate error summary and add error analysis if there are failures AND include_errors is true
         let error_summary = ErrorSummary::from_comparison_results(results);
-        if error_summary.failed_requests > 0 {
+        if error_summary.failed_requests > 0 && include_errors {
             output.push_str(&Self::format_error_analysis(&error_summary, results));
         }
-        
+
         if different_count > 0 {
             output.push_str("\nDIFFERENCES FOUND\n");
             output.push_str("═════════════════\n");
@@ -266,7 +266,7 @@ impl CurlGenerator {
         } else if identical_count == total_tests {
             output.push_str("\n✅ All responses are identical across environments!");
         }
-        
+
         output
     }
 
@@ -829,7 +829,7 @@ mod tests {
         };
 
         let results = vec![identical_result, different_result];
-        let output = CurlGenerator::format_comparison_results(&results);
+        let output = CurlGenerator::format_comparison_results(&results, true);
         
         assert!(output.contains("✅ Identical:"));
         assert!(output.contains("✅ Identical:     1/2 (50.0%)"));
@@ -866,7 +866,7 @@ mod tests {
         };
 
         let results = vec![result];
-        let output = CurlGenerator::format_comparison_results(&results);
+        let output = CurlGenerator::format_comparison_results(&results, true);
         
         assert!(output.contains("✅ Identical:"));
         assert!(output.contains("✅ Identical:     1/1 (100.0%)"));

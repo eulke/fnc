@@ -16,6 +16,7 @@ use tokio::runtime::Runtime;
 pub fn execute(
     environments: Option<String>,
     include_headers: bool,
+    include_errors: bool,
     diff_view: crate::cli::DiffViewType,
     config_path: String,
     users_file: String,
@@ -32,6 +33,7 @@ pub fn execute(
         execute_async(
             environments,
             include_headers,
+            include_errors,
             diff_view,
             config_path,
             users_file,
@@ -46,6 +48,7 @@ pub fn execute(
 async fn execute_async(
     environments: Option<String>,
     include_headers: bool,
+    include_errors: bool,
     diff_view: crate::cli::DiffViewType,
     config_path: String,
     users_file: String,
@@ -270,7 +273,7 @@ async fn execute_async(
 
     // Display summary
     ui::section_header("Test Results Summary");
-    println!("{}", http_diff::output::CurlGenerator::format_comparison_results(&results));
+    println!("{}", http_diff::output::CurlGenerator::format_comparison_results(&results, include_errors));
 
     // Show next steps if there are differences
     if different_count > 0 {
@@ -357,6 +360,7 @@ path = "/api/test"
         let result = execute_async(
             Some("invalid_env".to_string()),
             false,
+            false, // include_errors
             crate::cli::DiffViewType::Unified,
             config_path.to_string_lossy().to_string(),
             users_path.to_string_lossy().to_string(),
@@ -399,6 +403,7 @@ path = "/api/test"
         if let Commands::HttpDiff { 
             environments, 
             include_headers,
+            include_errors: _,
             diff_view: _,
             config,
             users_file,

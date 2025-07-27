@@ -40,6 +40,7 @@ fn main() {
         Commands::HttpDiff {
             environments,
             include_headers,
+            include_errors,
             diff_view,
             config,
             users_file,
@@ -49,6 +50,7 @@ fn main() {
         } => http_diff::execute(
             environments,
             include_headers,
+            include_errors,
             diff_view,
             config,
             users_file,
