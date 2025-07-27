@@ -556,21 +556,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
 
 [[package]]
-name = "fnc-tests"
-version = "0.1.0"
-dependencies = [
- "changelog",
- "http-diff",
- "reqwest",
- "serde",
- "serde_json",
- "tempfile",
- "tokio",
- "version",
- "wiremock",
-]
-
-[[package]]
 name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
