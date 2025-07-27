@@ -235,8 +235,15 @@ impl CurlGenerator {
             0.0
         };
         
-        output.push_str(&format!("🔍 Test Results Summary: {} total, {} identical, {} different - Success Rate: {:.1}%\n", 
-                                total_tests, identical_count, different_count, success_rate));
+        // Priority 1: Enhanced Summary Format - structured multi-line format
+        if total_tests > 0 {
+            output.push_str(&format!("✅ Identical:     {}/{} ({:.1}%)\n", 
+                                    identical_count, total_tests, success_rate));
+            output.push_str(&format!("❌ Different:     {}/{} ({:.1}%)\n", 
+                                    different_count, total_tests, 100.0 - success_rate));
+        } else {
+            output.push_str("No test scenarios found\n");
+        }
         
         // Generate error summary and add error analysis if there are failures
         let error_summary = ErrorSummary::from_comparison_results(results);
@@ -245,13 +252,10 @@ impl CurlGenerator {
         }
         
         if different_count > 0 {
-            output.push_str("\n❌ Differences Found:\n");
+            output.push_str("\nDIFFERENCES FOUND\n");
+            output.push_str("═════════════════\n");
             for result in results.iter().filter(|r| !r.is_identical) {
-                output.push_str(&format!("\n📍 Route '{}' (User: {:?})\n", 
-                                        result.route_name, result.user_context));
-                for diff in &result.differences {
-                    output.push_str(&Self::format_difference(diff));
-                }
+                output.push_str(&Self::format_route_group(result));
             }
         } else {
             output.push_str("\n✅ All responses are identical across environments!");
@@ -260,11 +264,42 @@ impl CurlGenerator {
         output
     }
 
+    /// Priority 2: Format route differences with improved visual grouping
+    fn format_route_group(result: &ComparisonResult) -> String {
+        let mut output = String::new();
+        
+        // Format user context more concisely
+        let user_context = if result.user_context.is_empty() {
+            "default".to_string()
+        } else {
+            result.user_context.iter()
+                .map(|(k, v)| format!("{}={}", k, v))
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+        
+        // Simple route header only
+        let route_header = format!("📍 Route: {} | User: {}", result.route_name, user_context);
+        output.push_str(&format!("{}\n", route_header));
+        
+        // Add detailed diff output if available
+        for difference in &result.differences {
+            if let Some(diff_output) = &difference.diff_output {
+                output.push_str("\n");
+                output.push_str(diff_output);
+                output.push_str("\n");
+            }
+        }
+        
+        output.push_str("\n");
+        output
+    }
+
     /// Format a single comparison result
     pub fn format_single_result(result: &ComparisonResult) -> String {
         let mut output = String::new();
         
-        output.push_str(&format!("Route: {} | User: {:?}\n", 
+        output.push_str(&format!("📍 Route: {} | User: {:?}\n", 
                                 result.route_name, 
                                 result.user_context));
         
@@ -307,21 +342,29 @@ impl CurlGenerator {
     fn format_error_analysis(error_summary: &ErrorSummary, results: &[ComparisonResult]) -> String {
         let mut output = String::new();
         
-        output.push_str("\n==== Error Analysis ====\n");
-        output.push_str(&format!("🚨 {} requests failed (non-2xx status codes)\n", error_summary.failed_requests));
+        // Priority 4: Error Analysis Restructure - improved visual formatting and user-focused language
+        output.push_str("\n🚨 ERROR ANALYSIS\n");
+        output.push_str("═══════════════\n");
         
-        if error_summary.identical_failures > 0 {
-            output.push_str(&format!("⚠️  {} requests failed identically across environments\n", error_summary.identical_failures));
-        }
+        let total_requests = results.len();
         
-        if error_summary.mixed_responses > 0 {
-            output.push_str(&format!("🔄 {} requests had different status codes across environments\n", error_summary.mixed_responses));
-        }
+        // Calculate critical issues (different failures across environments)
+        let critical_issues = error_summary.mixed_responses;
+        
+        output.push_str(&format!("Critical Issues:     {} (different failures across envs)\n", critical_issues));
+        output.push_str(&format!("Consistent Failures: {} (same errors in all environments)\n", error_summary.identical_failures));
+        output.push_str(&format!("Total Failed:        {}/{} requests ({:.1}%)\n", 
+                                error_summary.failed_requests, total_requests, 
+                                (error_summary.failed_requests as f32 / total_requests as f32) * 100.0));
         
         // Show detailed error information for failed requests
         let failed_results: Vec<&ComparisonResult> = results.iter().filter(|r| r.has_errors).collect();
-        for result in failed_results {
-            output.push_str(&Self::format_failed_request_details(result));
+        if !failed_results.is_empty() {
+            output.push_str("\nFAILED REQUESTS DETAILS\n");
+            output.push_str("═══════════════════════\n");
+            for result in failed_results {
+                output.push_str(&Self::format_failed_request_details(result));
+            }
         }
         
         output
@@ -782,10 +825,14 @@ mod tests {
         let results = vec![identical_result, different_result];
         let output = CurlGenerator::format_comparison_results(&results);
         
-        assert!(output.contains("🔍 Test Results Summary: 2 total, 1 identical, 1 different - Success Rate: 50.0%"));
-        assert!(output.contains("❌ Differences Found:"));
-        assert!(output.contains("📍 Route 'route2'"));
-        assert!(output.contains("📄 Body content differs"));
+        assert!(output.contains("🔍 TEST RESULTS SUMMARY"));
+        assert!(output.contains("═══════════════════════"));
+        assert!(output.contains("✅ Identical:     1/2 (50.0%)"));
+        assert!(output.contains("❌ Different:     1/2 (50.0%)"));
+        assert!(output.contains("DIFFERENCES FOUND"));
+        assert!(output.contains("═════════════════"));
+        assert!(output.contains("Route: route2 | User: userId=123"));
+        assert!(output.contains("Route: route2 | User: userId=123"));
     }
 
     #[test]
@@ -816,9 +863,12 @@ mod tests {
         let results = vec![result];
         let output = CurlGenerator::format_comparison_results(&results);
         
-        assert!(output.contains("🔍 Test Results Summary: 1 total, 1 identical, 0 different - Success Rate: 100.0%"));
+        assert!(output.contains("🔍 TEST RESULTS SUMMARY"));
+        assert!(output.contains("═══════════════════════"));
+        assert!(output.contains("✅ Identical:     1/1 (100.0%)"));
+        assert!(output.contains("❌ Different:     0/1 (0.0%)"));
         assert!(output.contains("✅ All responses are identical across environments!"));
-        assert!(!output.contains("❌ Differences Found:"));
+        assert!(!output.contains("DIFFERENCES FOUND"));
     }
 
     #[test]

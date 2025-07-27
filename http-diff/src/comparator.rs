@@ -293,7 +293,7 @@ impl ResponseComparator {
             }
         }
         
-        format!("📋 Headers Comparison\n{}", table.build())
+        format!("{}", table.build())
     }
 
     /// Generate side-by-side diff table for headers
@@ -330,7 +330,7 @@ impl ResponseComparator {
             table.styled_row(vec![header_cell, left_value, right_value]);
         }
         
-        format!("📋 Headers Comparison\n{}", table.build())
+        format!("{}", table.build())
     }
 
 
@@ -704,7 +704,6 @@ mod tests {
         
         // Check that the grouped header output contains the expected information
         let diff_output = diff.diff_output.as_ref().unwrap();
-        assert!(diff_output.contains("📋 Headers Comparison"));
         assert!(diff_output.contains("X-Version"));
         assert!(diff_output.contains("1.0"));
         assert!(diff_output.contains("2.0"));
@@ -747,7 +746,6 @@ mod tests {
             .unwrap();
 
         let unified_output = unified_header_diff.diff_output.as_ref().unwrap();
-        assert!(unified_output.contains("📋 Headers Comparison"));
         assert!(unified_output.contains("X-Version"));
         assert!(unified_output.contains("X-Environment"));
         assert!(unified_output.contains("X-New-Header"));
@@ -764,15 +762,10 @@ mod tests {
             .unwrap();
 
         let side_by_side_output = side_by_side_header_diff.diff_output.as_ref().unwrap();
-        assert!(side_by_side_output.contains("📋 Headers Comparison"));
         assert!(side_by_side_output.contains("PROD"));
         assert!(side_by_side_output.contains("TEST"));
         assert!(side_by_side_output.contains("X-Version"));
         assert!(side_by_side_output.contains("(missing)"));
-
-        // Verify both formats group all headers in a single table (not multiple tables)
-        assert_eq!(unified_output.matches("📋 Headers Comparison").count(), 1);
-        assert_eq!(side_by_side_output.matches("📋 Headers Comparison").count(), 1);
     }
 
     #[test]
