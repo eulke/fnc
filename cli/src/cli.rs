@@ -85,6 +85,10 @@ pub enum Commands {
         #[clap(short, long)]
         environments: Option<String>,
 
+        /// Comma-separated list of route names to test (defaults to all configured routes)
+        #[clap(short, long)]
+        routes: Option<String>,
+
         /// Include headers in response comparison (disabled by default)
         #[clap(short = 'H', long, default_value_t = false)]
         include_headers: bool,

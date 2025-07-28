@@ -39,6 +39,7 @@ fn main() {
         Commands::Upgrade { force, verbose } => upgrade::execute(force, verbose),
         Commands::HttpDiff {
             environments,
+            routes,
             include_headers,
             include_errors,
             diff_view,
@@ -49,6 +50,7 @@ fn main() {
             output_file,
         } => http_diff::execute(
             environments,
+            routes,
             include_headers,
             include_errors,
             diff_view,

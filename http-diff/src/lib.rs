@@ -40,9 +40,10 @@ pub use formatter::{TextFormatter, FormatterConfig, DiffStyle};
 pub async fn run_http_diff(
     config: HttpDiffConfig,
     environments: Option<Vec<String>>,
+    routes: Option<Vec<String>>,
 ) -> Result<Vec<ComparisonResult>> {
     let runner = TestRunner::new(config)?;
-    runner.execute(environments).await
+    runner.execute(environments, routes).await
 }
 
 #[cfg(test)]

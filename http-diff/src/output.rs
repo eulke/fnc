@@ -448,8 +448,10 @@ impl CurlGenerator {
             
             for result in &group_results {
                 if let Some(error_bodies) = &result.error_bodies {
-                    for body in error_bodies.values() {
-                        let formatted_body = Self::format_error_body(body);
+                    for (env_name, body) in error_bodies {
+                        // Get the status code for this environment
+                        let status_code = result.status_codes.get(env_name).copied();
+                        let formatted_body = Self::format_error_body_with_status(body, status_code);
                         if unique_errors.insert(formatted_body.clone()) {
                             output.push_str(&format!("     Issue: {}\n", formatted_body));
                         }
@@ -504,23 +506,8 @@ impl CurlGenerator {
         }
     }
     
-    /// Get human-readable status description
-    fn get_status_description(status: u16) -> &'static str {
-        match status {
-            400 => "Bad Request",
-            401 => "Unauthorized", 
-            403 => "Forbidden",
-            404 => "Not Found",
-            424 => "Failed Dependency",
-            500 => "Internal Server Error",
-            502 => "Bad Gateway",
-            503 => "Service Unavailable",
-            _ => "",
-        }
-    }
-    
-    /// Format error response body for better readability
-    fn format_error_body(body: &str) -> String {
+    /// Format error response body for better readability, with status code fallback
+    fn format_error_body_with_status(body: &str, status_code: Option<u16>) -> String {
         // Try to parse as JSON for better formatting
         if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(body) {
             if let Some(obj) = json_value.as_object() {
@@ -551,9 +538,20 @@ impl CurlGenerator {
         }
         
         // Fallback to truncated original body
-        Self::truncate_response_body(body, 150)
+        let formatted_body = Self::truncate_response_body(body, 150);
+        
+        // If the body is empty or whitespace-only, use status code description
+        if formatted_body.trim().is_empty() {
+            if let Some(status) = status_code {
+                Self::get_friendly_error_message(status)
+            } else {
+                "No error details provided in response body".to_string()
+            }
+        } else {
+            formatted_body
+        }
     }
-    
+
     /// Extract error type from response body
     fn extract_error_type(body: &str) -> String {
         if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(body) {
@@ -583,6 +581,22 @@ impl CurlGenerator {
             (_, 500) => Some("Check application logs for internal errors".to_string()),
             (_, 424) => Some("Verify dependent services are operational".to_string()),
             _ => None,
+        }
+    }
+
+    /// Get friendly error message based on status code when response body is empty
+    fn get_friendly_error_message(status: u16) -> String {
+        match status {
+            400 => "Request contains invalid data or missing required fields".to_string(),
+            401 => "Authentication failed - check credentials or authorization headers".to_string(),
+            403 => "Access denied - insufficient permissions for this resource".to_string(),
+            404 => "Requested resource or endpoint not found".to_string(),
+            424 => "Dependent service is unavailable or failing".to_string(),
+            500 => "Internal server error occurred - check application logs".to_string(),
+            502 => "Gateway error - upstream service not responding correctly".to_string(),
+            503 => "Service temporarily unavailable - likely overloaded or under maintenance".to_string(),
+            504 => "Request timed out - service taking too long to respond".to_string(),
+            _ => format!("Service returned error status {} with no additional details", status),
         }
     }
 

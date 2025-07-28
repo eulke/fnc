@@ -15,6 +15,7 @@ use tokio::runtime::Runtime;
 
 pub fn execute(
     environments: Option<String>,
+    routes: Option<String>,
     include_headers: bool,
     include_errors: bool,
     diff_view: crate::cli::DiffViewType,
@@ -32,6 +33,7 @@ pub fn execute(
     rt.block_on(async {
         execute_async(
             environments,
+            routes,
             include_headers,
             include_errors,
             diff_view,
@@ -47,6 +49,7 @@ pub fn execute(
 
 async fn execute_async(
     environments: Option<String>,
+    routes: Option<String>,
     include_headers: bool,
     include_errors: bool,
     diff_view: crate::cli::DiffViewType,
@@ -133,6 +136,14 @@ async fn execute_async(
             .collect::<Vec<String>>()
     });
 
+    // Parse route list
+    let route_list = routes.map(|route_str| {
+        route_str
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .collect::<Vec<String>>()
+    });
+
     // Validate environment names if specified
     if let Some(ref envs) = env_list {
         for env in envs {
@@ -141,6 +152,20 @@ async fn execute_async(
                     "Environment '{}' not found in configuration. Available environments: {}",
                     env,
                     config.environments.keys().cloned().collect::<Vec<_>>().join(", ")
+                )));
+            }
+        }
+    }
+
+    // Validate route names if specified
+    if let Some(ref routes) = route_list {
+        let available_routes: Vec<String> = config.routes.iter().map(|r| r.name.clone()).collect();
+        for route in routes {
+            if !available_routes.contains(route) {
+                return Err(CliError::Other(format!(
+                    "Route '{}' not found in configuration. Available routes: {}",
+                    route,
+                    available_routes.join(", ")
                 )));
             }
         }
@@ -160,7 +185,8 @@ async fn execute_async(
 
     // Setup progress tracking
     let env_count = env_list.as_ref().map(|e| e.len()).unwrap_or(config.environments.len());
-    let total_tests = config.routes.len() * user_data.len().max(1) * env_count;
+    let route_count = route_list.as_ref().map(|r| r.len()).unwrap_or(config.routes.len());
+    let total_tests = route_count * user_data.len().max(1) * env_count;
     
     let mut progress = ProgressTracker::new("HTTP Diff Testing").with_steps(vec![
         "Initializing test runner".to_string(),
@@ -194,6 +220,12 @@ async fn execute_async(
             .map(|envs| envs.join(", "))
             .unwrap_or_else(|| config.environments.keys().cloned().collect::<Vec<_>>().join(", "));
         ui::info_message(&format!("Testing environments: {}", env_names));
+        
+        let route_names = route_list.as_ref()
+            .map(|routes| routes.join(", "))
+            .unwrap_or_else(|| config.routes.iter().map(|r| r.name.clone()).collect::<Vec<_>>().join(", "));
+        ui::info_message(&format!("Testing routes: {}", route_names));
+        
         ui::info_message(&format!("Headers comparison: {}", if include_headers { "enabled" } else { "disabled" }));
         let diff_view_name = match diff_view {
             crate::cli::DiffViewType::Unified => "unified",
@@ -213,14 +245,14 @@ async fn execute_async(
 
     // Execute with progress callback
     let pb_clone = Arc::clone(&pb);
-    let (results, _tracker) = runner.execute_with_progress(
-        env_list.clone(),
-        Some(Box::new(move |tracker| {
-            pb_clone.set_position(tracker.completed_requests as u64);
-            pb_clone.set_message(format!("Completed {}/{} requests", tracker.completed_requests, tracker.total_requests));
+    let (results, _final_progress) = runner.execute_with_progress(
+        env_list,
+        route_list,
+        Some(Box::new(move |p: &http_diff::runner::ProgressTracker| {
+            pb_clone.set_position(p.completed_requests as u64);
         }))
     ).await.map_err(|e| {
-        CliError::Other(format!("HTTP diff tests failed: {}", e))
+        CliError::Other(format!("HTTP diff execution failed: {}", e))
     })?;
 
     pb.finish_with_message("✅ All HTTP requests completed!");
@@ -359,6 +391,7 @@ path = "/api/test"
         // Test with invalid environment
         let result = execute_async(
             Some("invalid_env".to_string()),
+            None, // routes
             false,
             false, // include_errors
             crate::cli::DiffViewType::Unified,
@@ -381,8 +414,9 @@ path = "/api/test"
         // Test basic http-diff command
         let cli = Cli::try_parse_from(&["fnc", "http-diff"]).unwrap();
         
-        if let Commands::HttpDiff { environments, include_headers, .. } = cli.command {
+        if let Commands::HttpDiff { environments, routes, include_headers, .. } = cli.command {
             assert_eq!(environments, None);
+            assert_eq!(routes, None);
             assert_eq!(include_headers, false);
         } else {
             panic!("Expected HttpDiff command");
@@ -402,6 +436,7 @@ path = "/api/test"
         
         if let Commands::HttpDiff { 
             environments, 
+            routes: _,
             include_headers,
             include_errors: _,
             diff_view: _,

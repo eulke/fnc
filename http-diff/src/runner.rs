@@ -116,22 +116,24 @@ impl TestRunner {
     }
 
     /// Execute HTTP diff tests with concurrent request execution and progress tracking
-    pub async fn execute(&self, environments: Option<Vec<String>>) -> Result<Vec<ComparisonResult>> {
-        self.execute_with_progress(environments, None).await.map(|(results, _)| results)
+    pub async fn execute(&self, environments: Option<Vec<String>>, routes: Option<Vec<String>>) -> Result<Vec<ComparisonResult>> {
+        self.execute_with_progress(environments, routes, None).await.map(|(results, _)| results)
     }
 
     /// Execute HTTP diff tests with progress tracking callback
     pub async fn execute_with_progress(
         &self, 
         environments: Option<Vec<String>>,
+        routes: Option<Vec<String>>,
         progress_callback: Option<Box<dyn Fn(&ProgressTracker) + Send + Sync>>,
     ) -> Result<(Vec<ComparisonResult>, ProgressTracker)>
     {
         let user_data = load_user_data("users.csv")?;
         let environments = self.resolve_environments(environments)?;
+        let routes = self.resolve_routes(routes)?;
         
         // Calculate total number of requests
-        let total_requests = self.config.routes.len() * user_data.len() * environments.len();
+        let total_requests = routes.len() * user_data.len() * environments.len();
         let mut progress = ProgressTracker::new(total_requests);
         
         if let Some(ref callback) = progress_callback {
@@ -141,7 +143,7 @@ impl TestRunner {
         let mut results = Vec::new();
 
         // Execute tests for each route and user combination
-        for route in &self.config.routes {
+        for route in routes {
             for user in &user_data {
                 // Execute requests for this route-user combination
                 let mut responses = HashMap::new();
@@ -191,15 +193,44 @@ impl TestRunner {
             }
         }
     }
+
+    /// Resolve route names and filter routes
+    fn resolve_routes(&self, routes: Option<Vec<String>>) -> Result<Vec<&crate::config::Route>> {
+        match routes {
+            Some(route_names) => {
+                let mut filtered_routes = Vec::new();
+                
+                // Validate that all requested routes exist and collect them
+                for route_name in &route_names {
+                    if let Some(route) = self.config.routes.iter().find(|r| r.name == *route_name) {
+                        filtered_routes.push(route);
+                    } else {
+                        let available_routes: Vec<String> = self.config.routes.iter().map(|r| r.name.clone()).collect();
+                        return Err(HttpDiffError::invalid_config(format!(
+                            "Route '{}' not found in configuration. Available routes: {}",
+                            route_name,
+                            available_routes.join(", ")
+                        )));
+                    }
+                }
+                Ok(filtered_routes)
+            }
+            None => {
+                // Use all available routes
+                Ok(self.config.routes.iter().collect())
+            }
+        }
+    }
 }
 
 /// Convenience function to run HTTP diff with default settings
 pub async fn run_http_diff(
     config: HttpDiffConfig,
     environments: Option<Vec<String>>,
+    routes: Option<Vec<String>>,
 ) -> Result<Vec<ComparisonResult>> {
     let runner = TestRunner::new(config)?;
-    runner.execute(environments).await
+    runner.execute(environments, routes).await
 }
 
 /// Convenience function to run HTTP diff with headers comparison enabled
@@ -208,7 +239,7 @@ pub async fn run_http_diff_with_headers(
     environments: Option<Vec<String>>,
 ) -> Result<Vec<ComparisonResult>> {
     let runner = TestRunner::with_headers_comparison(config)?;
-    runner.execute(environments).await
+    runner.execute(environments, None).await
 }
 
 #[cfg(test)]
