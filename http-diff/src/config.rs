@@ -55,11 +55,71 @@ pub struct Route {
     pub body: Option<String>,
 }
 
-/// User data loaded from CSV for path parameter substitution
+/// User data loaded from CSV for parameter substitution
 #[derive(Debug, Clone)]
 pub struct UserData {
     /// CSV column data
     pub data: HashMap<String, String>,
+}
+
+impl UserData {
+    /// Substitute placeholders like {userId} with actual values from CSV data
+    /// 
+    /// # Arguments
+    /// * `text` - The text containing placeholders in {param_name} format
+    /// * `url_encode` - Whether to URL encode the substituted values (true for paths, false for headers/body)
+    /// * `strict` - If true, error on missing parameters; if false, leave unmatched placeholders unchanged
+    pub fn substitute_placeholders(&self, text: &str, url_encode: bool, strict: bool) -> Result<String> {
+        let mut result = text.to_string();
+        let mut position = 0;
+        
+        // Find and replace all valid {parameter} placeholders
+        while let Some(start) = result[position..].find('{') {
+            let start = position + start;
+            
+            if let Some(relative_end) = result[start..].find('}') {
+                let end = start + relative_end;
+                let param_name = &result[start + 1..end];
+                
+
+                
+                // Check if this looks like a valid parameter placeholder
+                if is_valid_param_name(param_name) {
+                    if let Some(value) = self.data.get(param_name) {
+                        // We have the parameter value, substitute it
+                        let final_value = if url_encode {
+                            urlencoding::encode(value).to_string()
+                        } else {
+                            value.clone()
+                        };
+                        
+
+                        result.replace_range(start..end + 1, &final_value);
+                        // Continue from after the replacement
+                        position = start + final_value.len();
+                    } else if strict {
+                        // Strict mode: error if parameter is missing
+                        return Err(HttpDiffError::MissingPathParameter {
+                            param: param_name.to_string(),
+                        });
+                    } else {
+                        // Non-strict mode: skip this placeholder and continue searching after it
+
+                        position = end + 1;
+                    }
+                } else {
+                    // Not a valid parameter name, skip this placeholder
+
+                    position = end + 1;
+                }
+            } else {
+                // No closing brace found, stop searching
+                break;
+            }
+        }
+        
+        Ok(result)
+    }
 }
 
 impl HttpDiffConfig {
@@ -140,6 +200,11 @@ pub fn load_user_data<P: AsRef<Path>>(path: P) -> Result<Vec<UserData>> {
     }
     
     Ok(users)
+}
+
+/// Check if a parameter name is a valid identifier (letters, numbers, underscore)
+fn is_valid_param_name(name: &str) -> bool {
+    !name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '_')
 }
 
 /// Generate default http-diff.toml template with examples
@@ -762,6 +827,47 @@ path = "/api/test"
         assert!(users.len() > 0);
         assert!(users[0].data.contains_key("userId"));
         assert!(users[0].data.contains_key("siteId"));
+    }
+
+    #[test]
+    fn test_csv_parameter_substitution_comprehensive() {
+        // Test comprehensive CSV parameter substitution across all request parts
+        let mut user_data = HashMap::new();
+        user_data.insert("userId".to_string(), "12345".to_string());
+        user_data.insert("apiKey".to_string(), "secret-key-123".to_string());
+        user_data.insert("region".to_string(), "us-east-1".to_string());
+        let user_data = UserData { data: user_data };
+
+        // Test path parameter substitution (strict mode)
+        let path = "/api/users/{userId}/profile";
+        let result = user_data.substitute_placeholders(path, true, true).unwrap();
+        assert_eq!(result, "/api/users/12345/profile");
+
+        // Test header substitution (non-strict mode)
+        let header = "Bearer {apiKey}";
+        let result = user_data.substitute_placeholders(header, false, false).unwrap();
+        assert_eq!(result, "Bearer secret-key-123");
+
+        // Test query parameter substitution (non-strict mode)
+        let query_param = "region={region}&format=json";
+        let result = user_data.substitute_placeholders(query_param, false, false).unwrap();
+        assert_eq!(result, "region=us-east-1&format=json");
+
+        // Test simple body substitution (non-strict mode) - should work for simple cases
+        let simple_body = "userId={userId}&region={region}";
+        let result = user_data.substitute_placeholders(simple_body, false, false).unwrap();
+        assert_eq!(result, "userId=12345&region=us-east-1");
+
+        // Test that missing parameters in non-strict mode are left unchanged
+        let text_with_missing = "Hello {userId}, your {missingParam} is ready";
+        let result = user_data.substitute_placeholders(text_with_missing, false, false).unwrap();
+        assert_eq!(result, "Hello 12345, your {missingParam} is ready");
+
+        // Test that missing parameters in strict mode cause an error
+        let path_with_missing = "/api/users/{userId}/posts/{missingParam}";
+        let result = user_data.substitute_placeholders(path_with_missing, true, true);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), HttpDiffError::MissingPathParameter { .. }));
     }
 
     #[test]

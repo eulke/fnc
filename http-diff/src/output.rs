@@ -40,8 +40,8 @@ impl CurlGenerator {
 
         let mut command = format!("curl -X {} '{}'", route.method, self.escape_shell_argument(&url));
 
-        // Add headers with proper escaping
-        let headers = self.collect_headers(route, environment);
+        // Add headers with CSV substitution and proper escaping
+        let headers = self.collect_headers(route, environment, user_data)?;
         for (key, value) in headers {
             command.push_str(&format!(" \\\n  -H '{}: {}'", 
                 self.escape_shell_argument(&key), 
@@ -49,8 +49,8 @@ impl CurlGenerator {
             ));
         }
 
-        // Add query parameters with proper URL encoding
-        let params = self.collect_query_parameters(route);
+        // Add query parameters with CSV substitution and proper URL encoding
+        let params = self.collect_query_parameters(route, user_data)?;
         if !params.is_empty() {
             let query_string = params
                 .iter()
@@ -62,9 +62,10 @@ impl CurlGenerator {
                                     &format!("'{}?{}'", self.escape_shell_argument(&url), query_string));
         }
 
-        // Add body if present with proper escaping
+        // Add body with CSV substitution and proper escaping
         if let Some(body) = &route.body {
-            let escaped_body = self.escape_shell_argument(body);
+            let substituted_body = user_data.substitute_placeholders(body, false, false)?;
+            let escaped_body = self.escape_shell_argument(&substituted_body);
             command.push_str(&format!(" \\\n  -d '{}'", escaped_body));
         }
 
@@ -609,74 +610,69 @@ impl CurlGenerator {
         }
     }
 
-    /// Substitute path parameters like {userId} with actual values (same as HttpClient)
+    /// Substitute path parameters like {userId} with actual values using shared implementation
     fn substitute_path_parameters(&self, path: &str, user_data: &UserData) -> Result<String> {
-        let mut result = path.to_string();
-        
-        // Find all parameters in the format {param_name}
-        while let Some(start) = result.find('{') {
-            if let Some(end) = result[start..].find('}') {
-                let param_name = &result[start + 1..start + end];
-                
-                let value = user_data.data.get(param_name)
-                    .ok_or_else(|| crate::error::HttpDiffError::MissingPathParameter {
-                        param: param_name.to_string(),
-                    })?;
-                
-                // URL encode the parameter value for safety
-                let encoded_value = urlencoding::encode(value);
-                result.replace_range(start..start + end + 1, &encoded_value);
-            } else {
-                break;
-            }
-        }
-        
-        Ok(result)
+        user_data.substitute_placeholders(path, true, true)
     }
 
-    /// Collect all headers for a request
-    fn collect_headers(&self, route: &Route, environment: &str) -> HashMap<String, String> {
+    /// Collect all headers for a request with CSV parameter substitution
+    fn collect_headers(&self, route: &Route, environment: &str, user_data: &UserData) -> Result<HashMap<String, String>> {
         let mut headers = HashMap::new();
 
         // Add global headers
         if let Some(global) = &self.config.global {
             if let Some(global_headers) = &global.headers {
-                headers.extend(global_headers.clone());
+                for (key, value) in global_headers {
+                    let substituted_value = user_data.substitute_placeholders(value, false, false)?;
+                    headers.insert(key.clone(), substituted_value);
+                }
             }
         }
 
         // Add environment-specific headers
         if let Some(env) = self.config.environments.get(environment) {
             if let Some(env_headers) = &env.headers {
-                headers.extend(env_headers.clone());
+                for (key, value) in env_headers {
+                    let substituted_value = user_data.substitute_placeholders(value, false, false)?;
+                    headers.insert(key.clone(), substituted_value);
+                }
             }
         }
 
         // Add route-specific headers (these take precedence)
         if let Some(route_headers) = &route.headers {
-            headers.extend(route_headers.clone());
+            for (key, value) in route_headers {
+                let substituted_value = user_data.substitute_placeholders(value, false, false)?;
+                headers.insert(key.clone(), substituted_value);
+            }
         }
 
-        headers
+        Ok(headers)
     }
 
-    /// Collect all query parameters for a request
-    fn collect_query_parameters(&self, route: &Route) -> HashMap<String, String> {
+    /// Collect all query parameters for a request with CSV parameter substitution
+    fn collect_query_parameters(&self, route: &Route, user_data: &UserData) -> Result<HashMap<String, String>> {
         let mut params = HashMap::new();
 
         // Add global parameters
         if let Some(global) = &self.config.global {
             if let Some(global_params) = &global.params {
-                params.extend(global_params.clone());
+                for (key, value) in global_params {
+                    let substituted_value = user_data.substitute_placeholders(value, false, false)?;
+                    params.insert(key.clone(), substituted_value);
+                }
             }
         }
 
         // Add route-specific parameters
         if let Some(route_params) = &route.params {
-            params.extend(route_params.clone());
+            for (key, value) in route_params {
+                let substituted_value = user_data.substitute_placeholders(value, false, false)?;
+                params.insert(key.clone(), substituted_value);
+            }
         }
 
-        params
+        Ok(params)
     }
 }
 

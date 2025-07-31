@@ -75,12 +75,13 @@ impl HttpClient {
         // Start building request
         let mut request_builder = self.client.request(method, url);
 
-        // Add headers
-        request_builder = self.add_headers(request_builder, route, environment)?;
+        // Add headers with CSV parameter substitution
+        request_builder = self.add_headers(request_builder, route, environment, user_data)?;
 
-        // Add body if present
+        // Add body with CSV parameter substitution if present
         if let Some(body) = &route.body {
-            request_builder = request_builder.body(body.clone());
+            let substituted_body = user_data.substitute_placeholders(body, false, false)?;
+            request_builder = request_builder.body(substituted_body);
         }
 
         request_builder.build().map_err(Into::into)
@@ -90,12 +91,13 @@ impl HttpClient {
 
 
 
-    /// Add headers to request
+    /// Add headers to request with CSV parameter substitution
     fn add_headers(
         &self,
         mut request_builder: reqwest::RequestBuilder,
         route: &Route,
         environment: &str,
+        user_data: &UserData,
     ) -> Result<reqwest::RequestBuilder> {
         let mut headers = std::collections::HashMap::new();
 
@@ -118,9 +120,10 @@ impl HttpClient {
             headers.extend(route_headers.clone());
         }
 
-        // Apply all headers to the request builder
+        // Apply headers with CSV parameter substitution
         for (key, value) in headers {
-            request_builder = request_builder.header(key, value);
+            let substituted_value = user_data.substitute_placeholders(&value, false, false)?;
+            request_builder = request_builder.header(key, substituted_value);
         }
 
         Ok(request_builder)
@@ -334,9 +337,14 @@ mod tests {
             body: None,
         };
 
+        // Create test user data
+        let mut user_data = std::collections::HashMap::new();
+        user_data.insert("userId".to_string(), "12345".to_string());
+        let user_data = crate::config::UserData { data: user_data };
+
         // Test the add_headers method by creating a mock request builder
         let request_builder = reqwest::Client::new().request(reqwest::Method::GET, "http://example.com");
-        let result = client.add_headers(request_builder, &route, "test");
+        let result = client.add_headers(request_builder, &route, "test", &user_data);
         
         assert!(result.is_ok());
         

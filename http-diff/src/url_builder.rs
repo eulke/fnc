@@ -59,35 +59,14 @@ impl<'a> UrlBuilder<'a> {
             })
     }
 
-    /// Substitute path parameters like {userId} with actual values
+    /// Substitute path parameters like {userId} with actual values using URL encoding
     fn substitute_path_parameters(&self) -> Result<String> {
-        let mut path = self.route.path.clone();
-        
-        // Find and replace all {parameter} placeholders
-        while let Some(start) = path.find('{') {
-            let end = path[start..]
-                .find('}')
-                .ok_or_else(|| HttpDiffError::invalid_config("Unclosed path parameter"))?;
-            
-            let param_name = &path[start + 1..start + end];
-            let value = self.user_data
-                .data
-                .get(param_name)
-                .ok_or_else(|| HttpDiffError::MissingPathParameter {
-                    param: param_name.to_string(),
-                })?;
-            
-            // URL encode the parameter value
-            let encoded_value = encode(value);
-            path.replace_range(start..start + end + 1, &encoded_value);
-        }
-        
-        Ok(path)
+        self.user_data.substitute_placeholders(&self.route.path, true, true)
     }
 
-    /// Add query parameters to the URL
+    /// Add query parameters to the URL with CSV parameter substitution
     fn add_query_parameters(&self, url: &mut Url) -> Result<()> {
-        let params = self.collect_query_parameters();
+        let params = self.collect_query_parameters()?;
         
         for (key, value) in params {
             url.query_pairs_mut().append_pair(&key, &value);
@@ -96,8 +75,8 @@ impl<'a> UrlBuilder<'a> {
         Ok(())
     }
 
-    /// Collect all query parameters from global config and route
-    fn collect_query_parameters(&self) -> HashMap<String, String> {
+    /// Collect all query parameters from global config and route with CSV substitution
+    fn collect_query_parameters(&self) -> Result<HashMap<String, String>> {
         let mut params = HashMap::new();
 
         // Add global parameters first
@@ -106,15 +85,21 @@ impl<'a> UrlBuilder<'a> {
             .as_ref()
             .and_then(|g| g.params.as_ref())
         {
-            params.extend(global_params.clone());
+            for (key, value) in global_params {
+                let substituted_value = self.user_data.substitute_placeholders(value, false, false)?;
+                params.insert(key.clone(), substituted_value);
+            }
         }
 
         // Add route-specific parameters (override global ones)
         if let Some(route_params) = &self.route.params {
-            params.extend(route_params.clone());
+            for (key, value) in route_params {
+                let substituted_value = self.user_data.substitute_placeholders(value, false, false)?;
+                params.insert(key.clone(), substituted_value);
+            }
         }
 
-        params
+        Ok(params)
     }
 
     /// Get just the path with substituted parameters (for display purposes)
@@ -128,17 +113,17 @@ impl<'a> UrlBuilder<'a> {
     }
 
     /// Get all query parameters as a formatted string
-    pub fn get_query_string(&self) -> String {
-        let params = self.collect_query_parameters();
+    pub fn get_query_string(&self) -> Result<String> {
+        let params = self.collect_query_parameters()?;
         if params.is_empty() {
-            return String::new();
+            return Ok(String::new());
         }
 
-        params
+        Ok(params
             .iter()
             .map(|(k, v)| format!("{}={}", encode(k), encode(v)))
             .collect::<Vec<_>>()
-            .join("&")
+            .join("&"))
     }
 }
 
