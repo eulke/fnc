@@ -4,8 +4,10 @@ use crate::types::ComparisonResult;
 use crate::config::{HttpDiffConfig, load_user_data};
 use crate::error::{Result, HttpDiffError};
 use std::collections::HashMap;
-
 use std::time::Instant;
+use futures::stream::{FuturesUnordered, StreamExt};
+use tokio::sync::Semaphore;
+use std::sync::Arc;
 
 /// Progress tracking for concurrent execution
 #[derive(Debug, Clone)]
@@ -71,6 +73,7 @@ pub struct TestRunner {
     config: HttpDiffConfig,
     client: HttpClient,
     comparator: ResponseComparator,
+    max_concurrent_requests: usize,
 }
 
 impl TestRunner {
@@ -83,6 +86,7 @@ impl TestRunner {
             config,
             client,
             comparator,
+            max_concurrent_requests: 10, // Default to 10 concurrent requests
         })
     }
 
@@ -95,6 +99,7 @@ impl TestRunner {
             config,
             client,
             comparator,
+            max_concurrent_requests: 10, // Default to 10 concurrent requests
         })
     }
 
@@ -115,7 +120,14 @@ impl TestRunner {
             config,
             client,
             comparator,
+            max_concurrent_requests: 10, // Default to 10 concurrent requests
         })
+    }
+
+    /// Configure maximum concurrent requests
+    pub fn with_max_concurrent_requests(mut self, max_concurrent: usize) -> Self {
+        self.max_concurrent_requests = max_concurrent.max(1); // Ensure at least 1
+        self
     }
 
     /// Execute HTTP diff tests with concurrent request execution and progress tracking
@@ -135,7 +147,18 @@ impl TestRunner {
         let environments = self.resolve_environments(environments)?;
         let routes = self.resolve_routes(routes)?;
         
-        // Calculate total number of requests
+        self.execute_concurrent(&user_data, &environments, &routes, progress_callback).await
+    }
+
+    /// Execute tests concurrently with controlled parallelism
+    async fn execute_concurrent(
+        &self,
+        user_data: &[crate::config::UserData],
+        environments: &[String],
+        routes: &[&crate::config::Route],
+        progress_callback: Option<Box<ProgressCallback>>,
+    ) -> Result<(Vec<ComparisonResult>, ProgressTracker)> {
+        // Calculate total requests and set up progress tracking
         let total_requests = routes.len() * user_data.len() * environments.len();
         let mut progress = ProgressTracker::new(total_requests);
         
@@ -143,33 +166,93 @@ impl TestRunner {
             callback(&progress);
         }
 
-        let mut results = Vec::new();
-
-        // Execute tests for each route and user combination
+        // Use semaphore to limit concurrent requests
+        let semaphore = Arc::new(Semaphore::new(self.max_concurrent_requests));
+        let mut request_futures = FuturesUnordered::new();
+        
+        // Create all request tasks upfront
         for route in routes {
-            for user in &user_data {
-                // Execute requests for this route-user combination
-                let mut responses = HashMap::new();
+            for user in user_data {
+                // For each route-user combination, execute requests to all environments
+                let route_clone = (*route).clone();
+                let user_clone = user.clone();
+                let environments_clone = environments.to_vec();
+                let client = self.client.clone();
+                let semaphore_clone = semaphore.clone();
                 
-                for env in &environments {
-                    let response = self.client.execute_request(route, env, user).await?;
-                    responses.insert(env.clone(), response);
+                let request_task = async move {
+                    let mut responses = HashMap::new();
+                    let mut request_results = Vec::new();
                     
-                    // Update progress
-                    progress.request_completed(true);
+                    // Execute requests to all environments for this route-user combination
+                    for env in &environments_clone {
+                        let _permit = semaphore_clone.acquire().await.map_err(|e| {
+                            HttpDiffError::general(format!("Failed to acquire semaphore: {}", e))
+                        })?;
+                        
+                        match client.execute_request(&route_clone, env, &user_clone).await {
+                            Ok(response) => {
+                                let success = response.is_success();
+                                responses.insert(env.clone(), response);
+                                request_results.push(success);
+                            }
+                            Err(e) => {
+                                // Continue with other environments even if one fails
+                                eprintln!("⚠️  Request failed for route '{}' in environment '{}': {}", route_clone.name, env, e);
+                                request_results.push(false);
+                            }
+                        }
+                    }
+                    
+                    Result::<_>::Ok((route_clone, user_clone, responses, request_results))
+                };
+                
+                request_futures.push(request_task);
+            }
+        }
+
+        let mut results = Vec::new();
+        
+        // Process completed requests as they finish
+        while let Some(request_result) = request_futures.next().await {
+            match request_result {
+                Ok((route, user, responses, request_success_flags)) => {
+                    // Update progress for all requests in this batch
+                    for success in &request_success_flags {
+                        progress.request_completed(*success);
+                    }
+                    
+                    if let Some(ref callback) = progress_callback {
+                        callback(&progress);
+                    }
+                    
+                    // Only create comparison result if we have at least 2 responses
+                    if responses.len() >= 2 {
+                        match self.comparator.compare_responses(
+                            route.name.clone(),
+                            user.data.clone(),
+                            responses,
+                        ) {
+                            Ok(comparison_result) => {
+                                results.push(comparison_result);
+                            }
+                            Err(e) => {
+                                eprintln!("⚠️  Comparison failed for route '{}': {}", route.name, e);
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("❌ Request task failed: {}", e);
+                    // Still need to update progress for failed requests
+                    for _ in 0..environments.len() {
+                        progress.request_completed(false);
+                    }
+                    
                     if let Some(ref callback) = progress_callback {
                         callback(&progress);
                     }
                 }
-
-                // Compare responses
-                let comparison_result = self.comparator.compare_responses(
-                    route.name.clone(),
-                    user.data.clone(),
-                    responses,
-                )?;
-
-                results.push(comparison_result);
             }
         }
 
@@ -243,6 +326,18 @@ pub async fn run_http_diff_with_headers(
 ) -> Result<Vec<ComparisonResult>> {
     let runner = TestRunner::with_headers_comparison(config)?;
     runner.execute(environments, None).await
+}
+
+/// Convenience function to run HTTP diff with custom concurrency
+pub async fn run_http_diff_concurrent(
+    config: HttpDiffConfig,
+    environments: Option<Vec<String>>,
+    routes: Option<Vec<String>>,
+    max_concurrent: usize,
+) -> Result<Vec<ComparisonResult>> {
+    let runner = TestRunner::new(config)?
+        .with_max_concurrent_requests(max_concurrent);
+    runner.execute(environments, routes).await
 }
 
 #[cfg(test)]

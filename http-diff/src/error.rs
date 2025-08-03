@@ -34,20 +34,27 @@ pub enum HttpDiffError {
     #[error("Route '{route}' not found")]
     RouteNotFound { route: String },
 
-    #[error("Path parameter '{param}' not found in user data")]
-    MissingPathParameter { param: String },
+    #[error("Path parameter '{param}' not found in user data. Available parameters: {available_params}")]
+    MissingPathParameter { 
+        param: String,
+        available_params: String,
+    },
 
     #[error("Invalid configuration: {message}")]
     InvalidConfig { message: String },
 
-    #[error("Request execution failed: {message}")]
-    RequestFailed { message: String },
+    #[error("Request execution failed for {route} in {environment}: {message}")]
+    RequestFailed { 
+        route: String,
+        environment: String,
+        message: String,
+    },
 
     #[error("Response comparison failed: {message}")]
     ComparisonFailed { message: String },
 
-    #[error("{0}")]
-    Other(#[from] anyhow::Error),
+    #[error("General error: {message}")]
+    General { message: String },
 }
 
 impl HttpDiffError {
@@ -59,8 +66,10 @@ impl HttpDiffError {
     }
 
     /// Create a new request failed error
-    pub fn request_failed<S: Into<String>>(message: S) -> Self {
+    pub fn request_failed<S: Into<String>>(route: S, environment: S, message: S) -> Self {
         Self::RequestFailed {
+            route: route.into(),
+            environment: environment.into(),
             message: message.into(),
         }
     }
@@ -68,6 +77,13 @@ impl HttpDiffError {
     /// Create a new comparison failed error
     pub fn comparison_failed<S: Into<String>>(message: S) -> Self {
         Self::ComparisonFailed {
+            message: message.into(),
+        }
+    }
+
+    /// Create a new general error
+    pub fn general<S: Into<String>>(message: S) -> Self {
+        Self::General {
             message: message.into(),
         }
     }

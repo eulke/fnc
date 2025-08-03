@@ -94,13 +94,22 @@ impl UserData {
                         };
                         
 
-                        result.replace_range(start..end + 1, &final_value);
+                        result.replace_range(start..=end, &final_value);
                         // Continue from after the replacement
                         position = start + final_value.len();
                     } else if strict {
                         // Strict mode: error if parameter is missing
+                        let available = self.data.keys()
+                            .map(String::as_str)
+                            .collect::<Vec<_>>()
+                            .join(", ");
                         return Err(HttpDiffError::MissingPathParameter {
                             param: param_name.to_string(),
+                            available_params: if available.is_empty() { 
+                                "none".to_string() 
+                            } else { 
+                                available 
+                            },
                         });
                     } else {
                         // Non-strict mode: skip this placeholder and continue searching after it
@@ -122,7 +131,168 @@ impl UserData {
     }
 }
 
+/// Builder for HttpDiffConfig to improve API ergonomics
+pub struct HttpDiffConfigBuilder {
+    environments: HashMap<String, Environment>,
+    global: Option<GlobalConfig>,
+    routes: Vec<Route>,
+}
+
+impl HttpDiffConfigBuilder {
+    /// Create a new config builder
+    pub fn new() -> Self {
+        Self {
+            environments: HashMap::new(),
+            global: None,
+            routes: Vec::new(),
+        }
+    }
+
+    /// Add an environment
+    #[must_use]
+    pub fn environment<S: Into<String>>(mut self, name: S, base_url: S) -> Self {
+        self.environments.insert(
+            name.into(),
+            Environment {
+                base_url: base_url.into(),
+                headers: None,
+            },
+        );
+        self
+    }
+
+    /// Add an environment with headers
+    pub fn environment_with_headers<S: Into<String>>(
+        mut self,
+        name: S,
+        base_url: S,
+        headers: HashMap<String, String>,
+    ) -> Self {
+        self.environments.insert(
+            name.into(),
+            Environment {
+                base_url: base_url.into(),
+                headers: Some(headers),
+            },
+        );
+        self
+    }
+
+    /// Set global configuration
+    pub fn global_config(mut self, global: GlobalConfig) -> Self {
+        self.global = Some(global);
+        self
+    }
+
+    /// Set timeout in seconds
+    pub fn timeout(mut self, seconds: u64) -> Self {
+        let mut global = self.global.unwrap_or_default();
+        global.timeout_seconds = Some(seconds);
+        self.global = Some(global);
+        self
+    }
+
+    /// Set whether to follow redirects
+    pub fn follow_redirects(mut self, follow: bool) -> Self {
+        let mut global = self.global.unwrap_or_default();
+        global.follow_redirects = Some(follow);
+        self.global = Some(global);
+        self
+    }
+
+    /// Add global headers
+    pub fn global_headers(mut self, headers: HashMap<String, String>) -> Self {
+        let mut global = self.global.unwrap_or_default();
+        global.headers = Some(headers);
+        self.global = Some(global);
+        self
+    }
+
+    /// Add a global header
+    pub fn global_header<S: Into<String>>(mut self, key: S, value: S) -> Self {
+        let mut global = self.global.unwrap_or_default();
+        if global.headers.is_none() {
+            global.headers = Some(HashMap::new());
+        }
+        global.headers.as_mut().unwrap().insert(key.into(), value.into());
+        self.global = Some(global);
+        self
+    }
+
+    /// Add a route
+    pub fn route(mut self, route: Route) -> Self {
+        self.routes.push(route);
+        self
+    }
+
+    /// Add a simple GET route
+    #[must_use]
+    pub fn get_route<S: Into<String>>(mut self, name: S, path: S) -> Self {
+        self.routes.push(Route {
+            name: name.into(),
+            method: "GET".to_string(),
+            path: path.into(),
+            headers: None,
+            params: None,
+            base_urls: None,
+            body: None,
+        });
+        self
+    }
+
+    /// Add a POST route with body
+    pub fn post_route<S: Into<String>>(mut self, name: S, path: S, body: S) -> Self {
+        self.routes.push(Route {
+            name: name.into(),
+            method: "POST".to_string(),
+            path: path.into(),
+            headers: None,
+            params: None,
+            base_urls: None,
+            body: Some(body.into()),
+        });
+        self
+    }
+
+    /// Build the configuration
+    ///
+    /// # Errors
+    /// Returns an error if the configuration is invalid (e.g., no environments or routes defined)
+    pub fn build(self) -> Result<HttpDiffConfig> {
+        let config = HttpDiffConfig {
+            environments: self.environments,
+            global: self.global,
+            routes: self.routes,
+        };
+        config.validate()?;
+        Ok(config)
+    }
+}
+
+impl Default for HttpDiffConfigBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Default implementation for GlobalConfig
+impl Default for GlobalConfig {
+    fn default() -> Self {
+        Self {
+            timeout_seconds: Some(30),
+            follow_redirects: Some(true),
+            headers: None,
+            params: None,
+        }
+    }
+}
+
 impl HttpDiffConfig {
+    /// Create a new config builder
+    pub fn builder() -> HttpDiffConfigBuilder {
+        HttpDiffConfigBuilder::new()
+    }
+
     /// Load configuration from http-diff.toml file
     pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let content = std::fs::read_to_string(&path)
@@ -130,7 +300,7 @@ impl HttpDiffConfig {
                 path: path.as_ref().to_path_buf(),
             })?;
         
-        let config: HttpDiffConfig = toml::from_str(&content)?;
+        let config: Self = toml::from_str(&content)?;
         config.validate()?;
         Ok(config)
     }
@@ -287,13 +457,13 @@ body = '{"name": "Test User", "email": "test@example.com"}'
 
 /// Generate default users.csv template
 pub fn generate_default_users_csv() -> String {
-    r#"userId,siteId
+    r"userId,siteId
 745741037,MCO
 85264518,MLA
 123456789,MLB
 987654321,MCO
 555666777,MLA
-"#.to_string()
+".to_string()
 }
 
 /// Check if configuration files exist and optionally generate them
@@ -347,7 +517,7 @@ impl HttpDiffConfig {
             .map_err(HttpDiffError::Io)?;
 
         // Parse TOML with enhanced error context
-        let config: HttpDiffConfig = toml::from_str(&content)
+        let config: Self = toml::from_str(&content)
             .map_err(|e| {
                 HttpDiffError::invalid_config(format!(
                     "Failed to parse TOML in {}: {}",
@@ -398,7 +568,7 @@ impl HttpDiffConfig {
                             "Route '{}' references unknown environment '{}' in base_urls. Available environments: {}",
                             route.name,
                             env_name,
-                            self.environments.keys().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")
+                            self.environments.keys().map(String::as_str).collect::<Vec<_>>().join(", ")
                         )));
                     }
                 }
@@ -899,6 +1069,65 @@ path = "/api/test"
         
         let users = load_user_data(&csv_path).unwrap();
         assert!(!users.is_empty());
+    }
+
+    #[test]
+    fn test_config_builder_basic() {
+        let config = HttpDiffConfig::builder()
+            .environment("test", "https://api-test.example.com")
+            .environment("prod", "https://api.example.com")
+            .get_route("health", "/health")
+            .post_route("create_user", "/users", r#"{"name": "test"}"#)
+            .timeout(45)
+            .global_header("User-Agent", "http-diff/1.0")
+            .build()
+            .unwrap();
+
+        assert_eq!(config.environments.len(), 2);
+        assert_eq!(config.routes.len(), 2);
+        assert!(config.global.is_some());
+        
+        let global = config.global.as_ref().unwrap();
+        assert_eq!(global.timeout_seconds, Some(45));
+        assert!(global.headers.is_some());
+        assert_eq!(global.headers.as_ref().unwrap().get("User-Agent"), Some(&"http-diff/1.0".to_string()));
+    }
+
+    #[test]
+    fn test_config_builder_validation_failure() {
+        // Builder should fail validation if no environments are added
+        let result = HttpDiffConfig::builder()
+            .get_route("health", "/health")
+            .build();
+        
+        assert!(result.is_err());
+        
+        // Builder should fail validation if no routes are added
+        let result = HttpDiffConfig::builder()
+            .environment("test", "https://api-test.example.com")
+            .build();
+        
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_config_builder_with_headers() {
+        let mut headers = HashMap::new();
+        headers.insert("X-Custom".to_string(), "value".to_string());
+        
+        let config = HttpDiffConfig::builder()
+            .environment_with_headers("test", "https://api-test.example.com", headers)
+            .environment("prod", "https://api.example.com")
+            .get_route("health", "/health")
+            .build()
+            .unwrap();
+
+        let test_env = config.environments.get("test").unwrap();
+        assert!(test_env.headers.is_some());
+        assert_eq!(test_env.headers.as_ref().unwrap().get("X-Custom"), Some(&"value".to_string()));
+        
+        let prod_env = config.environments.get("prod").unwrap();
+        assert!(prod_env.headers.is_none());
     }
 
     #[test]

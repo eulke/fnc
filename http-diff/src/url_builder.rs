@@ -189,7 +189,18 @@ pub mod utils {
         
         for param in required_params {
             if !user_data.data.contains_key(&param) {
-                return Err(HttpDiffError::MissingPathParameter { param });
+                let available = user_data.data.keys()
+                    .map(|k| k.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                return Err(HttpDiffError::MissingPathParameter { 
+                    param,
+                    available_params: if available.is_empty() { 
+                        "none".to_string() 
+                    } else { 
+                        available 
+                    },
+                });
             }
         }
         

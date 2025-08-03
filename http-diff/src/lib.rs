@@ -20,13 +20,13 @@ pub mod comparator;
 pub mod output;
 
 // Re-export main types for convenience
-pub use config::{HttpDiffConfig, Environment, Route, UserData};
+pub use config::{HttpDiffConfig, HttpDiffConfigBuilder, Environment, Route, UserData};
 pub use types::{
     HttpResponse, ComparisonResult, Difference, DifferenceCategory, 
     DiffViewStyle, ErrorSummary, CurlCommand, ProgressConfig, ProgressInfo
 };
 pub use client::HttpClient;
-pub use runner::TestRunner;
+pub use runner::{TestRunner, run_http_diff_concurrent};
 pub use comparator::ResponseComparator;
 pub use output::CurlGenerator;
 pub use error::{HttpDiffError, Result};

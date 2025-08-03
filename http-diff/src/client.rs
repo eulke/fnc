@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 /// HTTP client wrapper for executing requests
+#[derive(Clone)]
 pub struct HttpClient {
     client: Client,
     config: HttpDiffConfig,
@@ -52,7 +53,11 @@ impl HttpClient {
         let response = self.client
             .execute(request)
             .await
-            .map_err(|e| HttpDiffError::request_failed(format!("Request failed: {}", e)))?;
+            .map_err(|e| HttpDiffError::request_failed(
+                route.name.clone(), 
+                environment.to_string(), 
+                format!("Request failed: {}", e)
+            ))?;
 
         self.convert_response(response, curl_command).await
     }

@@ -463,7 +463,7 @@ impl CurlGenerator {
             
         match (error_type, max_status) {
             (_, status) if *status >= 500 => 1, // Critical
-            ("DependencyError", _) | (_, 424) | (_, 502) | (_, 503) => 2, // Dependency
+            ("DependencyError", _) | (_, 424 | 502 | 503) => 2, // Dependency
             (_, status) if *status >= 400 => 3, // Client
             _ => 4, // Unknown
         }

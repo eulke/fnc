@@ -108,7 +108,7 @@ impl ComparisonResult {
 
     /// Check if all responses have the same status code
     pub fn has_consistent_status(&self) -> bool {
-        let statuses: Vec<u16> = self.status_codes.values().cloned().collect();
+        let statuses: Vec<u16> = self.status_codes.values().copied().collect();
         statuses.windows(2).all(|w| w[0] == w[1])
     }
 

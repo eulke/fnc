@@ -9,6 +9,7 @@ authors = ["FNC Team"]
 # HTTP client and async runtime
 reqwest = { version = "0.12", features = ["json", "stream"] }
 tokio = { version = "1.0", features = ["full"] }
+futures = "0.3"
 
 # Configuration and data parsing
 serde = { version = "1.0", features = ["derive"] }
@@ -17,12 +18,10 @@ toml = "0.8"
 csv = "1.3"
 
 # Text diffing and URL handling
-similar = { version = "2.0", features = ["text"] }
 prettydiff = "0.8"
 url = "2.5"
 
 # Error handling and utilities
-anyhow = "1.0"
 thiserror = "2.0"
 
 # Terminal colors for prettydiff-style formatting
