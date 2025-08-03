@@ -189,18 +189,15 @@ pub enum ErrorSeverity {
 
 /// Diff view style configuration for text differences
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Default)]
 pub enum DiffViewStyle {
     /// Traditional unified diff (up/down) - default, backward compatible
+    #[default]
     Unified,
     /// Side-by-side diff view for easier comparison
     SideBySide,
 }
 
-impl Default for DiffViewStyle {
-    fn default() -> Self {
-        DiffViewStyle::Unified
-    }
-}
 
 /// Summary of error statistics across all comparison results
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -233,7 +230,7 @@ impl ErrorSummary {
 
         for result in results {
             let statuses: Vec<u16> = result.status_codes.values().cloned().collect();
-            let all_successful = statuses.iter().all(|&status| status >= 200 && status < 300);
+            let all_successful = statuses.iter().all(|&status| (200..300).contains(&status));
             let all_same_status = statuses.windows(2).all(|w| w[0] == w[1]);
 
             // First check if all status codes are the same

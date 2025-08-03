@@ -4,6 +4,44 @@ use url::Url;
 use urlencoding::encode;
 use std::collections::HashMap;
 
+/// Resolve all headers with precedence (global < environment < route) and CSV substitution
+pub fn resolve_headers(
+    config: &HttpDiffConfig,
+    route: &Route,
+    environment: &str,
+    user_data: &UserData,
+) -> Result<HashMap<String, String>> {
+    let mut headers = HashMap::new();
+
+    if let Some(global) = &config.global {
+        if let Some(global_headers) = &global.headers {
+            for (k, v) in global_headers {
+                let sv = user_data.substitute_placeholders(v, false, false)?;
+                headers.insert(k.clone(), sv);
+            }
+        }
+    }
+
+    if let Some(env) = config.environments.get(environment) {
+        if let Some(env_headers) = &env.headers {
+            for (k, v) in env_headers {
+                let sv = user_data.substitute_placeholders(v, false, false)?;
+                headers.insert(k.clone(), sv);
+            }
+        }
+    }
+
+    if let Some(route_headers) = &route.headers {
+        for (k, v) in route_headers {
+            let sv = user_data.substitute_placeholders(v, false, false)?;
+            headers.insert(k.clone(), sv);
+        }
+    }
+
+    Ok(headers)
+}
+
+
 /// Builder for constructing HTTP URLs with parameter substitution
 pub struct UrlBuilder<'a> {
     config: &'a HttpDiffConfig,
@@ -42,21 +80,7 @@ impl<'a> UrlBuilder<'a> {
 
     /// Get the base URL for this route and environment
     fn get_base_url(&self) -> Result<String> {
-        // Check for route-specific base URL override first
-        if let Some(base_urls) = &self.route.base_urls {
-            if let Some(override_url) = base_urls.get(self.environment) {
-                return Ok(override_url.clone());
-            }
-        }
-
-        // Fall back to environment base URL
-        self.config
-            .environments
-            .get(self.environment)
-            .map(|env| env.base_url.clone())
-            .ok_or_else(|| HttpDiffError::InvalidEnvironment {
-                environment: self.environment.to_string(),
-            })
+        self.config.get_base_url(self.route, self.environment)
     }
 
     /// Substitute path parameters like {userId} with actual values using URL encoding
@@ -144,7 +168,7 @@ pub mod utils {
         while let Some(ch) = chars.next() {
             if ch == '{' {
                 let mut param = String::new();
-                while let Some(ch) = chars.next() {
+                for ch in chars.by_ref() {
                     if ch == '}' {
                         break;
                     }

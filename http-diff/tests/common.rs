@@ -28,7 +28,7 @@ pub fn create_comparison_result(
         responses.insert(env.to_string(), create_response(status, body, None));
         status_codes.insert(env.to_string(), status);
         
-        if status < 200 || status >= 300 {
+        if !(200..300).contains(&status) {
             has_errors = true;
             error_bodies.insert(env.to_string(), body.to_string());
         }

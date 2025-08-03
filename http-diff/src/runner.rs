@@ -7,13 +7,6 @@ use std::collections::HashMap;
 
 use std::time::Instant;
 
-/// Main test runner for HTTP diff operations
-pub struct TestRunner {
-    config: HttpDiffConfig,
-    client: HttpClient,
-    comparator: ResponseComparator,
-}
-
 /// Progress tracking for concurrent execution
 #[derive(Debug, Clone)]
 pub struct ProgressTracker {
@@ -68,6 +61,16 @@ impl ProgressTracker {
 
         Some(std::time::Duration::from_secs_f64(estimated_seconds))
     }
+}
+
+/// Alias for progress callback to reduce type complexity lint
+pub type ProgressCallback = dyn Fn(&ProgressTracker) + Send + Sync;
+
+/// Main test runner for HTTP diff operations
+pub struct TestRunner {
+    config: HttpDiffConfig,
+    client: HttpClient,
+    comparator: ResponseComparator,
 }
 
 impl TestRunner {
@@ -125,7 +128,7 @@ impl TestRunner {
         &self, 
         environments: Option<Vec<String>>,
         routes: Option<Vec<String>>,
-        progress_callback: Option<Box<dyn Fn(&ProgressTracker) + Send + Sync>>,
+        progress_callback: Option<Box<ProgressCallback>>,  // type alias to reduce complexity
     ) -> Result<(Vec<ComparisonResult>, ProgressTracker)>
     {
         let user_data = load_user_data("users.csv")?;
@@ -315,4 +318,4 @@ mod tests {
         assert_eq!(tracker.successful_requests, 9);
         assert_eq!(tracker.failed_requests, 1);
     }
-} 
+}

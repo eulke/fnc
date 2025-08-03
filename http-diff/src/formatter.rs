@@ -178,8 +178,8 @@ impl TextFormatter {
                     for line in lines {
                         let truncated = self.truncate_line_simple(line);
                         table.styled_row(vec![
-                            cells::normal(&format!("  {}", truncated)),
-                            cells::normal(&format!("  {}", truncated))
+                            cells::normal(format!("  {}", truncated)),
+                            cells::normal(format!("  {}", truncated))
                         ]);
                     }
                 }
@@ -188,7 +188,7 @@ impl TextFormatter {
                     for line in lines {
                         let truncated = self.truncate_line_simple(line);
                         table.styled_row(vec![
-                            cells::removed(&format!("- {}", truncated)),
+                            cells::removed(format!("- {}", truncated)),
                             cells::normal("")
                         ]);
                     }
@@ -199,7 +199,7 @@ impl TextFormatter {
                         let truncated = self.truncate_line_simple(line);
                         table.styled_row(vec![
                             cells::normal(""),
-                            cells::added(&format!("+ {}", truncated))
+                            cells::added(format!("+ {}", truncated))
                         ]);
                     }
                 }
@@ -210,14 +210,14 @@ impl TextFormatter {
                     for i in 0..max_lines {
                         let left_content = if let Some(line) = old_lines.get(i) {
                             let truncated = self.truncate_line_simple(line);
-                            cells::removed(&format!("- {}", truncated))
+                            cells::removed(format!("- {}", truncated))
                         } else {
                             cells::normal("")
                         };
                         
                         let right_content = if let Some(line) = new_lines.get(i) {
                             let truncated = self.truncate_line_simple(line);
-                            cells::added(&format!("+ {}", truncated))
+                            cells::added(format!("+ {}", truncated))
                         } else {
                             cells::normal("")
                         };

@@ -48,18 +48,18 @@ fn main() {
             init,
             verbose,
             output_file,
-        } => http_diff::execute(
+        } => http_diff::execute(http_diff::HttpDiffArgs {
             environments,
             routes,
             include_headers,
             include_errors,
             diff_view,
-            config,
+            config_path: config,
             users_file,
             init,
             verbose,
             output_file,
-        ),
+        }),
     };
 
     if let Err(err) = result {

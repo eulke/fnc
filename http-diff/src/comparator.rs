@@ -280,20 +280,20 @@ impl ResponseComparator {
             if let Some(value1) = &diff.value1 {
                 table.styled_row(vec![
                     cells::normal(&diff.name),
-                    cells::removed(&format!("- {}", env1.to_uppercase())),
+                    cells::removed(format!("- {}", env1.to_uppercase())),
                     cells::removed(value1)
                 ]);
             }
             if let Some(value2) = &diff.value2 {
                 table.styled_row(vec![
                     cells::normal(&diff.name),
-                    cells::added(&format!("+ {}", env2.to_uppercase())),
+                    cells::added(format!("+ {}", env2.to_uppercase())),
                     cells::added(value2)
                 ]);
             }
         }
         
-        format!("{}", table.build())
+        table.build().to_string()
     }
 
     /// Generate side-by-side diff table for headers
@@ -330,7 +330,7 @@ impl ResponseComparator {
             table.styled_row(vec![header_cell, left_value, right_value]);
         }
         
-        format!("{}", table.build())
+        table.build().to_string()
     }
 
 
@@ -368,7 +368,7 @@ impl ResponseComparator {
 
         Ok(Some(Difference {
             category: DifferenceCategory::Body,
-            description: format!("Body Comparison"),
+            description: "Body Comparison".to_string(),
             diff_output: Some(diff_output),
         }))
     }
@@ -473,7 +473,8 @@ impl ResponseComparator {
             "application/json" | "json" => self.normalize_json(text),
             "application/xml" | "text/xml" | "xml" => self.normalize_xml(text),
             "text/html" | "html" => self.normalize_html(text),
-            "text/plain" | "text" | _ => self.normalize_plain_text(text),
+            "text/plain" | "text" => self.normalize_plain_text(text),
+            _ => self.normalize_plain_text(text),
         }
     }
 
@@ -481,12 +482,8 @@ impl ResponseComparator {
     fn detect_content_type(&self, text: &str) -> &str {
         let trimmed = text.trim();
 
-        if (trimmed.starts_with('{') && trimmed.ends_with('}'))
-            || (trimmed.starts_with('[') && trimmed.ends_with(']'))
-        {
-            if serde_json::from_str::<serde_json::Value>(trimmed).is_ok() {
-                return "application/json";
-            }
+        if ((trimmed.starts_with('{') && trimmed.ends_with('}')) || (trimmed.starts_with('[') && trimmed.ends_with(']'))) && serde_json::from_str::<serde_json::Value>(trimmed).is_ok() {
+            return "application/json";
         }
 
         if trimmed.starts_with('<') && trimmed.contains('>') {

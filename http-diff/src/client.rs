@@ -94,39 +94,17 @@ impl HttpClient {
     /// Add headers to request with CSV parameter substitution
     fn add_headers(
         &self,
-        mut request_builder: reqwest::RequestBuilder,
+        request_builder: reqwest::RequestBuilder,
         route: &Route,
         environment: &str,
         user_data: &UserData,
     ) -> Result<reqwest::RequestBuilder> {
-        let mut headers = std::collections::HashMap::new();
-
-        // Add global headers
-        if let Some(global) = &self.config.global {
-            if let Some(global_headers) = &global.headers {
-                headers.extend(global_headers.clone());
-            }
-        }
-
-        // Add environment-specific headers (these override global)
-        if let Some(env) = self.config.environments.get(environment) {
-            if let Some(env_headers) = &env.headers {
-                headers.extend(env_headers.clone());
-            }
-        }
-
-        // Add route-specific headers (these take precedence)
-        if let Some(route_headers) = &route.headers {
-            headers.extend(route_headers.clone());
-        }
-
-        // Apply headers with CSV parameter substitution
+        let headers = crate::url_builder::resolve_headers(&self.config, route, environment, user_data)?;
+        let mut rb = request_builder;
         for (key, value) in headers {
-            let substituted_value = user_data.substitute_placeholders(&value, false, false)?;
-            request_builder = request_builder.header(key, substituted_value);
+            rb = rb.header(key, value);
         }
-
-        Ok(request_builder)
+        Ok(rb)
     }
 
     /// Convert reqwest Response to our HttpResponse

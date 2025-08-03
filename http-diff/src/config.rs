@@ -315,7 +315,7 @@ pub fn ensure_config_files_exist(
     if !config_exists && force_generate {
         let template = generate_default_config_template();
         fs::write(config_path, template)
-            .map_err(|e| HttpDiffError::Io(e))?;
+            .map_err(HttpDiffError::Io)?;
         config_generated = true;
     }
 
@@ -323,7 +323,7 @@ pub fn ensure_config_files_exist(
     if !csv_exists && force_generate {
         let template = generate_default_users_csv();
         fs::write(csv_path, template)
-            .map_err(|e| HttpDiffError::Io(e))?;
+            .map_err(HttpDiffError::Io)?;
         csv_generated = true;
     }
 
@@ -343,7 +343,7 @@ impl HttpDiffConfig {
             });
         }
 
-        let content = std::fs::read_to_string(&path_ref)
+        let content = std::fs::read_to_string(path_ref)
             .map_err(HttpDiffError::Io)?;
 
         // Parse TOML with enhanced error context
@@ -406,7 +406,7 @@ impl HttpDiffConfig {
 
             // Validate URLs in environments and route overrides
             for (env_name, env) in &self.environments {
-                if let Err(_) = url::Url::parse(&env.base_url) {
+                if url::Url::parse(&env.base_url).is_err() {
                     return Err(HttpDiffError::invalid_config(format!(
                         "Invalid base_url '{}' in environment '{}'. Must be a valid URL.",
                         env.base_url,
@@ -824,7 +824,7 @@ path = "/api/test"
         fs::write(&csv_path, template).unwrap();
         
         let users = load_user_data(&csv_path).unwrap();
-        assert!(users.len() > 0);
+        assert!(!users.is_empty());
         assert!(users[0].data.contains_key("userId"));
         assert!(users[0].data.contains_key("siteId"));
     }

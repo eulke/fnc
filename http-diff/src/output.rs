@@ -1,7 +1,8 @@
-// HttpResponse type is available in client module for future use
 use crate::types::{ComparisonResult, Difference, DifferenceCategory, ErrorSummary, ErrorSeverity};
 use crate::config::{HttpDiffConfig, Route, UserData};
 use crate::error::Result;
+use crate::formatter::shell;
+use crate::url_builder::UrlBuilder;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
@@ -34,38 +35,23 @@ impl CurlGenerator {
         environment: &str,
         user_data: &UserData,
     ) -> Result<CurlCommand> {
-        let base_url = self.config.get_base_url(route, environment)?;
-        let path = self.substitute_path_parameters(&route.path, user_data)?;
-        let url = format!("{}{}", base_url.trim_end_matches('/'), path);
-
-        let mut command = format!("curl -X {} '{}'", route.method, self.escape_shell_argument(&url));
+        let url = UrlBuilder::new(&self.config, route, environment, user_data).build()?;
+        let url_str = url.as_str();
+        let mut command = format!("curl -X {} '{}'", route.method, shell::escape_argument(url_str));
 
         // Add headers with CSV substitution and proper escaping
-        let headers = self.collect_headers(route, environment, user_data)?;
+        let headers = crate::url_builder::resolve_headers(&self.config, route, environment, user_data)?;
         for (key, value) in headers {
             command.push_str(&format!(" \\\n  -H '{}: {}'", 
-                self.escape_shell_argument(&key), 
-                self.escape_shell_argument(&value)
+                shell::escape_argument(&key), 
+                shell::escape_argument(&value)
             ));
-        }
-
-        // Add query parameters with CSV substitution and proper URL encoding
-        let params = self.collect_query_parameters(route, user_data)?;
-        if !params.is_empty() {
-            let query_string = params
-                .iter()
-                .map(|(k, v)| format!("{}={}", urlencoding::encode(k), urlencoding::encode(v)))
-                .collect::<Vec<_>>()
-                .join("&");
-            
-            command = command.replace(&format!("'{}'", self.escape_shell_argument(&url)), 
-                                    &format!("'{}?{}'", self.escape_shell_argument(&url), query_string));
         }
 
         // Add body with CSV substitution and proper escaping
         if let Some(body) = &route.body {
             let substituted_body = user_data.substitute_placeholders(body, false, false)?;
-            let escaped_body = self.escape_shell_argument(&substituted_body);
+            let escaped_body = shell::escape_argument(&substituted_body);
             command.push_str(&format!(" \\\n  -d '{}'", escaped_body));
         }
 
@@ -77,12 +63,6 @@ impl CurlGenerator {
         })
     }
 
-    /// Escape shell arguments to handle special characters properly
-    fn escape_shell_argument(&self, arg: &str) -> String {
-        // Handle single quotes by replacing them with '"'"'
-        // This closes the current quote, adds an escaped quote, then opens a new quote
-        arg.replace('\'', "'\"'\"'")
-    }
 
     /// Generate curl commands for all test scenarios
     pub fn generate_all_curl_commands(
@@ -125,8 +105,8 @@ impl CurlGenerator {
         for command in commands {
             commands_by_route
                 .entry(command.route_name.clone())
-                .or_insert_with(Vec::new)
-                .push(&command);
+                .or_default()
+                .push(command);
         }
 
         for (route_name, route_commands) in commands_by_route {
@@ -184,7 +164,7 @@ impl CurlGenerator {
             for env in &environments {
                 doc.push_str(&format!("- {}\n", env));
             }
-            doc.push_str("\n");
+            doc.push('\n');
         }
         
         // Route analysis
@@ -216,7 +196,7 @@ impl CurlGenerator {
                 for diff in &result.differences {
                     doc.push_str(&format!("- {:?}: {}\n", diff.category, diff.description));
                 }
-                doc.push_str("\n");
+                doc.push('\n');
             }
         }
         
@@ -292,13 +272,13 @@ impl CurlGenerator {
         // Add detailed diff output if available
         for difference in &result.differences {
             if let Some(diff_output) = &difference.diff_output {
-                output.push_str("\n");
+                output.push('\n');
                 output.push_str(diff_output);
-                output.push_str("\n");
+                output.push('\n');
             }
         }
         
-        output.push_str("\n");
+        output.push('\n');
         output
     }
 
@@ -335,11 +315,11 @@ impl CurlGenerator {
         if let Some(diff_output) = &difference.diff_output {
             // Add newline before diff output only if we had a description
             if !difference.description.is_empty() {
-                output.push_str("\n");
+                output.push('\n');
             }
             // Display diff output without additional indentation since it's already formatted
             output.push_str(diff_output);
-            output.push_str("\n");
+            output.push('\n');
         }
 
         output
@@ -391,7 +371,7 @@ impl CurlGenerator {
                 "Unknown".to_string()
             };
             
-            error_groups.entry(error_type).or_insert_with(Vec::new).push(result);
+            error_groups.entry(error_type).or_default().push(result);
         }
         
         output.push_str("\nFAILED REQUESTS BY ERROR TYPE\n");
@@ -610,70 +590,6 @@ impl CurlGenerator {
         }
     }
 
-    /// Substitute path parameters like {userId} with actual values using shared implementation
-    fn substitute_path_parameters(&self, path: &str, user_data: &UserData) -> Result<String> {
-        user_data.substitute_placeholders(path, true, true)
-    }
-
-    /// Collect all headers for a request with CSV parameter substitution
-    fn collect_headers(&self, route: &Route, environment: &str, user_data: &UserData) -> Result<HashMap<String, String>> {
-        let mut headers = HashMap::new();
-
-        // Add global headers
-        if let Some(global) = &self.config.global {
-            if let Some(global_headers) = &global.headers {
-                for (key, value) in global_headers {
-                    let substituted_value = user_data.substitute_placeholders(value, false, false)?;
-                    headers.insert(key.clone(), substituted_value);
-                }
-            }
-        }
-
-        // Add environment-specific headers
-        if let Some(env) = self.config.environments.get(environment) {
-            if let Some(env_headers) = &env.headers {
-                for (key, value) in env_headers {
-                    let substituted_value = user_data.substitute_placeholders(value, false, false)?;
-                    headers.insert(key.clone(), substituted_value);
-                }
-            }
-        }
-
-        // Add route-specific headers (these take precedence)
-        if let Some(route_headers) = &route.headers {
-            for (key, value) in route_headers {
-                let substituted_value = user_data.substitute_placeholders(value, false, false)?;
-                headers.insert(key.clone(), substituted_value);
-            }
-        }
-
-        Ok(headers)
-    }
-
-    /// Collect all query parameters for a request with CSV parameter substitution
-    fn collect_query_parameters(&self, route: &Route, user_data: &UserData) -> Result<HashMap<String, String>> {
-        let mut params = HashMap::new();
-
-        // Add global parameters
-        if let Some(global) = &self.config.global {
-            if let Some(global_params) = &global.params {
-                for (key, value) in global_params {
-                    let substituted_value = user_data.substitute_placeholders(value, false, false)?;
-                    params.insert(key.clone(), substituted_value);
-                }
-            }
-        }
-
-        // Add route-specific parameters
-        if let Some(route_params) = &route.params {
-            for (key, value) in route_params {
-                let substituted_value = user_data.substitute_placeholders(value, false, false)?;
-                params.insert(key.clone(), substituted_value);
-            }
-        }
-
-        Ok(params)
-    }
 }
 
 #[cfg(test)]
@@ -803,14 +719,11 @@ mod tests {
 
     #[test]
     fn test_escape_shell_argument() {
-        let config = create_test_config();
-        let generator = CurlGenerator::new(config);
-
-        // Test various special characters
-        assert_eq!(generator.escape_shell_argument("simple"), "simple");
-        assert_eq!(generator.escape_shell_argument("with'quote"), "with'\"'\"'quote");
-        assert_eq!(generator.escape_shell_argument("multiple'single'quotes"), "multiple'\"'\"'single'\"'\"'quotes");
-        assert_eq!(generator.escape_shell_argument("no'quotes'here"), "no'\"'\"'quotes'\"'\"'here");
+        // Test various special characters via shared formatter util
+        assert_eq!(shell::escape_argument("simple"), "simple");
+        assert_eq!(shell::escape_argument("with'quote"), "with'\"'\"'quote");
+        assert_eq!(shell::escape_argument("multiple'single'quotes"), "multiple'\"'\"'single'\"'\"'quotes");
+        assert_eq!(shell::escape_argument("no'quotes'here"), "no'\"'\"'quotes'\"'\"'here");
     }
 
     #[test]
@@ -993,7 +906,7 @@ mod tests {
                 ctx.insert("userId".to_string(), "123".to_string());
                 ctx
             },
-            responses: responses,
+            responses,
             differences: vec![Difference {
                 category: DifferenceCategory::Body,
                 description: "Body content differs".to_string(),
