@@ -1,14 +1,16 @@
 use crate::error::{CliError, Result};
 
-use crate::progress::ProgressTracker;
+use crate::progress::ProgressTracker as CliProgressTracker;
 use crate::ui;
 use dialoguer::{Confirm, theme::ColorfulTheme};
 use http_diff::{
-    config::{ensure_config_files_exist, load_user_data, HttpDiffConfig},
-    CurlGenerator,
-    TestRunner,
+    config::{load_user_data, HttpDiffConfig, ensure_config_files_exist},
+    curl::CurlGenerator,
+    DefaultTestRunner, DefaultHttpClient, DefaultResponseComparator,
     CliRenderer,
     OutputRenderer,
+    TestRunner,
+    ProgressTracker as HttpProgressTracker,
 };
 use indicatif::{ProgressBar, ProgressStyle};
 use std::fs;
@@ -170,7 +172,7 @@ async fn execute_async(args: HttpDiffArgs) -> Result<()> {
     let route_count = route_list.as_ref().map(|r| r.len()).unwrap_or(config.routes.len());
     let total_tests = route_count * user_data.len().max(1) * env_count;
     
-    let mut progress = ProgressTracker::new("HTTP Diff Testing").with_steps(vec![
+    let mut progress = CliProgressTracker::new("HTTP Diff Testing").with_steps(vec![
         "Initializing test runner".to_string(),
         format!("Executing {} HTTP tests", total_tests),
         "Comparing responses".to_string(),
@@ -186,11 +188,17 @@ async fn execute_async(args: HttpDiffArgs) -> Result<()> {
         crate::cli::DiffViewType::SideBySide => http_diff::DiffViewStyle::SideBySide,
     };
     
-    let runner = TestRunner::with_comparator_settings(
-        config.clone(),
-        args.include_headers,
-        diff_view_style.clone(),
-    ).map_err(|e| {
+    // Create test runner with custom comparator settings
+    let client = DefaultHttpClient::new(config.clone()).map_err(|e| {
+        CliError::Other(format!("Failed to create HTTP client: {}", e))
+    })?;
+    
+    let mut comparator = DefaultResponseComparator::new().with_diff_view_style(diff_view_style.clone());
+    if args.include_headers {
+        comparator = comparator.with_headers_comparison();
+    }
+    
+    let runner = DefaultTestRunner::new(config.clone(), client, comparator).map_err(|e| {
         CliError::Other(format!("Failed to initialize test runner: {}", e))
     })?;
     progress.complete_step();
@@ -230,7 +238,7 @@ async fn execute_async(args: HttpDiffArgs) -> Result<()> {
     let (results, _final_progress) = runner.execute_with_progress(
         env_list,
         route_list,
-        Some(Box::new(move |p: &http_diff::runner::ProgressTracker| {
+        Some(Box::new(move |p: &HttpProgressTracker| {
             pb_clone.set_position(p.completed_requests as u64);
         }))
     ).await.map_err(|e| {

@@ -3,48 +3,103 @@
 //! This crate provides functionality to execute HTTP requests across multiple
 //! configurable environments and compare responses to identify differences.
 
-// Core modules
+// Core trait definitions
+pub mod traits;
+
+// Core modules - restructured for better organization
 pub mod config;
 pub mod error;
 pub mod types;
 
-// Shared utility modules
-pub mod url_builder;
-pub mod utils;
+// New structured modules
+pub mod http;
+pub mod execution;
+pub mod validation;
 
-// Main functionality modules
-pub mod client;
-pub mod runner;
+// Existing functionality modules
 pub mod comparison;
 pub mod curl;
 pub mod documentation;
 pub mod error_analysis;
 pub mod renderers;
 
-// Re-export main types for convenience
+// Shared utility modules
+pub mod url_builder;
+pub mod utils;
+
+// Testing utilities
+#[cfg(test)]
+pub mod testing;
+
+// Re-export core traits
+pub use traits::{
+    HttpClient, ResponseComparator, TestRunner,
+    RequestBuilder, ResponseConverter, UrlBuilder as UrlBuilderTrait,
+    ConfigValidator, ProgressReporter, ProgressCallback
+};
+
+// Re-export main types
 pub use config::{HttpDiffConfig, HttpDiffConfigBuilder, Environment, Route, UserData};
 pub use types::{
     HttpResponse, ComparisonResult, Difference, DifferenceCategory, 
     DiffViewStyle, ErrorSummary
 };
-pub use client::HttpClient;
-pub use runner::TestRunner;
-pub use comparison::ResponseComparator;
-pub use curl::{CurlGenerator, CurlCommand};
+
+// Re-export implementations (clean API without "Impl" suffix)
+pub use http::{HttpClientImpl as DefaultHttpClient, RequestBuilderImpl, ResponseConverterImpl};
+pub use execution::{TestRunnerImpl as DefaultTestRunner, ProgressTracker};
+pub use validation::ResponseValidatorImpl;
+pub use comparison::ResponseComparator as DefaultResponseComparator;
+
+// Re-export renderers
 pub use renderers::{OutputRenderer, CliRenderer, ComparisonFormatter, TableBuilder, TableStyle};
+
+// Re-export error types
 pub use error::{HttpDiffError, Result};
 
-// Re-export utility modules for advanced usage
+// Re-export utility modules
 pub use url_builder::UrlBuilder;
 
-/// Execute HTTP diff testing with the given configuration
+/// Create a default HTTP client with configuration
+pub fn create_http_client(config: HttpDiffConfig) -> Result<DefaultHttpClient> {
+    DefaultHttpClient::new(config)
+}
+
+/// Create a default test runner with configuration
+pub fn create_test_runner(
+    config: HttpDiffConfig,
+    client: impl HttpClient,
+    comparator: impl ResponseComparator,
+) -> Result<DefaultTestRunner<impl HttpClient, impl ResponseComparator>> {
+    DefaultTestRunner::new(config, client, comparator)
+}
+
+/// Create a test runner with default implementations
+pub fn create_default_test_runner(config: HttpDiffConfig) -> Result<DefaultTestRunner<DefaultHttpClient, DefaultResponseComparator>> {
+    let client = create_http_client(config.clone())?;
+    let comparator = DefaultResponseComparator::new();
+    DefaultTestRunner::new(config, client, comparator)
+}
+
+/// Execute HTTP diff testing with default implementations
 pub async fn run_http_diff(
     config: HttpDiffConfig,
     environments: Option<Vec<String>>,
     routes: Option<Vec<String>>,
 ) -> Result<Vec<ComparisonResult>> {
-    let runner = TestRunner::new(config)?;
+    let runner = create_default_test_runner(config)?;
     runner.execute(environments, routes).await
+}
+
+/// Execute HTTP diff testing with progress tracking
+pub async fn run_http_diff_with_progress(
+    config: HttpDiffConfig,
+    environments: Option<Vec<String>>,
+    routes: Option<Vec<String>>,
+    progress_callback: Option<ProgressCallback>,
+) -> Result<(Vec<ComparisonResult>, ProgressTracker)> {
+    let runner = create_default_test_runner(config)?;
+    runner.execute_with_progress(environments, routes, progress_callback).await
 }
 
 #[cfg(test)]
@@ -138,4 +193,66 @@ mod tests {
         assert!(!comparison_result.has_errors);
         assert!(comparison_result.is_identical);
     }
-} 
+
+    /// Test factory functions
+    #[test]
+    fn test_factory_functions() {
+        let config = HttpDiffConfig::builder()
+            .environment("test", "https://test.example.com")
+            .get_route("health", "/health")
+            .build()
+            .unwrap();
+
+        // Test creating HTTP client
+        let client = create_http_client(config.clone());
+        assert!(client.is_ok());
+
+        // Test creating default test runner
+        let runner = create_default_test_runner(config);
+        assert!(runner.is_ok());
+    }
+
+    #[cfg(test)]
+    mod mock_tests {
+        use super::*;
+        use crate::testing::mocks::*;
+        use crate::testing::mocks::test_helpers::*;
+
+        #[tokio::test]
+        async fn test_mock_http_client() {
+            let route = create_mock_route("test", "GET", "/test");
+            let response = create_mock_response(200, "test body");
+            
+            let client = MockHttpClient::new()
+                .with_response("test:dev".to_string(), response.clone());
+
+            let user_data = create_mock_user_data(vec![("userId", "123")]);
+            
+            let result = client.execute_request(&route, "dev", &user_data).await;
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap().body, "test body");
+        }
+
+        #[test]
+        fn test_mock_response_comparator() {
+            let comparator = MockResponseComparator::new();
+            
+            let responses = HashMap::new();
+            let result = comparator.compare_responses(
+                "test".to_string(),
+                HashMap::new(),
+                responses,
+            );
+            
+            assert!(result.is_ok());
+            assert!(result.unwrap().is_identical);
+        }
+
+        #[tokio::test]
+        async fn test_mock_test_runner() {
+            let runner = MockTestRunner::new();
+            let result = runner.execute(None, None).await;
+            assert!(result.is_ok());
+        }
+    }
+}

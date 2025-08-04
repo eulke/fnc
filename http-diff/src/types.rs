@@ -189,6 +189,12 @@ pub struct ErrorSummary {
     pub mixed_responses: usize,     // different status codes across envs
 }
 
+impl Default for ErrorSummary {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ErrorSummary {
     /// Create a new empty error summary
     pub fn new() -> Self {

@@ -1,12 +1,12 @@
 /// Response comparison module with pure business logic
 pub mod content;
 pub mod analyzer;
-pub mod validator;
 
 use crate::error::Result;
 use crate::types::{HttpResponse, ComparisonResult, DiffViewStyle};
+use crate::traits::ResponseComparator as ResponseComparatorTrait;
 use analyzer::DifferenceAnalyzer;
-use validator::ResponseValidator;
+use crate::validation::ResponseValidatorImpl;
 use std::collections::HashMap;
 
 /// Response comparator with configurable comparison strategies - pure business logic only
@@ -83,7 +83,7 @@ impl ResponseComparator {
         responses: HashMap<String, HttpResponse>,
     ) -> Result<ComparisonResult> {
         // Validate responses
-        ResponseValidator::validate_responses(&responses)?;
+        ResponseValidatorImpl::validate_responses(&responses)?;
 
         let mut differences = Vec::new();
         let environments: Vec<String> = responses.keys().cloned().collect();
@@ -112,10 +112,10 @@ impl ResponseComparator {
         let is_identical = differences.is_empty();
 
         // Extract status codes and error information
-        let status_codes = ResponseValidator::extract_status_codes(&responses);
-        let has_errors = ResponseValidator::has_error_responses(&responses);
+        let status_codes = ResponseValidatorImpl::extract_status_codes(&responses);
+        let has_errors = ResponseValidatorImpl::has_error_responses(&responses);
         let error_bodies = if has_errors {
-            Some(ResponseValidator::get_error_responses(&responses))
+            Some(ResponseValidatorImpl::get_error_responses(&responses))
         } else {
             None
         };
@@ -147,6 +147,25 @@ impl ResponseComparator {
 impl Default for ResponseComparator {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl ResponseComparatorTrait for ResponseComparator {
+    fn compare_responses(
+        &self,
+        route_name: String,
+        user_context: HashMap<String, String>,
+        responses: HashMap<String, HttpResponse>,
+    ) -> Result<ComparisonResult> {
+        self.compare_responses(route_name, user_context, responses)
+    }
+
+    fn diff_view_style(&self) -> DiffViewStyle {
+        self.diff_view_style()
+    }
+
+    fn headers_comparison_enabled(&self) -> bool {
+        self.headers_comparison_enabled()
     }
 }
 

@@ -1,4 +1,4 @@
-use http_diff::{output::CurlGenerator, types::*};
+use http_diff::{curl::CurlGenerator, types::*};
 use std::collections::HashMap;
 
 fn main() {
@@ -7,7 +7,7 @@ fn main() {
         status: 200,
         headers: HashMap::new(),
         body: "{}".to_string(),
-        url: "https://prod.example.com".to_string\(\),
+        url: "https://prod.example.com".to_string(),
         curl_command: "curl".to_string(),
     });
 
@@ -26,11 +26,28 @@ fn main() {
         error_bodies: None,
     };
 
-    let output = CurlGenerator::format_comparison_results(&[result], true);
-    println!("Output with include_errors=true:");
-    println!("{}", output);
+    // Create a basic HTTP diff config for the CurlGenerator
+    let config = http_diff::HttpDiffConfig::builder()
+        .environment("prod", "https://prod.example.com")
+        .get_route("test", "/api/test")
+        .build()
+        .unwrap();
     
-    let output = CurlGenerator::format_comparison_results(&[result], false);
-    println!("\nOutput with include_errors=false:");
-    println!("{}", output);
+    let generator = CurlGenerator::new(config.clone());
+    
+    // Create test user data
+    let user_data = http_diff::UserData {
+        data: HashMap::new(),
+    };
+    
+    // Generate a curl command for the test route
+    match generator.generate_curl_command(&config.routes[0], "prod", &user_data) {
+        Ok(command) => {
+            println!("Generated curl command:");
+            println!("{}", command);
+        }
+        Err(e) => {
+            println!("Error generating curl command: {}", e);
+        }
+    }
 }
