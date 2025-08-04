@@ -13,14 +13,10 @@ pub trait OutputRenderer {
 
 // Sub-modules
 pub mod cli;
-pub mod json;
-pub mod html;
 pub mod comparison_formatter;
 pub mod table;
 
 // Re-exports for convenience
 pub use cli::CliRenderer;
-pub use json::JsonRenderer;
-pub use html::HtmlRenderer;
 pub use comparison_formatter::ComparisonFormatter;
 pub use table::{TableBuilder, TableStyle};

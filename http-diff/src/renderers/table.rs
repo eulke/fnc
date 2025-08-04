@@ -14,12 +14,6 @@ pub struct TableBuilder {
 pub enum TableStyle {
     /// Clean diff table with minimal borders
     Diff,
-    /// Summary table with full borders
-    Summary,
-    /// Comparison table for side-by-side data
-    Comparison,
-    /// Error table with warning styling
-    Error,
 }
 
 impl TableBuilder {
@@ -52,17 +46,6 @@ impl TableBuilder {
                     .remove_style(TableComponent::LeftBorderIntersections)
                     .remove_style(TableComponent::RightBorderIntersections)
                     .remove_style(TableComponent::MiddleIntersections);
-            }
-            TableStyle::Summary => {
-                // Keep all borders for clear structure
-            }
-            TableStyle::Comparison => {
-                // Optimized for side-by-side comparison
-                self.table
-                    .remove_style(TableComponent::HorizontalLines);
-            }
-            TableStyle::Error => {
-                // Error styling with red borders (handled via cell colors)
             }
         }
         self
@@ -140,51 +123,6 @@ impl Default for TableBuilder {
     }
 }
 
-/// Utility functions for creating common table types
-pub mod presets {
-    use super::*;
-
-    /// Create a diff table for displaying text differences
-    pub fn diff_table() -> TableBuilder {
-        TableBuilder::with_style(TableStyle::Diff)
-    }
-
-    /// Create a summary table for overview information
-    pub fn summary_table<I, S>(headers: I) -> TableBuilder 
-    where
-        I: IntoIterator<Item = S>,
-        S: Into<String>,
-    {
-        let mut builder = TableBuilder::with_style(TableStyle::Summary);
-        builder.headers(headers);
-        builder
-    }
-
-    /// Create a comparison table for side-by-side data
-    pub fn comparison_table<I, S>(headers: I) -> TableBuilder 
-    where
-        I: IntoIterator<Item = S>,
-        S: Into<String>,
-    {
-        let mut builder = TableBuilder::with_style(TableStyle::Comparison);
-        builder.headers(headers);
-        builder
-    }
-
-    /// Create an error summary table
-    pub fn error_table() -> TableBuilder {
-        TableBuilder::with_style(TableStyle::Error)
-    }
-
-    /// Create a large response summary table
-    pub fn large_response_summary<S1, S2>(_env1: S1, _env2: S2) -> TableBuilder 
-    where
-        S1: Into<String>,
-        S2: Into<String>,
-    {
-        summary_table(vec!["Environment", "Response Size", "Line Count"])
-    }
-}
 
 /// Helper functions for creating styled cells
 pub mod cells {
@@ -195,10 +133,6 @@ pub mod cells {
         Cell::new(text.into()).add_attribute(Attribute::Bold)
     }
 
-    /// Create a colored cell
-    pub fn colored<S: Into<String>>(text: S, color: Color) -> Cell {
-        Cell::new(text.into()).fg(color)
-    }
 
     /// Create an error cell (red background)
     pub fn error<S: Into<String>>(text: S) -> Cell {
@@ -214,17 +148,7 @@ pub mod cells {
             .bg(Color::Green)
     }
 
-    /// Create a warning cell (yellow background)
-    pub fn warning<S: Into<String>>(text: S) -> Cell {
-        Cell::new(text.into())
-            .fg(Color::Black)
-            .bg(Color::Yellow)
-    }
 
-    /// Create a cell that preserves ANSI escape codes (for diff output)
-    pub fn with_ansi<S: Into<String>>(text: S) -> Cell {
-        Cell::new(text.into())
-    }
 
     /// Create a muted/dimmed cell (gray text)
     pub fn muted<S: Into<String>>(text: S) -> Cell {
@@ -267,8 +191,8 @@ mod tests {
     }
 
     #[test]
-    fn test_diff_table_preset() {
-        let mut builder = presets::diff_table();
+    fn test_diff_table_style() {
+        let mut builder = TableBuilder::with_style(TableStyle::Diff);
         builder.line("Added line");
         builder.line("Removed line");
         let table = builder.build();
@@ -278,8 +202,9 @@ mod tests {
     }
 
     #[test]
-    fn test_summary_table_preset() {
-        let mut builder = presets::summary_table(vec!["Environment", "Status"]);
+    fn test_summary_table_style() {
+        let mut builder = TableBuilder::with_style(TableStyle::Diff);
+        builder.headers(vec!["Environment", "Status"]);
         builder.row(vec!["dev", "200"]);
         builder.row(vec!["prod", "404"]);
         let table = builder.build();
@@ -318,7 +243,7 @@ mod tests {
             "Line 3"
         ];
 
-        let mut builder = presets::diff_table();
+        let mut builder = TableBuilder::with_style(TableStyle::Diff);
         builder.lines(lines);
         let table = builder.build();
 

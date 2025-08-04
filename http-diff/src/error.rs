@@ -31,8 +31,6 @@ pub enum HttpDiffError {
     #[error("No environments configured")]
     NoEnvironments,
 
-    #[error("Route '{route}' not found")]
-    RouteNotFound { route: String },
 
     #[error("Path parameter '{param}' not found in user data. Available parameters: {available_params}")]
     MissingPathParameter { 

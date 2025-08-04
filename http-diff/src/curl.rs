@@ -6,8 +6,6 @@
 use crate::config::{HttpDiffConfig, Route, UserData};
 use crate::error::Result;
 use crate::url_builder::UrlBuilder;
-use crate::types::ComparisonResult;
-use crate::renderers::OutputRenderer;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
@@ -43,15 +41,6 @@ impl CurlCommand {
         }
     }
 
-    /// Get a unique identifier for this command
-    pub fn id(&self) -> String {
-        format!("{}_{}", self.route_name, self.environment)
-    }
-
-    /// Get a human-readable description
-    pub fn description(&self) -> String {
-        format!("{} on {}", self.route_name, self.environment)
-    }
 }
 
 impl CurlGenerator {
@@ -166,15 +155,6 @@ impl CurlGenerator {
         Ok(())
     }
 
-    /// Format comparison results for display (convenience wrapper)
-    pub fn format_comparison_results(results: &[ComparisonResult], include_errors: bool) -> String {
-        let renderer = if include_errors {
-            crate::renderers::CliRenderer::new()
-        } else {
-            crate::renderers::CliRenderer::without_errors()
-        };
-        renderer.render(results)
-    }
 
 }
 
@@ -187,19 +167,6 @@ mod shell_utils {
         arg.replace('\'', "'\"'\"'")
     }
 
-    /// Escape and quote a shell argument if it contains special characters
-    pub(super) fn quote_if_needed(arg: &str) -> String {
-        if needs_quoting(arg) {
-            format!("'{}'", escape_argument(arg))
-        } else {
-            arg.to_string()
-        }
-    }
-
-    /// Check if a string needs shell quoting
-    pub(super) fn needs_quoting(arg: &str) -> bool {
-        arg.chars().any(|c| matches!(c, ' ' | '\t' | '\n' | '\'' | '"' | '\\' | '|' | '&' | ';' | '(' | ')' | '<' | '>' | '`' | '$'))
-    }
 }
 
 // Re-export shell utilities at module level for internal use

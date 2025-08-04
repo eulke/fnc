@@ -24,8 +24,6 @@ url = "2.5"
 # Error handling and utilities
 thiserror = "2.0"
 
-# Terminal colors for prettydiff-style formatting
-colored = "2.0"
 
 # Table rendering with proper alignment and terminal width detection
 comfy-table = { version = "7.1", features = ["custom_styling"] }

@@ -1,7 +1,6 @@
 use crate::config::{Route, UserData, HttpDiffConfig};
-use crate::error::{HttpDiffError, Result};
+use crate::error::Result;
 use url::Url;
-use urlencoding::encode;
 use std::collections::HashMap;
 
 /// Resolve all headers with precedence (global < environment < route) and CSV substitution
@@ -126,34 +125,10 @@ impl<'a> UrlBuilder<'a> {
         Ok(params)
     }
 
-    /// Get just the path with substituted parameters (for display purposes)
-    pub fn get_substituted_path(&self) -> Result<String> {
-        self.substitute_path_parameters()
-    }
-
-    /// Get the base URL without path (for display purposes)
-    pub fn get_base_url_only(&self) -> Result<String> {
-        self.get_base_url()
-    }
-
-    /// Get all query parameters as a formatted string
-    pub fn get_query_string(&self) -> Result<String> {
-        let params = self.collect_query_parameters()?;
-        if params.is_empty() {
-            return Ok(String::new());
-        }
-
-        Ok(params
-            .iter()
-            .map(|(k, v)| format!("{}={}", encode(k), encode(v)))
-            .collect::<Vec<_>>()
-            .join("&"))
-    }
 }
 
 /// Utility functions for URL manipulation
 pub mod utils {
-    use super::*;
 
     /// Check if a URL path contains parameter placeholders
     pub fn has_path_parameters(path: &str) -> bool {
@@ -183,29 +158,6 @@ pub mod utils {
         params
     }
 
-    /// Validate that all path parameters have corresponding user data
-    pub fn validate_path_parameters(path: &str, user_data: &UserData) -> Result<()> {
-        let required_params = extract_parameter_names(path);
-        
-        for param in required_params {
-            if !user_data.data.contains_key(&param) {
-                let available = user_data.data.keys()
-                    .map(|k| k.as_str())
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                return Err(HttpDiffError::MissingPathParameter { 
-                    param,
-                    available_params: if available.is_empty() { 
-                        "none".to_string() 
-                    } else { 
-                        available 
-                    },
-                });
-            }
-        }
-        
-        Ok(())
-    }
 }
 
 #[cfg(test)]
@@ -298,6 +250,6 @@ mod tests {
         let result = builder.build();
 
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), HttpDiffError::MissingPathParameter { .. }));
+        assert!(matches!(result.unwrap_err(), crate::error::HttpDiffError::MissingPathParameter { .. }));
     }
 } 

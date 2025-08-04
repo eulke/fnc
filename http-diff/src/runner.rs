@@ -319,26 +319,6 @@ pub async fn run_http_diff(
     runner.execute(environments, routes).await
 }
 
-/// Convenience function to run HTTP diff with headers comparison enabled
-pub async fn run_http_diff_with_headers(
-    config: HttpDiffConfig,
-    environments: Option<Vec<String>>,
-) -> Result<Vec<ComparisonResult>> {
-    let runner = TestRunner::with_headers_comparison(config)?;
-    runner.execute(environments, None).await
-}
-
-/// Convenience function to run HTTP diff with custom concurrency
-pub async fn run_http_diff_concurrent(
-    config: HttpDiffConfig,
-    environments: Option<Vec<String>>,
-    routes: Option<Vec<String>>,
-    max_concurrent: usize,
-) -> Result<Vec<ComparisonResult>> {
-    let runner = TestRunner::new(config)?
-        .with_max_concurrent_requests(max_concurrent);
-    runner.execute(environments, routes).await
-}
 
 #[cfg(test)]
 mod tests {

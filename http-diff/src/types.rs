@@ -39,16 +39,6 @@ impl HttpResponse {
         !self.is_success()
     }
 
-    /// Get the content type from headers
-    pub fn content_type(&self) -> Option<&String> {
-        self.headers.get("content-type")
-            .or_else(|| self.headers.get("Content-Type"))
-    }
-
-    /// Get the response size in bytes
-    pub fn size(&self) -> usize {
-        self.body.len()
-    }
 
     /// Get the number of lines in the response body
     pub fn line_count(&self) -> usize {
@@ -112,15 +102,6 @@ impl ComparisonResult {
         statuses.windows(2).all(|w| w[0] == w[1])
     }
 
-    /// Get the primary environment (first one in responses)
-    pub fn primary_environment(&self) -> Option<&String> {
-        self.responses.keys().next()
-    }
-
-    /// Get all environment names
-    pub fn environments(&self) -> Vec<&String> {
-        self.responses.keys().collect()
-    }
 }
 
 /// Represents a difference between responses
@@ -152,7 +133,7 @@ impl Difference {
 }
 
 /// Categories of differences that can be detected
-#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum DifferenceCategory {
     Status,
     Headers,
@@ -189,10 +170,8 @@ pub enum ErrorSeverity {
 
 /// Diff view style configuration for text differences
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[derive(Default)]
 pub enum DiffViewStyle {
     /// Traditional unified diff (up/down) - default, backward compatible
-    #[default]
     Unified,
     /// Side-by-side diff view for easier comparison
     SideBySide,
@@ -256,163 +235,10 @@ impl ErrorSummary {
         summary
     }
 
-    /// Get the success rate as a percentage
-    pub fn success_rate(&self) -> f64 {
-        if self.total_requests == 0 {
-            0.0
-        } else {
-            (self.successful_requests as f64 / self.total_requests as f64) * 100.0
-        }
-    }
-
-    /// Get the failure rate as a percentage
-    pub fn failure_rate(&self) -> f64 {
-        if self.total_requests == 0 {
-            0.0
-        } else {
-            (self.failed_requests as f64 / self.total_requests as f64) * 100.0
-        }
-    }
-
-    /// Check if there were any failures
-    pub fn has_failures(&self) -> bool {
-        self.failed_requests > 0
-    }
-
-    /// Check if all requests were successful
-    pub fn all_successful(&self) -> bool {
-        self.total_requests > 0 && self.failed_requests == 0
-    }
-}
-
-impl Default for ErrorSummary {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 /// Represents a curl command with metadata
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct CurlCommand {
-    pub route_name: String,
-    pub environment: String,
-    pub user_context: HashMap<String, String>,
-    pub command: String,
-}
 
-impl CurlCommand {
-    /// Create a new curl command
-    pub fn new(
-        route_name: String,
-        environment: String,
-        user_context: HashMap<String, String>,
-        command: String,
-    ) -> Self {
-        Self {
-            route_name,
-            environment,
-            user_context,
-            command,
-        }
-    }
-
-    /// Get a unique identifier for this command
-    pub fn id(&self) -> String {
-        format!("{}_{}", self.route_name, self.environment)
-    }
-
-    /// Get a human-readable description
-    pub fn description(&self) -> String {
-        format!("{} on {}", self.route_name, self.environment)
-    }
-}
-
-/// Configuration for progress tracking during test execution
-#[derive(Debug, Clone)]
-pub struct ProgressConfig {
-    /// Whether to show progress bars
-    pub show_progress: bool,
-    /// Update interval for progress callbacks (in milliseconds)
-    pub update_interval_ms: u64,
-    /// Whether to show estimated time remaining
-    pub show_eta: bool,
-}
-
-impl Default for ProgressConfig {
-    fn default() -> Self {
-        Self {
-            show_progress: true,
-            update_interval_ms: 100,
-            show_eta: true,
-        }
-    }
-}
-
-/// Progress tracking information
-#[derive(Debug, Clone)]
-pub struct ProgressInfo {
-    pub total_requests: usize,
-    pub completed_requests: usize,
-    pub successful_requests: usize,
-    pub failed_requests: usize,
-    pub start_time: std::time::Instant,
-}
-
-impl ProgressInfo {
-    /// Create new progress info
-    pub fn new(total_requests: usize) -> Self {
-        Self {
-            total_requests,
-            completed_requests: 0,
-            successful_requests: 0,
-            failed_requests: 0,
-            start_time: std::time::Instant::now(),
-        }
-    }
-
-    /// Mark a request as completed
-    pub fn complete_request(&mut self, success: bool) {
-        self.completed_requests += 1;
-        if success {
-            self.successful_requests += 1;
-        } else {
-            self.failed_requests += 1;
-        }
-    }
-
-    /// Get progress as a percentage
-    pub fn progress_percentage(&self) -> f64 {
-        if self.total_requests == 0 {
-            0.0
-        } else {
-            (self.completed_requests as f64 / self.total_requests as f64) * 100.0
-        }
-    }
-
-    /// Get elapsed time
-    pub fn elapsed(&self) -> std::time::Duration {
-        self.start_time.elapsed()
-    }
-
-    /// Estimate remaining time
-    pub fn estimated_remaining(&self) -> Option<std::time::Duration> {
-        if self.completed_requests == 0 || self.completed_requests >= self.total_requests {
-            return None;
-        }
-
-        let elapsed = self.elapsed();
-        let avg_time_per_request = elapsed.as_secs_f64() / self.completed_requests as f64;
-        let remaining_requests = self.total_requests - self.completed_requests;
-        let estimated_seconds = avg_time_per_request * remaining_requests as f64;
-
-        Some(std::time::Duration::from_secs_f64(estimated_seconds))
-    }
-
-    /// Check if all requests are completed
-    pub fn is_complete(&self) -> bool {
-        self.completed_requests >= self.total_requests
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -434,8 +260,7 @@ mod tests {
         assert!(response.is_success());
         assert!(!response.is_error());
         assert_eq!(response.status, 200);
-        assert_eq!(response.content_type(), Some(&"application/json".to_string()));
-        assert!(response.size() > 0);
+        assert_eq!(response.line_count(), 1);
     }
 
     #[test]
@@ -469,27 +294,12 @@ mod tests {
             mixed_responses: 1,
         };
 
-        assert_eq!(summary.success_rate(), 80.0);
-        assert_eq!(summary.failure_rate(), 20.0);
-        assert!(summary.has_failures());
-        assert!(!summary.all_successful());
+        // Test basic summary properties
+        assert_eq!(summary.total_requests, 10);
+        assert_eq!(summary.successful_requests, 8);
+        assert_eq!(summary.failed_requests, 2);
     }
 
-    #[test]
-    fn test_progress_info() {
-        let mut progress = ProgressInfo::new(10);
-        
-        assert_eq!(progress.progress_percentage(), 0.0);
-        assert!(!progress.is_complete());
-
-        progress.complete_request(true);
-        progress.complete_request(false);
-
-        assert_eq!(progress.progress_percentage(), 20.0);
-        assert_eq!(progress.successful_requests, 1);
-        assert_eq!(progress.failed_requests, 1);
-        assert!(!progress.is_complete());
-    }
 
     #[test]
     fn test_difference_category() {
@@ -502,16 +312,4 @@ mod tests {
         assert_eq!(DifferenceCategory::Body.icon(), "📄");
     }
 
-    #[test]
-    fn test_curl_command() {
-        let command = CurlCommand::new(
-            "get_user".to_string(),
-            "dev".to_string(),
-            HashMap::new(),
-            "curl -X GET https://api.dev.example.com/users".to_string(),
-        );
-
-        assert_eq!(command.id(), "get_user_dev");
-        assert_eq!(command.description(), "get_user on dev");
-    }
 } 

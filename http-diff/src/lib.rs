@@ -25,19 +25,17 @@ pub mod renderers;
 pub use config::{HttpDiffConfig, HttpDiffConfigBuilder, Environment, Route, UserData};
 pub use types::{
     HttpResponse, ComparisonResult, Difference, DifferenceCategory, 
-    DiffViewStyle, ErrorSummary, ProgressConfig, ProgressInfo
+    DiffViewStyle, ErrorSummary
 };
 pub use client::HttpClient;
-pub use runner::{TestRunner, run_http_diff_concurrent};
+pub use runner::TestRunner;
 pub use comparison::ResponseComparator;
 pub use curl::{CurlGenerator, CurlCommand};
-pub use documentation::generate_request_documentation;
-pub use renderers::{OutputRenderer, CliRenderer, JsonRenderer, HtmlRenderer, ComparisonFormatter, TableBuilder, TableStyle};
+pub use renderers::{OutputRenderer, CliRenderer, ComparisonFormatter, TableBuilder, TableStyle};
 pub use error::{HttpDiffError, Result};
 
 // Re-export utility modules for advanced usage
 pub use url_builder::UrlBuilder;
-pub use utils::text;
 
 /// Execute HTTP diff testing with the given configuration
 pub async fn run_http_diff(
