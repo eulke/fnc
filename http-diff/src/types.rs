@@ -2,7 +2,7 @@
 use std::collections::HashMap;
 
 /// HTTP response data with metadata
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct HttpResponse {
     pub status: u16,
     pub headers: HashMap<String, String>,
@@ -57,7 +57,7 @@ impl HttpResponse {
 }
 
 /// Result of comparing two HTTP responses
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ComparisonResult {
     pub route_name: String,
     pub user_context: HashMap<String, String>,
@@ -124,7 +124,7 @@ impl ComparisonResult {
 }
 
 /// Represents a difference between responses
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Difference {
     pub category: DifferenceCategory,
     pub description: String,
@@ -152,7 +152,7 @@ impl Difference {
 }
 
 /// Categories of differences that can be detected
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum DifferenceCategory {
     Status,
     Headers,
@@ -180,7 +180,7 @@ impl DifferenceCategory {
 }
 
 /// Error severity classification for failed requests
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum ErrorSeverity {
     Critical,    // 5xx errors
     Dependency,  // 424, 502, 503 errors
@@ -188,7 +188,7 @@ pub enum ErrorSeverity {
 }
 
 /// Diff view style configuration for text differences
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[derive(Default)]
 pub enum DiffViewStyle {
     /// Traditional unified diff (up/down) - default, backward compatible
@@ -200,7 +200,7 @@ pub enum DiffViewStyle {
 
 
 /// Summary of error statistics across all comparison results
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ErrorSummary {
     pub total_requests: usize,
     pub successful_requests: usize, // 2xx status codes
@@ -292,7 +292,7 @@ impl Default for ErrorSummary {
 }
 
 /// Represents a curl command with metadata
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CurlCommand {
     pub route_name: String,
     pub environment: String,

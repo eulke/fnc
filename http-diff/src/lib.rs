@@ -17,18 +17,23 @@ pub mod formatter;
 pub mod client;
 pub mod runner;
 pub mod comparator;
-pub mod output;
+pub mod curl;
+pub mod documentation;
+pub mod error_analysis;
+pub mod renderers;
 
 // Re-export main types for convenience
 pub use config::{HttpDiffConfig, HttpDiffConfigBuilder, Environment, Route, UserData};
 pub use types::{
     HttpResponse, ComparisonResult, Difference, DifferenceCategory, 
-    DiffViewStyle, ErrorSummary, CurlCommand, ProgressConfig, ProgressInfo
+    DiffViewStyle, ErrorSummary, ProgressConfig, ProgressInfo
 };
 pub use client::HttpClient;
 pub use runner::{TestRunner, run_http_diff_concurrent};
 pub use comparator::ResponseComparator;
-pub use output::CurlGenerator;
+pub use curl::{CurlGenerator, CurlCommand};
+pub use documentation::generate_request_documentation;
+pub use renderers::{OutputRenderer, CliRenderer, JsonRenderer, HtmlRenderer};
 pub use error::{HttpDiffError, Result};
 
 // Re-export utility modules for advanced usage

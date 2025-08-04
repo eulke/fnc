@@ -5,7 +5,7 @@ use crate::ui;
 use dialoguer::{Confirm, theme::ColorfulTheme};
 use http_diff::{
     config::{ensure_config_files_exist, load_user_data, HttpDiffConfig},
-    output::CurlGenerator,
+    CurlGenerator,
     TestRunner,
 };
 use indicatif::{ProgressBar, ProgressStyle};
@@ -285,7 +285,7 @@ async fn execute_async(args: HttpDiffArgs) -> Result<()> {
 
     // Display summary
     ui::section_header("Test Results Summary");
-    println!("{}", http_diff::output::CurlGenerator::format_comparison_results(&results, args.include_errors));
+    println!("{}", CurlGenerator::format_comparison_results(&results, args.include_errors));
 
     // Show next steps if there are differences
     if different_count > 0 {

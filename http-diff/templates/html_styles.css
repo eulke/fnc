@@ -1,0 +1,118 @@
+<style>
+.http-diff-report {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+    background: #f8f9fa;
+}
+
+.summary {
+    background: white;
+    border-radius: 8px;
+    padding: 24px;
+    margin-bottom: 24px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.summary h2 {
+    margin: 0 0 20px 0;
+    color: #2c3e50;
+    font-size: 24px;
+}
+
+.stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 16px;
+}
+
+.stat {
+    text-align: center;
+    padding: 16px;
+    border-radius: 6px;
+    background: #f8f9fa;
+}
+
+.stat.identical { background: #d4edda; color: #155724; }
+.stat.different { background: #fff3cd; color: #856404; }
+.stat.failed { background: #f8d7da; color: #721c24; }
+.stat.total { background: #e2e3e5; color: #383d41; }
+
+.stat .count {
+    display: block;
+    font-size: 32px;
+    font-weight: bold;
+    margin-bottom: 4px;
+}
+
+.stat .label {
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.details {
+    background: white;
+    border-radius: 8px;
+    padding: 24px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.details h2 {
+    margin: 0 0 20px 0;
+    color: #2c3e50;
+    font-size: 24px;
+}
+
+.test-result {
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    margin-bottom: 16px;
+    overflow: hidden;
+}
+
+.test-result.identical { border-left: 4px solid #28a745; }
+.test-result.different { border-left: 4px solid #ffc107; }
+.test-result.failed { border-left: 4px solid #dc3545; }
+
+.test-result h3 {
+    margin: 0;
+    padding: 16px;
+    background: #f8f9fa;
+    font-size: 18px;
+    color: #495057;
+}
+
+.environments {
+    padding: 16px;
+}
+
+.environment {
+    padding: 8px 0;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.environment:last-child {
+    border-bottom: none;
+}
+
+.differences {
+    padding: 16px;
+    background: #fff3cd;
+    border-top: 1px solid #ffeaa7;
+}
+
+.difference {
+    padding: 8px;
+    margin-bottom: 8px;
+    border-radius: 4px;
+    background: white;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 14px;
+}
+
+.difference.status { border-left: 3px solid #dc3545; }
+.difference.headers { border-left: 3px solid #007bff; }
+.difference.body { border-left: 3px solid #ffc107; }
+</style>
