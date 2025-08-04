@@ -32,22 +32,17 @@ pub trait ResponseComparator: Send + Sync {
     fn headers_comparison_enabled(&self) -> bool;
 }
 
-/// Trait for test runners
+/// Trait for test runners with clean architecture
 pub trait TestRunner: Send + Sync {
-    /// Execute HTTP diff tests
-    fn execute(
+    /// Execute HTTP diff tests with provided user data and comprehensive error handling
+    fn execute_with_data(
         &self,
+        user_data: &[crate::config::UserData],
         environments: Option<Vec<String>>,
         routes: Option<Vec<String>>,
-    ) -> impl Future<Output = Result<Vec<ComparisonResult>>> + Send;
-
-    /// Execute HTTP diff tests with progress tracking
-    fn execute_with_progress(
-        &self,
-        environments: Option<Vec<String>>,
-        routes: Option<Vec<String>>,
+        error_collector: Option<Box<dyn ErrorCollector>>,
         progress_callback: Option<ProgressCallback>,
-    ) -> impl Future<Output = Result<(Vec<ComparisonResult>, crate::execution::progress::ProgressTracker)>> + Send;
+    ) -> impl Future<Output = Result<crate::types::ExecutionResult>> + Send;
 }
 
 /// Trait for request building
@@ -92,6 +87,24 @@ pub trait ConfigValidator: Send + Sync {
 
 /// Type alias for progress callback to reduce complexity
 pub type ProgressCallback = Box<dyn Fn(&crate::execution::progress::ProgressTracker) + Send + Sync>;
+
+/// Trait for collecting execution errors in a structured way
+pub trait ErrorCollector: Send + Sync {
+    /// Record a request execution error
+    fn record_request_error(&self, route: &str, environment: &str, error: String);
+    
+    /// Record a response comparison error  
+    fn record_comparison_error(&self, route: &str, error: String);
+    
+    /// Record a general execution error
+    fn record_execution_error(&self, error: String);
+}
+
+/// Trait for providing user data from different sources
+pub trait UserDataProvider: Send + Sync {
+    /// Load user data asynchronously
+    fn load_user_data(&self) -> impl Future<Output = Result<Vec<crate::config::UserData>>> + Send;
+}
 
 /// Trait for progress reporting
 pub trait ProgressReporter: Send + Sync {

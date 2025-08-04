@@ -35,14 +35,15 @@ pub mod testing;
 pub use traits::{
     HttpClient, ResponseComparator, TestRunner,
     RequestBuilder, ResponseConverter, UrlBuilder as UrlBuilderTrait,
-    ConfigValidator, ProgressReporter, ProgressCallback
+    ConfigValidator, ProgressReporter, ProgressCallback,
+    ErrorCollector, UserDataProvider
 };
 
 // Re-export main types
 pub use config::{HttpDiffConfig, HttpDiffConfigBuilder, Environment, Route, UserData};
 pub use types::{
     HttpResponse, ComparisonResult, Difference, DifferenceCategory, 
-    DiffViewStyle, ErrorSummary
+    DiffViewStyle, ErrorSummary, ExecutionResult, ExecutionError, ExecutionErrorType
 };
 
 // Re-export implementations (clean API without "Impl" suffix)
@@ -81,25 +82,17 @@ pub fn create_default_test_runner(config: HttpDiffConfig) -> Result<DefaultTestR
     DefaultTestRunner::new(config, client, comparator)
 }
 
-/// Execute HTTP diff testing with default implementations
-pub async fn run_http_diff(
+/// Execute HTTP diff testing with clean architecture - requires explicit user data and error handling
+pub async fn run_http_diff_with_data(
     config: HttpDiffConfig,
+    user_data: &[UserData],
     environments: Option<Vec<String>>,
     routes: Option<Vec<String>>,
-) -> Result<Vec<ComparisonResult>> {
-    let runner = create_default_test_runner(config)?;
-    runner.execute(environments, routes).await
-}
-
-/// Execute HTTP diff testing with progress tracking
-pub async fn run_http_diff_with_progress(
-    config: HttpDiffConfig,
-    environments: Option<Vec<String>>,
-    routes: Option<Vec<String>>,
+    error_collector: Option<Box<dyn ErrorCollector>>,
     progress_callback: Option<ProgressCallback>,
-) -> Result<(Vec<ComparisonResult>, ProgressTracker)> {
+) -> Result<ExecutionResult> {
     let runner = create_default_test_runner(config)?;
-    runner.execute_with_progress(environments, routes, progress_callback).await
+    runner.execute_with_data(user_data, environments, routes, error_collector, progress_callback).await
 }
 
 #[cfg(test)]
@@ -251,8 +244,11 @@ mod tests {
         #[tokio::test]
         async fn test_mock_test_runner() {
             let runner = MockTestRunner::new();
-            let result = runner.execute(None, None).await;
+            let user_data = vec![create_mock_user_data(vec![("userId", "123")])];
+            let result = runner.execute_with_data(&user_data, None, None, None, None).await;
             assert!(result.is_ok());
+            let execution_result = result.unwrap();
+            assert!(!execution_result.has_errors());
         }
     }
 }

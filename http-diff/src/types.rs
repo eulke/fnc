@@ -243,8 +243,112 @@ impl ErrorSummary {
 
 }
 
-/// Represents a curl command with metadata
+/// Types of execution errors that can occur during test runs
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum ExecutionErrorType {
+    /// Error during HTTP request execution
+    RequestError,
+    /// Error during response comparison
+    ComparisonError,
+    /// General execution error (semaphore, task management, etc.)
+    ExecutionError,
+}
 
+/// Represents an execution error with context
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ExecutionError {
+    /// Type of error that occurred
+    pub error_type: ExecutionErrorType,
+    /// Route name where error occurred
+    pub route: String,
+    /// Environment name (if applicable)
+    pub environment: Option<String>,
+    /// Error message
+    pub message: String,
+}
+
+impl ExecutionError {
+    /// Create a new request error
+    pub fn request_error(route: String, environment: String, message: String) -> Self {
+        Self {
+            error_type: ExecutionErrorType::RequestError,
+            route,
+            environment: Some(environment),
+            message,
+        }
+    }
+
+    /// Create a new comparison error
+    pub fn comparison_error(route: String, message: String) -> Self {
+        Self {
+            error_type: ExecutionErrorType::ComparisonError,
+            route,
+            environment: None,
+            message,
+        }
+    }
+
+    /// Create a new general execution error
+    pub fn general_execution_error(message: String) -> Self {
+        Self {
+            error_type: ExecutionErrorType::ExecutionError,
+            route: "unknown".to_string(),
+            environment: None,
+            message,
+        }
+    }
+}
+
+/// Comprehensive result of test runner execution
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ExecutionResult {
+    /// Comparison results from successful test runs
+    pub comparisons: Vec<ComparisonResult>,
+    /// Progress information
+    pub progress: crate::execution::progress::ProgressTracker,
+    /// Collection of errors that occurred during execution
+    pub errors: Vec<ExecutionError>,
+}
+
+impl ExecutionResult {
+    /// Create a new execution result
+    pub fn new(
+        comparisons: Vec<ComparisonResult>,
+        progress: crate::execution::progress::ProgressTracker,
+        errors: Vec<ExecutionError>,
+    ) -> Self {
+        Self {
+            comparisons,
+            progress,
+            errors,
+        }
+    }
+
+    /// Check if execution had any errors
+    pub fn has_errors(&self) -> bool {
+        !self.errors.is_empty()
+    }
+
+    /// Get errors by type
+    pub fn errors_by_type(&self, error_type: ExecutionErrorType) -> Vec<&ExecutionError> {
+        self.errors.iter().filter(|e| e.error_type == error_type).collect()
+    }
+
+    /// Get request errors
+    pub fn request_errors(&self) -> Vec<&ExecutionError> {
+        self.errors_by_type(ExecutionErrorType::RequestError)
+    }
+
+    /// Get comparison errors
+    pub fn comparison_errors(&self) -> Vec<&ExecutionError> {
+        self.errors_by_type(ExecutionErrorType::ComparisonError)
+    }
+
+    /// Get execution errors
+    pub fn execution_errors(&self) -> Vec<&ExecutionError> {
+        self.errors_by_type(ExecutionErrorType::ExecutionError)
+    }
+}
 
 #[cfg(test)]
 mod tests {

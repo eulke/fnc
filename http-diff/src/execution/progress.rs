@@ -1,12 +1,13 @@
 use std::time::Instant;
 
 /// Progress tracking for concurrent execution
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ProgressTracker {
     pub total_requests: usize,
     pub completed_requests: usize,
     pub successful_requests: usize,
     pub failed_requests: usize,
+    #[serde(skip, default = "Instant::now")]
     pub start_time: Instant,
 }
 

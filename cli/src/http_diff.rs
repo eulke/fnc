@@ -10,6 +10,7 @@ use http_diff::{
     CliRenderer,
     OutputRenderer,
     TestRunner,
+    ErrorCollector,
     ProgressTracker as HttpProgressTracker,
 };
 use indicatif::{ProgressBar, ProgressStyle};
@@ -30,6 +31,40 @@ pub struct HttpDiffArgs {
     pub init: bool,
     pub verbose: bool,
     pub output_file: String,
+}
+
+/// CLI error collector that outputs errors with emoji formatting to stderr
+pub struct CliErrorCollector {
+    verbose: bool,
+}
+
+impl CliErrorCollector {
+    pub fn new(verbose: bool) -> Self {
+        Self { verbose }
+    }
+}
+
+impl ErrorCollector for CliErrorCollector {
+    fn record_request_error(&self, route: &str, environment: &str, error: String) {
+        eprintln!("⚠️  Request failed for route '{}' in environment '{}': {}", route, environment, error);
+        if self.verbose {
+            eprintln!("    This error was recorded and will be included in the final error summary.");
+        }
+    }
+
+    fn record_comparison_error(&self, route: &str, error: String) {
+        eprintln!("⚠️  Comparison failed for route '{}': {}", route, error);
+        if self.verbose {
+            eprintln!("    This error was recorded and will be included in the final error summary.");
+        }
+    }
+
+    fn record_execution_error(&self, error: String) {
+        eprintln!("❌ Request task failed: {}", error);
+        if self.verbose {
+            eprintln!("    This error was recorded and will be included in the final error summary.");
+        }
+    }
 }
 
 pub fn execute(args: HttpDiffArgs) -> Result<()> {
@@ -233,31 +268,48 @@ async fn execute_async(args: HttpDiffArgs) -> Result<()> {
     pb.set_style(style);
     pb.set_message("Executing HTTP requests...");
 
-    // Execute with progress callback
+    // Create error collector for structured error handling
+    let error_collector = CliErrorCollector::new(args.verbose);
+    
+    // Execute with progress callback and error collection
     let pb_clone = Arc::clone(&pb);
-    let (results, _final_progress) = runner.execute_with_progress(
+    let execution_result = runner.execute_with_data(
+        &user_data,
         env_list,
         route_list,
+        Some(Box::new(error_collector)),
         Some(Box::new(move |p: &HttpProgressTracker| {
             pb_clone.set_position(p.completed_requests as u64);
         }))
     ).await.map_err(|e| {
         CliError::Other(format!("HTTP diff execution failed: {}", e))
     })?;
-
+    
     pb.finish_with_message("✅ All HTTP requests completed!");
     progress.complete_step();
 
     // Analyze and display results
     progress.start_step();
-    let total_results = results.len();
-    let identical_count = results.iter().filter(|r| r.is_identical).count();
+    let total_results = execution_result.comparisons.len();
+    let identical_count = execution_result.comparisons.iter().filter(|r| r.is_identical).count();
     let different_count = total_results - identical_count;
 
     if args.verbose {
         ui::info_message(&format!("Test results: {} total, {} identical, {} different", 
                                  total_results, identical_count, different_count));
+        
+        // Display error summary if there were errors
+        if execution_result.has_errors() {
+            let request_errors = execution_result.request_errors();
+            let comparison_errors = execution_result.comparison_errors();
+            let execution_errors = execution_result.execution_errors();
+            
+            ui::info_message(&format!("Errors encountered: {} request errors, {} comparison errors, {} execution errors",
+                                     request_errors.len(), comparison_errors.len(), execution_errors.len()));
+        }
     }
+    
+    let results = execution_result.comparisons;
     progress.complete_step();
 
     // Generate output files

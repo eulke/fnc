@@ -1,7 +1,7 @@
-use crate::config::{HttpDiffConfig, load_user_data};
+use crate::config::HttpDiffConfig;
 use crate::error::{Result, HttpDiffError};
-use crate::traits::{HttpClient, ResponseComparator, TestRunner};
-use crate::types::ComparisonResult;
+use crate::traits::{HttpClient, ResponseComparator, TestRunner, ErrorCollector};
+use crate::types::{ExecutionResult, ExecutionError};
 use crate::execution::progress::{ProgressTracker, ProgressCallback};
 use std::collections::HashMap;
 use futures::stream::{FuturesUnordered, StreamExt};
@@ -45,14 +45,15 @@ where
         self
     }
 
-    /// Execute tests concurrently with controlled parallelism
-    async fn execute_concurrent(
+    /// Execute tests concurrently with controlled parallelism and error collection
+    async fn execute_concurrent_with_error_collection(
         &self,
         user_data: &[crate::config::UserData],
         environments: &[String],
         routes: &[&crate::config::Route],
+        error_collector: Option<Box<dyn ErrorCollector>>,
         progress_callback: Option<Box<ProgressCallback>>,
-    ) -> Result<(Vec<ComparisonResult>, ProgressTracker)> {
+    ) -> Result<ExecutionResult> {
         // Calculate total requests and set up progress tracking
         let total_requests = routes.len() * user_data.len() * environments.len();
         let mut progress = ProgressTracker::new(total_requests);
@@ -78,6 +79,7 @@ where
                 let request_task = async move {
                     let mut responses = HashMap::new();
                     let mut request_results = Vec::new();
+                    let mut errors = Vec::new();
                     
                     // Execute requests to all environments for this route-user combination
                     for env in &environments_clone {
@@ -92,14 +94,18 @@ where
                                 request_results.push(success);
                             }
                             Err(e) => {
-                                // Continue with other environments even if one fails
-                                eprintln!("⚠️  Request failed for route '{}' in environment '{}': {}", route_clone.name, env, e);
+                                // Collect error instead of printing to stderr
+                                errors.push(ExecutionError::request_error(
+                                    route_clone.name.clone(),
+                                    env.clone(),
+                                    e.to_string(),
+                                ));
                                 request_results.push(false);
                             }
                         }
                     }
                     
-                    Result::<_>::Ok((route_clone, user_clone, responses, request_results))
+                    Result::<_>::Ok((route_clone, user_clone, responses, request_results, errors))
                 };
                 
                 request_futures.push(request_task);
@@ -107,11 +113,12 @@ where
         }
 
         let mut results = Vec::new();
+        let mut all_errors = Vec::new();
         
         // Process completed requests as they finish
         while let Some(request_result) = request_futures.next().await {
             match request_result {
-                Ok((route, user, responses, request_success_flags)) => {
+                Ok((route, user, responses, request_success_flags, mut errors)) => {
                     // Update progress for all requests in this batch
                     for success in &request_success_flags {
                         progress.request_completed(*success);
@@ -120,6 +127,14 @@ where
                     if let Some(ref callback) = progress_callback {
                         callback(&progress);
                     }
+                    
+                    // Collect request errors
+                    for error in &errors {
+                        if let Some(ref collector) = error_collector {
+                            collector.record_request_error(&error.route, error.environment.as_ref().unwrap_or(&"unknown".to_string()), error.message.clone());
+                        }
+                    }
+                    all_errors.append(&mut errors);
                     
                     // Only create comparison result if we have at least 2 responses
                     if responses.len() >= 2 {
@@ -132,13 +147,22 @@ where
                                 results.push(comparison_result);
                             }
                             Err(e) => {
-                                eprintln!("⚠️  Comparison failed for route '{}': {}", route.name, e);
+                                let error = ExecutionError::comparison_error(route.name.clone(), e.to_string());
+                                if let Some(ref collector) = error_collector {
+                                    collector.record_comparison_error(&error.route, error.message.clone());
+                                }
+                                all_errors.push(error);
                             }
                         }
                     }
                 }
                 Err(e) => {
-                    eprintln!("❌ Request task failed: {}", e);
+                    let error = ExecutionError::general_execution_error(e.to_string());
+                    if let Some(ref collector) = error_collector {
+                        collector.record_execution_error(error.message.clone());
+                    }
+                    all_errors.push(error);
+                    
                     // Still need to update progress for failed requests
                     for _ in 0..environments.len() {
                         progress.request_completed(false);
@@ -151,8 +175,9 @@ where
             }
         }
 
-        Ok((results, progress))
+        Ok(ExecutionResult::new(results, progress, all_errors))
     }
+
 
     /// Resolve environment names
     fn resolve_environments(&self, environments: Option<Vec<String>>) -> Result<Vec<String>> {
@@ -207,21 +232,17 @@ where
     C: HttpClient,
     R: ResponseComparator,
 {
-    async fn execute(&self, environments: Option<Vec<String>>, routes: Option<Vec<String>>) -> Result<Vec<ComparisonResult>> {
-        self.execute_with_progress(environments, routes, None).await.map(|(results, _)| results)
-    }
-
-    async fn execute_with_progress(
-        &self, 
+    async fn execute_with_data(
+        &self,
+        user_data: &[crate::config::UserData],
         environments: Option<Vec<String>>,
         routes: Option<Vec<String>>,
+        error_collector: Option<Box<dyn ErrorCollector>>,
         progress_callback: Option<Box<ProgressCallback>>,
-    ) -> Result<(Vec<ComparisonResult>, ProgressTracker)>
-    {
-        let user_data = load_user_data("users.csv")?;
+    ) -> Result<ExecutionResult> {
         let environments = self.resolve_environments(environments)?;
         let routes = self.resolve_routes(routes)?;
         
-        self.execute_concurrent(&user_data, &environments, &routes, progress_callback).await
+        self.execute_concurrent_with_error_collection(user_data, &environments, &routes, error_collector, progress_callback).await
     }
 }

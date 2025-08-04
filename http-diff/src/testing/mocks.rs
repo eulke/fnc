@@ -175,26 +175,23 @@ impl Default for MockTestRunner {
 }
 
 impl TestRunner for MockTestRunner {
-    async fn execute(
+    async fn execute_with_data(
         &self,
+        _user_data: &[crate::config::UserData],
         _environments: Option<Vec<String>>,
         _routes: Option<Vec<String>>,
-    ) -> Result<Vec<ComparisonResult>> {
+        _error_collector: Option<Box<dyn crate::traits::ErrorCollector>>,
+        _progress_callback: Option<Box<dyn Fn(&ProgressTracker) + Send + Sync>>,
+    ) -> Result<crate::types::ExecutionResult> {
         if self.should_fail {
             return Err(crate::error::HttpDiffError::general(&self.failure_message));
         }
-        Ok(self.mock_results.clone())
-    }
-
-    async fn execute_with_progress(
-        &self,
-        environments: Option<Vec<String>>,
-        routes: Option<Vec<String>>,
-        _progress_callback: Option<Box<dyn Fn(&ProgressTracker) + Send + Sync>>,
-    ) -> Result<(Vec<ComparisonResult>, ProgressTracker)> {
-        let results = self.execute(environments, routes).await?;
-        let progress = ProgressTracker::new(results.len());
-        Ok((results, progress))
+        let progress = ProgressTracker::new(self.mock_results.len());
+        Ok(crate::types::ExecutionResult::new(
+            self.mock_results.clone(),
+            progress,
+            Vec::new() // No errors in mock
+        ))
     }
 }
 
