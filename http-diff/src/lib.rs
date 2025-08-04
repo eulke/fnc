@@ -10,7 +10,7 @@ pub mod types;
 
 // Shared utility modules
 pub mod url_builder;
-pub mod formatter;
+pub mod utils;
 
 // Main functionality modules
 pub mod client;
@@ -37,7 +37,7 @@ pub use error::{HttpDiffError, Result};
 
 // Re-export utility modules for advanced usage
 pub use url_builder::UrlBuilder;
-pub use formatter::{TextFormatter, FormatterConfig, DiffStyle};
+pub use utils::text;
 
 /// Execute HTTP diff testing with the given configuration
 pub async fn run_http_diff(
@@ -97,10 +97,9 @@ mod tests {
     /// Test that shared utilities work
     #[test]
     fn test_shared_utilities() {
-        // Test formatter utilities
-        use formatter::{shell, text};
+        // Test text utilities
+        use crate::utils::text;
         
-        assert_eq!(shell::escape_argument("simple"), "simple");
         assert_eq!(text::line_count("line1\nline2"), 2);
         
         // Test table builder

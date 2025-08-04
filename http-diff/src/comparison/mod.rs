@@ -142,10 +142,6 @@ impl ResponseComparator {
         self.compare_headers
     }
 
-    /// Calculate similarity score between two responses
-    pub fn calculate_similarity(&self, response1: &HttpResponse, response2: &HttpResponse) -> f64 {
-        validator::SimilarityCalculator::calculate_response_similarity(response1, response2)
-    }
 }
 
 impl Default for ResponseComparator {
@@ -156,7 +152,6 @@ impl Default for ResponseComparator {
 
 // Re-export key types for convenience
 pub use analyzer::{HeaderDiff, BodyDiff};
-pub use validator::SimilarityCalculator;
 
 #[cfg(test)]
 mod tests {
@@ -274,17 +269,6 @@ mod tests {
         assert_eq!(side_by_side_comparator.diff_view_style(), DiffViewStyle::SideBySide);
     }
 
-    #[test]
-    fn test_similarity_calculation() {
-        let comparator = ResponseComparator::new();
-
-        let response1 = create_test_response(200, "hello world");
-        let response2 = create_test_response(200, "hello world");
-        let response3 = create_test_response(404, "error");
-
-        assert_eq!(comparator.calculate_similarity(&response1, &response2), 1.0);
-        assert!(comparator.calculate_similarity(&response1, &response3) < 1.0);
-    }
 
     #[test]
     fn test_error_response_handling() {

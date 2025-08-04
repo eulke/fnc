@@ -2,7 +2,7 @@
 
 use crate::types::{ComparisonResult, ErrorSummary, DifferenceCategory, DiffViewStyle};
 use crate::comparison::analyzer::{HeaderDiff, BodyDiff};
-use super::{OutputRenderer, ComparisonFormatter};
+use crate::renderers::{OutputRenderer, ComparisonFormatter};
 
 /// CLI renderer that produces the original colored terminal output
 pub struct CliRenderer {

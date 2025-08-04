@@ -5,7 +5,6 @@
 
 use crate::config::{HttpDiffConfig, Route, UserData};
 use crate::error::Result;
-use crate::formatter::shell;
 use crate::url_builder::UrlBuilder;
 use crate::types::ComparisonResult;
 use crate::renderers::OutputRenderer;
@@ -70,21 +69,21 @@ impl CurlGenerator {
     ) -> Result<CurlCommand> {
         let url = UrlBuilder::new(&self.config, route, environment, user_data).build()?;
         let url_str = url.as_str();
-        let mut command = format!("curl -X {} '{}'", route.method, shell::escape_argument(url_str));
+        let mut command = format!("curl -X {} '{}'", route.method, escape_argument(url_str));
 
         // Add headers with CSV substitution and proper escaping
         let headers = crate::url_builder::resolve_headers(&self.config, route, environment, user_data)?;
         for (key, value) in headers {
             command.push_str(&format!(" \\\n  -H '{}: {}'", 
-                shell::escape_argument(&key), 
-                shell::escape_argument(&value)
+                escape_argument(&key), 
+                escape_argument(&value)
             ));
         }
 
         // Add body with CSV substitution and proper escaping
         if let Some(body) = &route.body {
             let substituted_body = user_data.substitute_placeholders(body, false, false)?;
-            let escaped_body = shell::escape_argument(&substituted_body);
+            let escaped_body = escape_argument(&substituted_body);
             command.push_str(&format!(" \\\n  -d '{}'", escaped_body));
         }
 
@@ -178,6 +177,33 @@ impl CurlGenerator {
     }
 
 }
+
+/// Shell escaping utilities for curl command generation
+mod shell_utils {
+    /// Escape shell arguments to handle special characters properly
+    pub(super) fn escape_argument(arg: &str) -> String {
+        // Handle single quotes by replacing them with '"'"'
+        // This closes the current quote, adds an escaped quote, then opens a new quote
+        arg.replace('\'', "'\"'\"'")
+    }
+
+    /// Escape and quote a shell argument if it contains special characters
+    pub(super) fn quote_if_needed(arg: &str) -> String {
+        if needs_quoting(arg) {
+            format!("'{}'", escape_argument(arg))
+        } else {
+            arg.to_string()
+        }
+    }
+
+    /// Check if a string needs shell quoting
+    pub(super) fn needs_quoting(arg: &str) -> bool {
+        arg.chars().any(|c| matches!(c, ' ' | '\t' | '\n' | '\'' | '"' | '\\' | '|' | '&' | ';' | '(' | ')' | '<' | '>' | '`' | '$'))
+    }
+}
+
+// Re-export shell utilities at module level for internal use
+use shell_utils::escape_argument;
 
 #[cfg(test)]
 mod tests {
