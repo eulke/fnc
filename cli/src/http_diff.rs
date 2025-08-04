@@ -7,6 +7,8 @@ use http_diff::{
     config::{ensure_config_files_exist, load_user_data, HttpDiffConfig},
     CurlGenerator,
     TestRunner,
+    CliRenderer,
+    OutputRenderer,
 };
 use indicatif::{ProgressBar, ProgressStyle};
 use std::fs;
@@ -187,7 +189,7 @@ async fn execute_async(args: HttpDiffArgs) -> Result<()> {
     let runner = TestRunner::with_comparator_settings(
         config.clone(),
         args.include_headers,
-        diff_view_style,
+        diff_view_style.clone(),
     ).map_err(|e| {
         CliError::Other(format!("Failed to initialize test runner: {}", e))
     })?;
@@ -285,7 +287,12 @@ async fn execute_async(args: HttpDiffArgs) -> Result<()> {
 
     // Display summary
     ui::section_header("Test Results Summary");
-    println!("{}", CurlGenerator::format_comparison_results(&results, args.include_errors));
+    let renderer = if args.include_errors {
+        CliRenderer::new().with_diff_style(diff_view_style.clone())
+    } else {
+        CliRenderer::without_errors().with_diff_style(diff_view_style)
+    };
+    println!("{}", renderer.render(&results));
 
     // Show next steps if there are differences
     if different_count > 0 {

@@ -15,8 +15,10 @@ pub trait OutputRenderer {
 pub mod cli;
 pub mod json;
 pub mod html;
+pub mod comparison_formatter;
 
 // Re-exports for convenience
 pub use cli::CliRenderer;
 pub use json::JsonRenderer;
 pub use html::HtmlRenderer;
+pub use comparison_formatter::ComparisonFormatter;

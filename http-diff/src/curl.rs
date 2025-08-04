@@ -176,6 +176,7 @@ impl CurlGenerator {
         };
         renderer.render(results)
     }
+
 }
 
 #[cfg(test)]

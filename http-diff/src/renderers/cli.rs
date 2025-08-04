@@ -1,12 +1,17 @@
 //! CLI renderer for terminal output with colors and formatting
 
-use crate::types::{ComparisonResult, ErrorSummary};
-use super::OutputRenderer;
+use crate::types::{ComparisonResult, ErrorSummary, DifferenceCategory, DiffViewStyle};
+use crate::comparison::analyzer::{HeaderDiff, BodyDiff};
+use super::{OutputRenderer, ComparisonFormatter};
 
 /// CLI renderer that produces the original colored terminal output
 pub struct CliRenderer {
     /// Whether to include error analysis in output
     pub include_errors: bool,
+    /// Comparison formatter for diff output
+    formatter: ComparisonFormatter,
+    /// Default diff view style to use
+    diff_style: DiffViewStyle,
 }
 
 impl CliRenderer {
@@ -14,6 +19,8 @@ impl CliRenderer {
     pub fn new() -> Self {
         Self {
             include_errors: true,
+            formatter: ComparisonFormatter::new(),
+            diff_style: DiffViewStyle::Unified,
         }
     }
 
@@ -21,7 +28,15 @@ impl CliRenderer {
     pub fn without_errors() -> Self {
         Self {
             include_errors: false,
+            formatter: ComparisonFormatter::new(),
+            diff_style: DiffViewStyle::Unified,
         }
+    }
+
+    /// Create a CLI renderer with custom diff style
+    pub fn with_diff_style(mut self, diff_style: DiffViewStyle) -> Self {
+        self.diff_style = diff_style;
+        self
     }
 }
 
@@ -33,12 +48,12 @@ impl Default for CliRenderer {
 
 impl OutputRenderer for CliRenderer {
     fn render(&self, results: &[ComparisonResult]) -> String {
-        format_comparison_results(results, self.include_errors)
+        format_comparison_results(results, self.include_errors, &self.formatter, self.diff_style.clone())
     }
 }
 
 /// Format comparison results for CLI display
-fn format_comparison_results(results: &[ComparisonResult], include_errors: bool) -> String {
+fn format_comparison_results(results: &[ComparisonResult], include_errors: bool, formatter: &ComparisonFormatter, diff_style: DiffViewStyle) -> String {
     let mut output = String::new();
     
     let total_tests = results.len();
@@ -76,7 +91,7 @@ fn format_comparison_results(results: &[ComparisonResult], include_errors: bool)
         output.push_str("\nDIFFERENCES FOUND\n");
         output.push_str("═════════════════\n");
         for result in results.iter().filter(|r| !r.is_identical && !r.has_errors) {
-            output.push_str(&format_route_group(result));
+            output.push_str(&format_route_group(result, formatter, diff_style.clone()));
         }
     } else if identical_count == total_tests {
         output.push_str("\n✅ All responses are identical across environments!");
@@ -86,7 +101,7 @@ fn format_comparison_results(results: &[ComparisonResult], include_errors: bool)
 }
 
 /// Format route differences with improved visual grouping
-fn format_route_group(result: &ComparisonResult) -> String {
+fn format_route_group(result: &ComparisonResult, formatter: &ComparisonFormatter, diff_style: DiffViewStyle) -> String {
     let mut output = String::new();
     
     // Format user context more concisely
@@ -103,20 +118,50 @@ fn format_route_group(result: &ComparisonResult) -> String {
     let route_header = format!("📍 Route: {} | User: {}", result.route_name, user_context);
     output.push_str(&format!("{}\n", route_header));
     
-    // Add detailed diff output if available
-    for difference in &result.differences {
-        if let Some(diff_output) = &difference.diff_output {
-            output.push('\n');
-            output.push_str(diff_output);
-            output.push('\n');
-        } else if !difference.description.is_empty() {
-            // Show at least the description if no diff output is available
+    // Add detailed diff output - deserialize raw data and format it
+    let env_names: Vec<String> = result.responses.keys().cloned().collect();
+    if env_names.len() >= 2 {
+        let env1 = &env_names[0];
+        let env2 = &env_names[1];
+        
+        for difference in &result.differences {
             let icon = match difference.category {
-                crate::types::DifferenceCategory::Status => "🚨",
-                crate::types::DifferenceCategory::Headers => "📝",
-                crate::types::DifferenceCategory::Body => "📄",
+                DifferenceCategory::Status => "🚨",
+                DifferenceCategory::Headers => "📝", 
+                DifferenceCategory::Body => "📄",
             };
-            output.push_str(&format!("  {} {}\n", icon, difference.description));
+            
+            if let Some(diff_data) = &difference.diff_output {
+                output.push('\n');
+                
+                match difference.category {
+                    DifferenceCategory::Headers => {
+                        // Deserialize header diff data and format it
+                        if let Ok(header_diffs) = serde_json::from_str::<Vec<HeaderDiff>>(diff_data) {
+                            let formatted_diff = formatter.format_header_differences(&header_diffs, env1, env2, diff_style.clone());
+                            output.push_str(&format!("{} Header Differences:\n{}\n", icon, formatted_diff));
+                        } else {
+                            output.push_str(&format!("  {} {}\n", icon, difference.description));
+                        }
+                    }
+                    DifferenceCategory::Body => {
+                        // Deserialize body diff data and format it
+                        if let Ok(body_diff) = serde_json::from_str::<BodyDiff>(diff_data) {
+                            let formatted_diff = formatter.format_body_difference(&body_diff, env1, env2, diff_style.clone());
+                            output.push_str(&format!("{} Body Differences:\n{}\n", icon, formatted_diff));
+                        } else {
+                            output.push_str(&format!("  {} {}\n", icon, difference.description));
+                        }
+                    }
+                    DifferenceCategory::Status => {
+                        // Status differences don't need special formatting
+                        output.push_str(&format!("  {} {}\n", icon, difference.description));
+                    }
+                }
+            } else if !difference.description.is_empty() {
+                // Show at least the description if no diff output is available
+                output.push_str(&format!("  {} {}\n", icon, difference.description));
+            }
         }
     }
     

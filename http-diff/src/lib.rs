@@ -16,7 +16,7 @@ pub mod formatter;
 // Main functionality modules
 pub mod client;
 pub mod runner;
-pub mod comparator;
+pub mod comparison;
 pub mod curl;
 pub mod documentation;
 pub mod error_analysis;
@@ -30,10 +30,10 @@ pub use types::{
 };
 pub use client::HttpClient;
 pub use runner::{TestRunner, run_http_diff_concurrent};
-pub use comparator::ResponseComparator;
+pub use comparison::ResponseComparator;
 pub use curl::{CurlGenerator, CurlCommand};
 pub use documentation::generate_request_documentation;
-pub use renderers::{OutputRenderer, CliRenderer, JsonRenderer, HtmlRenderer};
+pub use renderers::{OutputRenderer, CliRenderer, JsonRenderer, HtmlRenderer, ComparisonFormatter};
 pub use error::{HttpDiffError, Result};
 
 // Re-export utility modules for advanced usage

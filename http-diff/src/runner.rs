@@ -1,5 +1,5 @@
 use crate::client::HttpClient;
-use crate::comparator::ResponseComparator;
+use crate::comparison::ResponseComparator;
 use crate::types::ComparisonResult;
 use crate::config::{HttpDiffConfig, load_user_data};
 use crate::error::{Result, HttpDiffError};
