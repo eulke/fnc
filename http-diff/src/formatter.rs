@@ -102,7 +102,7 @@ impl TextFormatter {
         let size2 = text2.len();
 
         // Use TableBuilder for consistent formatting
-        use crate::table_builder::TableBuilder;
+        use crate::renderers::table::TableBuilder;
         
         let mut table = TableBuilder::new();
         table.headers(vec!["Environment", "Size (bytes)", "Lines"]);
@@ -153,7 +153,7 @@ impl TextFormatter {
         label1: &str,
         label2: &str,
     ) -> String {
-                use crate::table_builder::{TableBuilder, TableStyle, cells};
+                use crate::renderers::table::{TableBuilder, TableStyle, cells};
         use prettydiff::{diff_slice, basic::DiffOp};
 
         // Create table with diff styling (no horizontal lines between rows)

@@ -1,7 +1,7 @@
 /// Comparison-specific formatting for diff output - handles presentation of differences
 use crate::comparison::analyzer::{HeaderDiff, BodyDiff};
 use crate::types::DiffViewStyle;
-use crate::table_builder::{TableBuilder, TableStyle, cells};
+use super::table::{TableBuilder, TableStyle, cells};
 use crate::formatter::TextFormatter;
 
 /// Formatter for comparison differences - handles all presentation logic

@@ -10,7 +10,6 @@ pub mod types;
 
 // Shared utility modules
 pub mod url_builder;
-pub mod table_builder;
 pub mod formatter;
 
 // Main functionality modules
@@ -33,12 +32,11 @@ pub use runner::{TestRunner, run_http_diff_concurrent};
 pub use comparison::ResponseComparator;
 pub use curl::{CurlGenerator, CurlCommand};
 pub use documentation::generate_request_documentation;
-pub use renderers::{OutputRenderer, CliRenderer, JsonRenderer, HtmlRenderer, ComparisonFormatter};
+pub use renderers::{OutputRenderer, CliRenderer, JsonRenderer, HtmlRenderer, ComparisonFormatter, TableBuilder, TableStyle};
 pub use error::{HttpDiffError, Result};
 
 // Re-export utility modules for advanced usage
 pub use url_builder::UrlBuilder;
-pub use table_builder::{TableBuilder, TableStyle};
 pub use formatter::{TextFormatter, FormatterConfig, DiffStyle};
 
 /// Execute HTTP diff testing with the given configuration
