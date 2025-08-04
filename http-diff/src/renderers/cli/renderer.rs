@@ -2,7 +2,9 @@
 
 use crate::types::{ComparisonResult, ErrorSummary, DifferenceCategory, DiffViewStyle};
 use crate::comparison::analyzer::{HeaderDiff, BodyDiff};
-use crate::renderers::{OutputRenderer, ComparisonFormatter};
+use crate::renderers::OutputRenderer;
+use super::{ComparisonFormatter, ErrorRenderer};
+use crate::analysis::{ErrorAnalyzer, ErrorClassifierImpl};
 
 /// CLI renderer that produces the original colored terminal output
 pub struct CliRenderer {
@@ -81,10 +83,13 @@ fn format_comparison_results(results: &[ComparisonResult], include_errors: bool,
         output.push_str("No test scenarios found\n");
     }
     
-    // Generate error summary and add error analysis if there are failures AND include_errors is true
+    // Generate error analysis using clean business logic + presentation separation
     let error_summary = ErrorSummary::from_comparison_results(results);
     if error_summary.failed_requests > 0 && include_errors {
-        output.push_str(&crate::error_analysis::format_error_analysis(&error_summary, results));
+        let error_analyzer = ErrorClassifierImpl::new();
+        let error_analysis = error_analyzer.analyze_errors(results);
+        let error_renderer = ErrorRenderer::new();
+        output.push_str(&error_renderer.render_error_analysis(&error_analysis));
     }
 
     if different_count > 0 {

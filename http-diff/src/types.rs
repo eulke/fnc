@@ -150,14 +150,6 @@ impl DifferenceCategory {
         }
     }
 
-    /// Get an emoji icon for the category
-    pub fn icon(&self) -> &'static str {
-        match self {
-            DifferenceCategory::Status => "🚨",
-            DifferenceCategory::Headers => "📝",
-            DifferenceCategory::Body => "📄",
-        }
-    }
 }
 
 /// Error severity classification for failed requests
@@ -416,10 +408,6 @@ mod tests {
         assert_eq!(DifferenceCategory::Status.name(), "Status Code");
         assert_eq!(DifferenceCategory::Headers.name(), "Headers");
         assert_eq!(DifferenceCategory::Body.name(), "Response Body");
-
-        assert_eq!(DifferenceCategory::Status.icon(), "🚨");
-        assert_eq!(DifferenceCategory::Headers.icon(), "📝");
-        assert_eq!(DifferenceCategory::Body.icon(), "📄");
     }
 
 } 

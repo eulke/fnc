@@ -2,7 +2,7 @@
 use crate::comparison::analyzer::{HeaderDiff, BodyDiff};
 use crate::types::DiffViewStyle;
 use super::table::{TableBuilder, TableStyle, cells};
-use super::cli::text_formatter::TextFormatter;
+use super::text_formatter::TextFormatter;
 
 /// Formatter for comparison differences - handles all presentation logic
 pub struct ComparisonFormatter {

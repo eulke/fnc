@@ -16,11 +16,13 @@ pub mod http;
 pub mod execution;
 pub mod validation;
 
-// Existing functionality modules
+// Business logic modules
+pub mod analysis;
 pub mod comparison;
 pub mod curl;
 pub mod documentation;
-pub mod error_analysis;
+
+// Presentation modules
 pub mod renderers;
 
 // Shared utility modules
@@ -39,6 +41,9 @@ pub use traits::{
     ErrorCollector, UserDataProvider
 };
 
+// Re-export analysis types
+pub use analysis::{ErrorAnalyzer, ErrorAnalysis, ErrorGroup, RouteError, ErrorClassifierImpl};
+
 // Re-export main types
 pub use config::{HttpDiffConfig, HttpDiffConfigBuilder, Environment, Route, UserData};
 pub use types::{
@@ -53,7 +58,8 @@ pub use validation::ResponseValidatorImpl;
 pub use comparison::ResponseComparator as DefaultResponseComparator;
 
 // Re-export renderers
-pub use renderers::{OutputRenderer, CliRenderer, ComparisonFormatter, TableBuilder, TableStyle};
+pub use renderers::{OutputRenderer, CliRenderer};
+pub use renderers::cli::{ComparisonFormatter, ErrorRenderer, TableBuilder, TableStyle};
 
 // Re-export error types
 pub use error::{HttpDiffError, Result};

@@ -4,7 +4,7 @@
 //! with configurable formatting options.
 
 use std::fmt::Write;
-use crate::renderers::table::{TableBuilder, TableStyle, cells};
+use super::table::{TableBuilder, TableStyle, cells};
 
 /// Configuration for text formatting operations
 #[derive(Debug, Clone)]
