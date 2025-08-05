@@ -17,6 +17,7 @@ pub struct ActionFeedback {
     pub message: String,
     pub feedback_type: FeedbackType,
     pub timestamp: std::time::Instant,
+    pub is_brief: bool,
 }
 
 /// Type of feedback to show different colors/styles
@@ -534,11 +535,11 @@ impl TuiApp {
         match self.focused_panel {
             FocusedPanel::Environments => {
                 self.toggle_environment(self.selected_env_index);
-                self.show_feedback("Environment selection toggled", FeedbackType::Info);
+                // No intrusive feedback for basic selection toggles
             }
             FocusedPanel::Routes => {
                 self.toggle_route(self.selected_route_index);
-                self.show_feedback("Route selection toggled", FeedbackType::Info);
+                // No intrusive feedback for basic selection toggles
             }
             FocusedPanel::Actions => {
                 // Handle action panel interactions
@@ -553,13 +554,25 @@ impl TuiApp {
             message: message.to_string(),
             feedback_type,
             timestamp: std::time::Instant::now(),
+            is_brief: false,
+        });
+    }
+    
+    /// Show brief feedback message (1.5 seconds instead of 3)
+    pub fn show_brief_feedback(&mut self, message: &str, feedback_type: FeedbackType) {
+        self.action_feedback = Some(ActionFeedback {
+            message: message.to_string(),
+            feedback_type,
+            timestamp: std::time::Instant::now(),
+            is_brief: true,
         });
     }
 
     /// Clear old feedback messages
     pub fn clear_old_feedback(&mut self) {
         if let Some(ref feedback) = self.action_feedback {
-            if feedback.timestamp.elapsed().as_secs() > 3 {
+            let duration_limit = if feedback.is_brief { 1 } else { 3 };
+            if feedback.timestamp.elapsed().as_secs() > duration_limit {
                 self.action_feedback = None;
             }
         }
@@ -575,11 +588,13 @@ impl TuiApp {
         match self.focused_panel {
             FocusedPanel::Environments => {
                 self.selected_environments = self.available_environments.clone();
-                self.show_feedback("All environments selected", FeedbackType::Success);
+                // Brief feedback for bulk operations
+                self.show_brief_feedback("All environments selected", FeedbackType::Success);
             }
             FocusedPanel::Routes => {
                 self.selected_routes = self.available_routes.clone();
-                self.show_feedback("All routes selected", FeedbackType::Success);
+                // Brief feedback for bulk operations
+                self.show_brief_feedback("All routes selected", FeedbackType::Success);
             }
             FocusedPanel::Actions => {
                 // No select all for actions
@@ -592,11 +607,13 @@ impl TuiApp {
         match self.focused_panel {
             FocusedPanel::Environments => {
                 self.selected_environments.clear();
-                self.show_feedback("All environments cleared", FeedbackType::Warning);
+                // Brief feedback for bulk operations
+                self.show_brief_feedback("All environments cleared", FeedbackType::Warning);
             }
             FocusedPanel::Routes => {
                 self.selected_routes.clear();
-                self.show_feedback("All routes cleared", FeedbackType::Warning);
+                // Brief feedback for bulk operations
+                self.show_brief_feedback("All routes cleared", FeedbackType::Warning);
             }
             FocusedPanel::Actions => {
                 // No clear all for actions

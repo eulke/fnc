@@ -348,6 +348,7 @@ fn draw_configuration_view(f: &mut Frame, app: &TuiApp, area: Rect) {
         .constraints([
             Constraint::Min(6),        // Main selection panels
             Constraint::Length(4),     // Action buttons
+            Constraint::Length(1),     // Selection status bar
         ])
         .split(area);
 
@@ -364,6 +365,9 @@ fn draw_configuration_view(f: &mut Frame, app: &TuiApp, area: Rect) {
     
     // Action buttons panel
     draw_action_buttons(f, app, main_chunks[1]);
+    
+    // Selection status bar
+    draw_selection_status_bar(f, app, main_chunks[2]);
 
     // Show error message if present
     if let Some(ref error) = app.error_message {
@@ -385,17 +389,31 @@ fn draw_environment_selection_enhanced(f: &mut Frame, app: &TuiApp, area: Rect) 
             let checkbox = if is_selected { UiSymbols::SELECTED } else { UiSymbols::UNSELECTED };
             let cursor = if is_cursor { UiSymbols::FOCUSED_INDICATOR } else { UiSymbols::UNFOCUSED_INDICATOR };
             
+            // Enhanced styling with better visual feedback
             let mut style = if is_selected {
-                TuiTheme::selected_style()
+                TuiTheme::selected_style().add_modifier(Modifier::BOLD)
             } else {
                 TuiTheme::primary_text_style()
             };
             
             if is_cursor {
-                style = TuiTheme::focused_style();
+                style = if is_selected {
+                    // Selected + focused: bright green with bold
+                    TuiTheme::focused_style().add_modifier(Modifier::BOLD)
+                } else {
+                    // Just focused: highlighted
+                    TuiTheme::focused_style()
+                };
             }
             
-            ratatui::widgets::ListItem::new(format!("{} {} {}", cursor, checkbox, env))
+            // Add visual emphasis for selected items
+            let display_text = if is_selected {
+                format!("{} {} {} ✓", cursor, checkbox, env)
+            } else {
+                format!("{} {} {}", cursor, checkbox, env)
+            };
+            
+            ratatui::widgets::ListItem::new(display_text)
                 .style(style)
         })
         .collect();
@@ -428,17 +446,31 @@ fn draw_route_selection_enhanced(f: &mut Frame, app: &TuiApp, area: Rect) {
             let checkbox = if is_selected { UiSymbols::SELECTED } else { UiSymbols::UNSELECTED };
             let cursor = if is_cursor { UiSymbols::FOCUSED_INDICATOR } else { UiSymbols::UNFOCUSED_INDICATOR };
             
+            // Enhanced styling with better visual feedback
             let mut style = if is_selected {
-                TuiTheme::selected_style()
+                TuiTheme::selected_style().add_modifier(Modifier::BOLD)
             } else {
                 TuiTheme::primary_text_style()
             };
             
             if is_cursor {
-                style = TuiTheme::focused_style();
+                style = if is_selected {
+                    // Selected + focused: bright green with bold
+                    TuiTheme::focused_style().add_modifier(Modifier::BOLD)
+                } else {
+                    // Just focused: highlighted
+                    TuiTheme::focused_style()
+                };
             }
             
-            ratatui::widgets::ListItem::new(format!("{} {} {}", cursor, checkbox, route))
+            // Add visual emphasis for selected items
+            let display_text = if is_selected {
+                format!("{} {} {} ✓", cursor, checkbox, route)
+            } else {
+                format!("{} {} {}", cursor, checkbox, route)
+            };
+            
+            ratatui::widgets::ListItem::new(display_text)
                 .style(style)
         })
         .collect();
@@ -687,4 +719,33 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
             Constraint::Percentage((100 - percent_x) / 2),
         ])
         .split(popup_layout[1])[1]
+}
+
+/// Draw selection status bar showing real-time selection counts
+fn draw_selection_status_bar(f: &mut Frame, app: &TuiApp, area: Rect) {
+    let env_selected = app.selected_environments.len();
+    let env_total = app.available_environments.len();
+    let route_selected = app.selected_routes.len();
+    let route_total = app.available_routes.len();
+    
+    // Create selection status
+    let selection_info = format!(
+        "{} Environments: {}/{} selected | {} Routes: {}/{} selected",
+        UiSymbols::LIST, env_selected, env_total,
+        UiSymbols::ROUTE, route_selected, route_total
+    );
+    
+    // Selection status styling
+    let selection_style = if env_selected > 0 && route_selected > 0 {
+        TuiTheme::success_style()
+    } else {
+        TuiTheme::warning_style()
+    };
+    
+    let selection_bar = Paragraph::new(selection_info)
+        .style(selection_style.add_modifier(Modifier::BOLD))
+        .alignment(Alignment::Center)
+        .block(Block::default().borders(Borders::TOP));
+    
+    f.render_widget(selection_bar, area);
 }
