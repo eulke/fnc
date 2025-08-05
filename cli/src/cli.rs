@@ -124,6 +124,14 @@ pub enum Commands {
         /// Generate executive summary report (format auto-detected from file extension)
         #[clap(long)]
         report: Option<String>,
+
+        /// Force CLI output instead of TUI (when stdout is a TTY)
+        #[clap(long, default_value_t = false)]
+        no_tui: bool,
+
+        /// Force TUI mode even when output is redirected
+        #[clap(long, default_value_t = false)]
+        force_tui: bool,
     },
 }
 

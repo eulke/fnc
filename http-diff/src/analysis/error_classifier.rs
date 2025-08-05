@@ -131,6 +131,18 @@ impl ErrorAnalyzer for ErrorClassifierImpl {
             "UnhandledError".to_string()
         } else if body.contains("ValidationError") || body.contains("validation") {
             "ValidationError".to_string()
+        // Connection and network error patterns
+        } else if body.contains("error sending request") || body.contains("connection refused") || 
+                  body.contains("Connection refused") || body.contains("connect refused") {
+            "ConnectionError".to_string()
+        } else if body.contains("timeout") || body.contains("timed out") || body.contains("Timeout") {
+            "TimeoutError".to_string()
+        } else if body.contains("dns") || body.contains("DNS") || body.contains("name resolution") ||
+                  body.contains("Name resolution") || body.contains("failed to resolve") {
+            "DNSError".to_string()
+        } else if body.contains("certificate") || body.contains("Certificate") || body.contains("SSL") ||
+                  body.contains("TLS") || body.contains("ssl") || body.contains("tls") {
+            "CertificateError".to_string()
         } else {
             "Unknown".to_string()
         }
@@ -141,7 +153,8 @@ impl ErrorAnalyzer for ErrorClassifierImpl {
         
         match (error_type, max_status) {
             (_, status) if *status >= 500 => ErrorSeverity::Critical,
-            ("DependencyError", _) | (_, 424 | 502 | 503) => ErrorSeverity::Dependency,
+            ("DependencyError", _) | ("ConnectionError", _) | ("TimeoutError", _) | 
+            ("DNSError", _) | ("CertificateError", _) | (_, 424 | 502 | 503 | 504) => ErrorSeverity::Dependency,
             (_, status) if *status >= 400 => ErrorSeverity::Client,
             _ => ErrorSeverity::Client, // Default for all other cases
         }
@@ -150,9 +163,15 @@ impl ErrorAnalyzer for ErrorClassifierImpl {
     fn get_debugging_suggestion(&self, error_type: &str, status: u16) -> Option<String> {
         match (error_type, status) {
             ("DependencyError", 424) => Some("Check dependent service health and connectivity".to_string()),
+            ("ConnectionError", 503) => Some("Check if the service is running and accessible at the specified host:port".to_string()),
+            ("TimeoutError", 504) => Some("Service is responding slowly - check service health and network connectivity".to_string()),
+            ("DNSError", 502) => Some("DNS resolution failed - verify the hostname is correct and DNS is working".to_string()),
+            ("CertificateError", 502) => Some("SSL/TLS certificate issue - check certificate validity and trust chain".to_string()),
             ("UnhandledError", 500) => Some("Review request payload structure and required fields".to_string()),
             ("ValidationError", 400) => Some("Verify request parameters and data format".to_string()),
             (_, 500) => Some("Check application logs for internal errors".to_string()),
+            (_, 503) => Some("Service is unavailable - verify it's running and not overloaded".to_string()),
+            (_, 504) => Some("Request timed out - service may be overloaded or network issues".to_string()),
             (_, 424) => Some("Verify dependent services are operational".to_string()),
             _ => None,
         }

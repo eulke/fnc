@@ -49,6 +49,8 @@ fn main() {
             verbose,
             output_file,
             report,
+            no_tui,
+            force_tui,
         } => http_diff::execute(http_diff::HttpDiffArgs {
             environments,
             routes,
@@ -61,6 +63,8 @@ fn main() {
             verbose,
             output_file,
             report_file: report,
+            no_tui,
+            force_tui,
         }),
     };
 

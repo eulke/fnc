@@ -33,50 +33,52 @@ pub struct HttpDiffArgs {
     pub verbose: bool,
     pub output_file: String,
     pub report_file: Option<String>,
+    pub no_tui: bool,
+    pub force_tui: bool,
 }
 
-/// CLI error collector that outputs errors with emoji formatting to stderr
+/// Silent CLI error collector that doesn't print during progress bar execution
 pub struct CliErrorCollector {
-    verbose: bool,
+    _verbose: bool,
 }
 
 impl CliErrorCollector {
     pub fn new(verbose: bool) -> Self {
-        Self { verbose }
+        Self { _verbose: verbose }
     }
 }
 
 impl ErrorCollector for CliErrorCollector {
-    fn record_request_error(&self, route: &str, environment: &str, error: String) {
-        eprintln!("⚠️  Request failed for route '{}' in environment '{}': {}", route, environment, error);
-        if self.verbose {
-            eprintln!("    This error was recorded and will be included in the final error summary.");
-        }
+    fn record_request_error(&self, _route: &str, _environment: &str, _error: String) {
+        // Do nothing - errors will be collected by the framework and shown after progress completes
     }
 
-    fn record_comparison_error(&self, route: &str, error: String) {
-        eprintln!("⚠️  Comparison failed for route '{}': {}", route, error);
-        if self.verbose {
-            eprintln!("    This error was recorded and will be included in the final error summary.");
-        }
+    fn record_comparison_error(&self, _route: &str, _error: String) {
+        // Do nothing - errors will be collected by the framework and shown after progress completes
     }
 
-    fn record_execution_error(&self, error: String) {
-        eprintln!("❌ Request task failed: {}", error);
-        if self.verbose {
-            eprintln!("    This error was recorded and will be included in the final error summary.");
-        }
+    fn record_execution_error(&self, _error: String) {
+        // Do nothing - errors will be collected by the framework and shown after progress completes
     }
 }
 
-pub fn execute(args: HttpDiffArgs) -> Result<()> {
-    // Create async runtime for HTTP operations
-    let rt = Runtime::new().map_err(|e| {
-        CliError::Other(format!("Failed to create async runtime: {}", e))
-    })?;
 
-    rt.block_on(execute_async(args.clone()))?;
-    Ok(())
+pub fn execute(args: HttpDiffArgs) -> Result<()> {
+    // Determine whether to use TUI or CLI based on arguments and environment
+    let use_tui = should_use_tui(&args);
+    
+    if use_tui {
+        // Launch TUI immediately - it will handle the complete workflow
+        launch_tui_workflow(args)
+    } else {
+        // Create async runtime for CLI-only execution
+        let rt = Runtime::new().map_err(|e| {
+            CliError::Other(format!("Failed to create async runtime: {}", e))
+        })?;
+
+        rt.block_on(execute_async(args.clone()))?;
+        Ok(())
+    }
 }
 
 async fn execute_async(args: HttpDiffArgs) -> Result<()> {
@@ -261,10 +263,10 @@ async fn execute_async(args: HttpDiffArgs) -> Result<()> {
         ui::info_message(&format!("Diff view style: {}", diff_view_name));
     }
 
-    // Create progress bar for HTTP requests
+    // Create progress bar for HTTP requests with clean, simple template
     let pb = Arc::new(ProgressBar::new(total_tests as u64));
     let style = ProgressStyle::with_template(
-        "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} {msg} (ETA: {eta})"
+        "{spinner} [{elapsed}] [{bar:40}] {pos}/{len} {msg}"
     ).unwrap_or_else(|_| ProgressStyle::default_bar())
     .progress_chars("█▉▊▋▌▍▎▏  ");
     pb.set_style(style);
@@ -288,6 +290,8 @@ async fn execute_async(args: HttpDiffArgs) -> Result<()> {
     })?;
     
     pb.finish_with_message("✅ All HTTP requests completed!");
+    
+    
     progress.complete_step();
 
     // Analyze and display results
@@ -311,7 +315,6 @@ async fn execute_async(args: HttpDiffArgs) -> Result<()> {
         }
     }
     
-    let results = execution_result.comparisons;
     progress.complete_step();
 
     // Generate output files
@@ -320,7 +323,7 @@ async fn execute_async(args: HttpDiffArgs) -> Result<()> {
     
     // Generate curl commands file
     let mut curl_commands = Vec::new();
-    for result in &results {
+    for result in &execution_result.comparisons {
         for (env_name, response) in &result.responses {
             curl_commands.push(format!(
                 "# Route: {} | Environment: {} | User: {:?}\n{}",
@@ -347,16 +350,7 @@ async fn execute_async(args: HttpDiffArgs) -> Result<()> {
 
     progress.complete();
 
-    // Display summary
-    ui::section_header("Test Results Summary");
-    let renderer = if args.include_errors {
-        CliRenderer::new().with_diff_style(diff_view_style.clone())
-    } else {
-        CliRenderer::without_errors().with_diff_style(diff_view_style)
-    };
-    println!("{}", renderer.render(&results));
-
-    // Generate executive report if requested
+    // Generate executive report if requested (do this before TUI/CLI output)
     if let Some(report_file) = &args.report_file {
         ui::status_message("Generating executive report...");
         
@@ -372,7 +366,7 @@ async fn execute_async(args: HttpDiffArgs) -> Result<()> {
             .with_context("headers_included", args.include_headers.to_string())
             .with_context("errors_included", args.include_errors.to_string());
         
-        let report_content = report_renderer.render_report(&results, &metadata);
+        let report_content = report_renderer.render_report(&execution_result.comparisons, &metadata);
         
         fs::write(report_file, report_content).map_err(|e| {
             CliError::Other(format!("Failed to write report file: {}", e))
@@ -381,20 +375,96 @@ async fn execute_async(args: HttpDiffArgs) -> Result<()> {
         ui::success_message(&format!("Executive report saved to {}", report_file));
     }
 
-    // Show next steps if there are differences
-    if different_count > 0 {
-        ui::section_header("Next Steps");
-        ui::step_message(1, "Review differences above");
-        ui::step_message(2, &format!("Use curl commands from {} to reproduce issues", args.output_file));
-        if !args.include_headers {
-            ui::step_message(3, "Re-run with --include-headers to compare headers if needed");
-        }
-        if args.report_file.is_some() {
-            ui::step_message(4, "Share the executive report with stakeholders");
+    // Determine whether to use TUI or CLI output
+    let use_tui = should_use_tui(&args);
+    
+    if use_tui {
+        // Use TUI for interactive display
+        ui::status_message("Launching interactive TUI...");
+        launch_tui(&execution_result.comparisons, &args, diff_view_style)?;
+    } else {
+        // Use CLI output
+        ui::section_header("Test Results Summary");
+        let renderer = if args.include_errors {
+            CliRenderer::new().with_diff_style(diff_view_style.clone())
+        } else {
+            CliRenderer::without_errors().with_diff_style(diff_view_style)
+        };
+        println!("{}", renderer.render(&execution_result));
+
+        // Show next steps if there are differences
+        if different_count > 0 {
+            ui::section_header("Next Steps");
+            ui::step_message(1, "Review differences above");
+            ui::step_message(2, &format!("Use curl commands from {} to reproduce issues", args.output_file));
+            if !args.include_headers {
+                ui::step_message(3, "Re-run with --include-headers to compare headers if needed");
+            }
+            if args.report_file.is_some() {
+                ui::step_message(4, "Share the executive report with stakeholders");
+            }
         }
     }
 
     Ok(())
+}
+
+/// Determine whether to use TUI or CLI based on arguments and environment
+fn should_use_tui(args: &HttpDiffArgs) -> bool {
+    // If explicitly forced to use TUI, use it
+    if args.force_tui {
+        return true;
+    }
+    
+    // If explicitly disabled, don't use TUI
+    if args.no_tui {
+        return false;
+    }
+    
+    // Use TUI by default if stdout is a TTY (terminal)
+    atty::is(atty::Stream::Stdout)
+}
+
+/// Launch the TUI workflow that handles everything from configuration to results
+fn launch_tui_workflow(args: HttpDiffArgs) -> Result<()> {
+    use http_diff::{TuiRenderer, InteractiveRenderer};
+    
+    // Create a TUI renderer that will handle the complete workflow
+    let tui_renderer = TuiRenderer::new()
+        .with_diff_style(convert_diff_view_style(args.diff_view.clone()))
+        .with_headers(args.include_headers)
+        .with_errors(args.include_errors);
+    
+    // Run the TUI synchronously - it will handle async internally
+    tui_renderer.run_workflow(args).map_err(|e| {
+        CliError::Other(format!("TUI failed: {}", e))
+    })
+}
+
+/// Launch the TUI interface for interactive result viewing (legacy function for CLI mode)
+fn launch_tui(
+    results: &[http_diff::ComparisonResult],
+    args: &HttpDiffArgs,
+    diff_view_style: http_diff::DiffViewStyle,
+) -> Result<()> {
+    use http_diff::{TuiRenderer, InteractiveRenderer};
+    
+    let tui_renderer = TuiRenderer::new()
+        .with_diff_style(diff_view_style)
+        .with_headers(args.include_headers)
+        .with_errors(args.include_errors);
+    
+    tui_renderer.run_interactive(results).map_err(|e| {
+        CliError::Other(format!("TUI failed: {}", e))
+    })
+}
+
+/// Convert CLI DiffViewType to http-diff DiffViewStyle
+fn convert_diff_view_style(diff_view: crate::cli::DiffViewType) -> http_diff::DiffViewStyle {
+    match diff_view {
+        crate::cli::DiffViewType::Unified => http_diff::DiffViewStyle::Unified,
+        crate::cli::DiffViewType::SideBySide => http_diff::DiffViewStyle::SideBySide,
+    }
 }
 
 #[cfg(test)]

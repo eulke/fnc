@@ -1,10 +1,11 @@
 //! CLI renderer for terminal output with colors and formatting
 
-use crate::types::{ComparisonResult, ErrorSummary, DifferenceCategory, DiffViewStyle};
+use crate::types::{ComparisonResult, ErrorSummary, DifferenceCategory, DiffViewStyle, ExecutionResult};
 use crate::comparison::analyzer::{HeaderDiff, BodyDiff};
 use crate::renderers::OutputRenderer;
 use super::{ComparisonFormatter, ErrorRenderer};
 use crate::analysis::{ErrorAnalyzer, ErrorClassifierImpl};
+use std::collections::HashMap;
 
 /// CLI renderer that produces the original colored terminal output
 pub struct CliRenderer {
@@ -40,6 +41,27 @@ impl CliRenderer {
         self.diff_style = diff_style;
         self
     }
+    
+    /// Map execution error messages to appropriate HTTP status codes
+    fn map_execution_error_to_status_code(&self, error_message: &str) -> u16 {
+        if error_message.contains("error sending request") || error_message.contains("connection refused") ||
+           error_message.contains("Connection refused") || error_message.contains("connect refused") {
+            503 // Service Unavailable - can't connect to service
+        } else if error_message.contains("timeout") || error_message.contains("timed out") || 
+                  error_message.contains("Timeout") {
+            504 // Gateway Timeout
+        } else if error_message.contains("dns") || error_message.contains("DNS") || 
+                  error_message.contains("name resolution") || error_message.contains("Name resolution") ||
+                  error_message.contains("failed to resolve") {
+            502 // Bad Gateway - DNS resolution failed
+        } else if error_message.contains("certificate") || error_message.contains("Certificate") || 
+                  error_message.contains("SSL") || error_message.contains("TLS") || 
+                  error_message.contains("ssl") || error_message.contains("tls") {
+            502 // Bad Gateway - SSL/TLS issues
+        } else {
+            500 // Internal Server Error - generic execution failure
+        }
+    }
 }
 
 impl Default for CliRenderer {
@@ -49,8 +71,32 @@ impl Default for CliRenderer {
 }
 
 impl OutputRenderer for CliRenderer {
-    fn render(&self, results: &[ComparisonResult]) -> String {
-        format_comparison_results(results, self.include_errors, &self.formatter, self.diff_style.clone())
+    fn render(&self, execution_result: &ExecutionResult) -> String {
+        // Convert execution errors to comparison results for unified analysis
+        let mut all_results = execution_result.comparisons.clone();
+        
+        // Convert execution errors to comparison results
+        for exec_error in &execution_result.errors {
+            let mut error_result = ComparisonResult::new(
+                exec_error.route.clone(),
+                HashMap::new()
+            );
+            error_result.has_errors = true;
+            
+            // Smart status code mapping based on error type
+            let status_code = self.map_execution_error_to_status_code(&exec_error.message);
+            
+            if let Some(env) = &exec_error.environment {
+                error_result.status_codes.insert(env.clone(), status_code);
+                let mut error_bodies = HashMap::new();
+                error_bodies.insert(env.clone(), exec_error.message.clone());
+                error_result.error_bodies = Some(error_bodies);
+            }
+            
+            all_results.push(error_result);
+        }
+        
+        format_comparison_results(&all_results, self.include_errors, &self.formatter, self.diff_style.clone())
     }
 }
 

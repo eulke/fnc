@@ -32,8 +32,16 @@ comfy-table = { version = "7.1", features = ["custom_styling"] }
 chrono = { version = "0.4", features = ["serde"] }
 urlencoding = "2.1"
 
+# TUI dependencies (optional)
+ratatui = { version = "0.29", optional = true }
+crossterm = { version = "0.28", optional = true }
+
 # Testing dependencies
 [dev-dependencies]
 tokio-test = "0.4"
 wiremock = "0.6"
-tempfile = "3.8" 
+tempfile = "3.8"
+
+[features]
+default = ["tui"]
+tui = ["ratatui", "crossterm"] 

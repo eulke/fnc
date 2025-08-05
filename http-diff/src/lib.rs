@@ -58,7 +58,7 @@ pub use validation::ResponseValidatorImpl;
 pub use comparison::ResponseComparator as DefaultResponseComparator;
 
 // Re-export renderers
-pub use renderers::{OutputRenderer, CliRenderer};
+pub use renderers::{OutputRenderer, CliRenderer, TuiRenderer, InteractiveRenderer};
 pub use renderers::cli::{ComparisonFormatter, ErrorRenderer, TableBuilder, TableStyle};
 
 // Re-export error types
