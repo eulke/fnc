@@ -120,6 +120,10 @@ pub enum Commands {
         /// Save curl commands to file for debugging
         #[clap(long, default_value = "curl_commands.txt")]
         output_file: String,
+
+        /// Generate executive summary report (format auto-detected from file extension)
+        #[clap(long)]
+        report: Option<String>,
     },
 }
 

@@ -12,6 +12,7 @@ use http_diff::{
     TestRunner,
     ErrorCollector,
     ProgressTracker as HttpProgressTracker,
+    renderers::{ReportRendererFactory, ReportMetadata},
 };
 use indicatif::{ProgressBar, ProgressStyle};
 use std::fs;
@@ -31,6 +32,7 @@ pub struct HttpDiffArgs {
     pub init: bool,
     pub verbose: bool,
     pub output_file: String,
+    pub report_file: Option<String>,
 }
 
 /// CLI error collector that outputs errors with emoji formatting to stderr
@@ -275,7 +277,7 @@ async fn execute_async(args: HttpDiffArgs) -> Result<()> {
     let pb_clone = Arc::clone(&pb);
     let execution_result = runner.execute_with_data(
         &user_data,
-        env_list,
+        env_list.clone(),
         route_list,
         Some(Box::new(error_collector)),
         Some(Box::new(move |p: &HttpProgressTracker| {
@@ -314,7 +316,7 @@ async fn execute_async(args: HttpDiffArgs) -> Result<()> {
 
     // Generate output files
     progress.start_step();
-    let _curl_generator = CurlGenerator::new(config);
+    let _curl_generator = CurlGenerator::new(config.clone());
     
     // Generate curl commands file
     let mut curl_commands = Vec::new();
@@ -354,6 +356,31 @@ async fn execute_async(args: HttpDiffArgs) -> Result<()> {
     };
     println!("{}", renderer.render(&results));
 
+    // Generate executive report if requested
+    if let Some(report_file) = &args.report_file {
+        ui::status_message("Generating executive report...");
+        
+        let report_renderer = ReportRendererFactory::create_renderer(report_file);
+        let env_names: Vec<String> = env_list.unwrap_or_else(|| config.environments.keys().cloned().collect());
+        let metadata = ReportMetadata::new(env_names, total_tests)
+            .with_duration(std::time::Duration::from_secs(0)) // TODO: Track actual duration
+            .with_context("config_file", &args.config_path)
+            .with_context("diff_view", match args.diff_view {
+                crate::cli::DiffViewType::Unified => "unified",
+                crate::cli::DiffViewType::SideBySide => "side-by-side",
+            })
+            .with_context("headers_included", args.include_headers.to_string())
+            .with_context("errors_included", args.include_errors.to_string());
+        
+        let report_content = report_renderer.render_report(&results, &metadata);
+        
+        fs::write(report_file, report_content).map_err(|e| {
+            CliError::Other(format!("Failed to write report file: {}", e))
+        })?;
+        
+        ui::success_message(&format!("Executive report saved to {}", report_file));
+    }
+
     // Show next steps if there are differences
     if different_count > 0 {
         ui::section_header("Next Steps");
@@ -361,6 +388,9 @@ async fn execute_async(args: HttpDiffArgs) -> Result<()> {
         ui::step_message(2, &format!("Use curl commands from {} to reproduce issues", args.output_file));
         if !args.include_headers {
             ui::step_message(3, "Re-run with --include-headers to compare headers if needed");
+        }
+        if args.report_file.is_some() {
+            ui::step_message(4, "Share the executive report with stakeholders");
         }
     }
 

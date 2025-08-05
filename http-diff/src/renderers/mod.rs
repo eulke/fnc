@@ -13,6 +13,8 @@ pub trait OutputRenderer {
 
 // Output format modules
 pub mod cli;
+pub mod report;
 
-// Re-export main CLI renderer for convenience
+// Re-export main renderers for convenience
 pub use cli::CliRenderer;
+pub use report::{ReportRendererFactory, ReportMetadata};

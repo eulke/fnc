@@ -48,6 +48,7 @@ fn main() {
             init,
             verbose,
             output_file,
+            report,
         } => http_diff::execute(http_diff::HttpDiffArgs {
             environments,
             routes,
@@ -59,6 +60,7 @@ fn main() {
             init,
             verbose,
             output_file,
+            report_file: report,
         }),
     };
 
