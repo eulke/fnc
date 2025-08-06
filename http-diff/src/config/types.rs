@@ -1,6 +1,6 @@
+use crate::error::{HttpDiffError, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use crate::error::{HttpDiffError, Result};
 
 /// Main configuration structure for HTTP diff testing
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -63,23 +63,28 @@ pub struct UserData {
 
 impl UserData {
     /// Substitute placeholders like {userId} with actual values from CSV data
-    /// 
+    ///
     /// # Arguments
     /// * `text` - The text containing placeholders in {param_name} format
     /// * `url_encode` - Whether to URL encode the substituted values (true for paths, false for headers/body)
     /// * `strict` - If true, error on missing parameters; if false, leave unmatched placeholders unchanged
-    pub fn substitute_placeholders(&self, text: &str, url_encode: bool, strict: bool) -> Result<String> {
+    pub fn substitute_placeholders(
+        &self,
+        text: &str,
+        url_encode: bool,
+        strict: bool,
+    ) -> Result<String> {
         let mut result = text.to_string();
         let mut position = 0;
-        
+
         // Find and replace all valid {parameter} placeholders
         while let Some(start) = result[position..].find('{') {
             let start = position + start;
-            
+
             if let Some(relative_end) = result[start..].find('}') {
                 let end = start + relative_end;
                 let param_name = &result[start + 1..end];
-                
+
                 // Check if this looks like a valid parameter placeholder
                 if is_valid_param_name(param_name) {
                     if let Some(value) = self.data.get(param_name) {
@@ -89,22 +94,24 @@ impl UserData {
                         } else {
                             value.clone()
                         };
-                        
+
                         result.replace_range(start..=end, &final_value);
                         // Continue from after the replacement
                         position = start + final_value.len();
                     } else if strict {
                         // Strict mode: error if parameter is missing
-                        let available = self.data.keys()
+                        let available = self
+                            .data
+                            .keys()
                             .map(String::as_str)
                             .collect::<Vec<_>>()
                             .join(", ");
                         return Err(HttpDiffError::MissingPathParameter {
                             param: param_name.to_string(),
-                            available_params: if available.is_empty() { 
-                                "none".to_string() 
-                            } else { 
-                                available 
+                            available_params: if available.is_empty() {
+                                "none".to_string()
+                            } else {
+                                available
                             },
                         });
                     } else {
@@ -120,7 +127,7 @@ impl UserData {
                 break;
             }
         }
-        
+
         Ok(result)
     }
 }

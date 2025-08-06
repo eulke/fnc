@@ -4,29 +4,34 @@
 //! documentation from HTTP comparison results, including statistics,
 //! route analysis, and difference summaries.
 
-use crate::types::ComparisonResult;
 use crate::error::Result;
+use crate::types::ComparisonResult;
 use std::collections::HashMap;
 
 /// Generate comprehensive request documentation in markdown format
 pub fn generate_request_documentation(results: &[ComparisonResult]) -> Result<String> {
     let mut doc = String::new();
-    
+
     doc.push_str("# HTTP Diff Test Documentation\n");
-    doc.push_str(&format!("Generated: {}\n\n", chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC")));
-    
+    doc.push_str(&format!(
+        "Generated: {}\n\n",
+        chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC")
+    ));
+
     // Summary statistics
     let total_tests = results.len();
     let identical_count = results.iter().filter(|r| r.is_identical).count();
     let different_count = total_tests - identical_count;
-    
+
     doc.push_str("## Test Summary\n");
     doc.push_str(&format!("- Total test scenarios: {}\n", total_tests));
     doc.push_str(&format!("- Identical responses: {}\n", identical_count));
     doc.push_str(&format!("- Different responses: {}\n", different_count));
-    doc.push_str(&format!("- Success rate: {:.1}%\n\n", 
-                         (identical_count as f32 / total_tests as f32) * 100.0));
-    
+    doc.push_str(&format!(
+        "- Success rate: {:.1}%\n\n",
+        (identical_count as f32 / total_tests as f32) * 100.0
+    ));
+
     // Environment information
     if let Some(first_result) = results.first() {
         let environments: Vec<String> = first_result.responses.keys().cloned().collect();
@@ -36,60 +41,75 @@ pub fn generate_request_documentation(results: &[ComparisonResult]) -> Result<St
         }
         doc.push('\n');
     }
-    
+
     // Route analysis
     let mut routes_analysis: HashMap<String, (usize, usize)> = HashMap::new();
     for result in results {
-        let entry = routes_analysis.entry(result.route_name.clone()).or_insert((0, 0));
+        let entry = routes_analysis
+            .entry(result.route_name.clone())
+            .or_insert((0, 0));
         if result.is_identical {
             entry.0 += 1;
         } else {
             entry.1 += 1;
         }
     }
-    
+
     doc.push_str("## Route Analysis\n");
     for (route_name, (identical, different)) in routes_analysis {
         let total = identical + different;
         let success_rate = (identical as f32 / total as f32) * 100.0;
         doc.push_str(&format!("### {}\n", route_name));
         doc.push_str(&format!("- Total tests: {}\n", total));
-        doc.push_str(&format!("- Identical: {} ({:.1}%)\n", identical, success_rate));
-        doc.push_str(&format!("- Different: {} ({:.1}%)\n\n", different, 100.0 - success_rate));
+        doc.push_str(&format!(
+            "- Identical: {} ({:.1}%)\n",
+            identical, success_rate
+        ));
+        doc.push_str(&format!(
+            "- Different: {} ({:.1}%)\n\n",
+            different,
+            100.0 - success_rate
+        ));
     }
-    
+
     // Differences summary
     if different_count > 0 {
         doc.push_str("## Differences Found\n");
         for result in results.iter().filter(|r| !r.is_identical) {
-            doc.push_str(&format!("### {} (User: {:?})\n", result.route_name, result.user_context));
+            doc.push_str(&format!(
+                "### {} (User: {:?})\n",
+                result.route_name, result.user_context
+            ));
             for diff in &result.differences {
                 doc.push_str(&format!("- {:?}: {}\n", diff.category, diff.description));
             }
             doc.push('\n');
         }
     }
-    
+
     Ok(doc)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{HttpResponse, Difference, DifferenceCategory};
+    use crate::types::{Difference, DifferenceCategory, HttpResponse};
     use std::collections::HashMap;
 
     #[test]
     fn test_generate_request_documentation() {
         // Create mock comparison results
         let mut responses = HashMap::new();
-        responses.insert("test".to_string(), HttpResponse {
-            status: 200,
-            headers: HashMap::new(),
-            body: "{}".to_string(),
-            url: "https://test.example.com".to_string(),
-            curl_command: "curl 'https://test.example.com'".to_string(),
-        });
+        responses.insert(
+            "test".to_string(),
+            HttpResponse {
+                status: 200,
+                headers: HashMap::new(),
+                body: "{}".to_string(),
+                url: "https://test.example.com".to_string(),
+                curl_command: "curl 'https://test.example.com'".to_string(),
+            },
+        );
 
         let mut status_codes1 = HashMap::new();
         status_codes1.insert("prod".to_string(), 200u16);
@@ -111,13 +131,16 @@ mod tests {
         };
 
         let mut different_responses = responses.clone();
-        different_responses.insert("prod".to_string(), HttpResponse {
-            status: 404,
-            headers: HashMap::new(),
-            body: "Not found".to_string(),
-            url: "https://prod.example.com".to_string(),
-            curl_command: "curl 'https://prod.example.com'".to_string(),
-        });
+        different_responses.insert(
+            "prod".to_string(),
+            HttpResponse {
+                status: 404,
+                headers: HashMap::new(),
+                body: "Not found".to_string(),
+                url: "https://prod.example.com".to_string(),
+                curl_command: "curl 'https://prod.example.com'".to_string(),
+            },
+        );
 
         let mut status_codes2 = HashMap::new();
         status_codes2.insert("prod".to_string(), 404u16);
@@ -147,7 +170,7 @@ mod tests {
 
         let results = vec![result1, result2];
         let documentation = generate_request_documentation(&results).unwrap();
-        
+
         // Verify documentation content
         assert!(documentation.contains("# HTTP Diff Test Documentation"));
         assert!(documentation.contains("Generated:"));

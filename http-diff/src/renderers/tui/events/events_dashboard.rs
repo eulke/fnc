@@ -1,6 +1,9 @@
-use crossterm::event::{KeyCode, KeyEvent};
-use crate::{error::Result, renderers::tui::app::{TuiApp, PanelFocus}};
 use super::AppResult;
+use crate::{
+    error::Result,
+    renderers::tui::app::{PanelFocus, TuiApp},
+};
+use crossterm::event::{KeyCode, KeyEvent};
 
 /// Handle keys for dashboard view with panel-focused navigation
 pub fn handle_dashboard_keys(app: &mut TuiApp, key: KeyEvent) -> Result<AppResult> {
@@ -117,7 +120,7 @@ pub fn handle_dashboard_keys(app: &mut TuiApp, key: KeyEvent) -> Result<AppResul
         }
         _ => {}
     }
-    
+
     Ok(AppResult::Continue)
 }
 
@@ -125,9 +128,15 @@ pub fn handle_dashboard_keys(app: &mut TuiApp, key: KeyEvent) -> Result<AppResul
 fn handle_dashboard_panel_up(app: &mut TuiApp) {
     match app.panel_focus {
         PanelFocus::Configuration => {
-            if matches!(app.focused_panel, crate::renderers::tui::app::FocusedPanel::Environments) {
+            if matches!(
+                app.focused_panel,
+                crate::renderers::tui::app::FocusedPanel::Environments
+            ) {
                 app.navigate_up();
-            } else if matches!(app.focused_panel, crate::renderers::tui::app::FocusedPanel::Routes) {
+            } else if matches!(
+                app.focused_panel,
+                crate::renderers::tui::app::FocusedPanel::Routes
+            ) {
                 app.navigate_up();
             }
         }
@@ -147,9 +156,15 @@ fn handle_dashboard_panel_up(app: &mut TuiApp) {
 fn handle_dashboard_panel_down(app: &mut TuiApp) {
     match app.panel_focus {
         PanelFocus::Configuration => {
-            if matches!(app.focused_panel, crate::renderers::tui::app::FocusedPanel::Environments) {
+            if matches!(
+                app.focused_panel,
+                crate::renderers::tui::app::FocusedPanel::Environments
+            ) {
                 app.navigate_down();
-            } else if matches!(app.focused_panel, crate::renderers::tui::app::FocusedPanel::Routes) {
+            } else if matches!(
+                app.focused_panel,
+                crate::renderers::tui::app::FocusedPanel::Routes
+            ) {
                 app.navigate_down();
             }
         }
@@ -284,17 +299,20 @@ fn handle_results_filter_shortcut(app: &mut TuiApp, key: KeyEvent) {
             }
             '2' => {
                 app.filter_state.current_tab = 1;
-                app.filter_state.status_filter = crate::renderers::tui::app::StatusFilter::Identical;
+                app.filter_state.status_filter =
+                    crate::renderers::tui::app::StatusFilter::Identical;
                 app.selected_index = 0;
             }
             '3' => {
                 app.filter_state.current_tab = 2;
-                app.filter_state.status_filter = crate::renderers::tui::app::StatusFilter::Different;
+                app.filter_state.status_filter =
+                    crate::renderers::tui::app::StatusFilter::Different;
                 app.selected_index = 0;
             }
             '4' => {
                 app.filter_state.current_tab = 3;
-                app.filter_state.status_filter = crate::renderers::tui::app::StatusFilter::ErrorsOnly;
+                app.filter_state.status_filter =
+                    crate::renderers::tui::app::StatusFilter::ErrorsOnly;
                 app.selected_index = 0;
             }
             _ => {}

@@ -5,4 +5,6 @@
 
 pub mod error_classifier;
 
-pub use error_classifier::{ErrorAnalyzer, ErrorAnalysis, ErrorGroup, RouteError, ErrorClassifierImpl};
+pub use error_classifier::{
+    ErrorAnalysis, ErrorAnalyzer, ErrorClassifierImpl, ErrorGroup, RouteError,
+};

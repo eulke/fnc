@@ -243,7 +243,7 @@ impl DiffData {
 
     /// Check if this diff data has any content to display
     pub fn is_empty(&self) -> bool {
-        self.headers.as_ref().map_or(true, |h| h.is_empty()) &&
-        self.body.as_ref().map_or(true, |b| b.is_empty())
+        self.headers.as_ref().map_or(true, |h| h.is_empty())
+            && self.body.as_ref().map_or(true, |b| b.is_empty())
     }
 }

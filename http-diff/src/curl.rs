@@ -40,7 +40,6 @@ impl CurlCommand {
             command,
         }
     }
-
 }
 
 impl CurlGenerator {
@@ -61,10 +60,12 @@ impl CurlGenerator {
         let mut command = format!("curl -X {} '{}'", route.method, escape_argument(url_str));
 
         // Add headers with CSV substitution and proper escaping
-        let headers = crate::url_builder::resolve_headers(&self.config, route, environment, user_data)?;
+        let headers =
+            crate::url_builder::resolve_headers(&self.config, route, environment, user_data)?;
         for (key, value) in headers {
-            command.push_str(&format!(" \\\n  -H '{}: {}'", 
-                escape_argument(&key), 
+            command.push_str(&format!(
+                " \\\n  -H '{}: {}'",
+                escape_argument(&key),
                 escape_argument(&value)
             ));
         }
@@ -109,15 +110,28 @@ impl CurlGenerator {
         commands: &[CurlCommand],
         file_path: P,
     ) -> Result<()> {
-        let file_name = file_path.as_ref().file_name().unwrap_or_default().to_string_lossy().to_string();
+        let file_name = file_path
+            .as_ref()
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
         let mut file = File::create(&file_path)?;
-        
+
         // Write header with timestamp and metadata
         writeln!(file, "#!/bin/bash")?;
         writeln!(file, "# HTTP Diff Test - Generated Curl Commands")?;
-        writeln!(file, "# Generated at: {}", chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC"))?;
+        writeln!(
+            file,
+            "# Generated at: {}",
+            chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC")
+        )?;
         writeln!(file, "# Total commands: {}", commands.len())?;
-        writeln!(file, "# Usage: bash {} or copy individual commands", file_name)?;
+        writeln!(
+            file,
+            "# Usage: bash {} or copy individual commands",
+            file_name
+        )?;
         writeln!(file)?;
 
         // Group commands by route for better organization
@@ -136,9 +150,11 @@ impl CurlGenerator {
             writeln!(file)?;
 
             for command in route_commands {
-                writeln!(file, "# Environment: {} | User: {:?}", 
-                         command.environment, 
-                         command.user_context)?;
+                writeln!(
+                    file,
+                    "# Environment: {} | User: {:?}",
+                    command.environment, command.user_context
+                )?;
                 writeln!(file, "{}", command.command)?;
                 writeln!(file)?;
             }
@@ -147,15 +163,20 @@ impl CurlGenerator {
         // Add footer with usage instructions
         writeln!(file, "# ========================================")?;
         writeln!(file, "# Usage Instructions:")?;
-        writeln!(file, "# 1. Make this file executable: chmod +x {}", file_name)?;
+        writeln!(
+            file,
+            "# 1. Make this file executable: chmod +x {}",
+            file_name
+        )?;
         writeln!(file, "# 2. Run all commands: bash {}", file_name)?;
-        writeln!(file, "# 3. Or copy individual curl commands for manual testing")?;
+        writeln!(
+            file,
+            "# 3. Or copy individual curl commands for manual testing"
+        )?;
         writeln!(file, "# ========================================")?;
 
         Ok(())
     }
-
-
 }
 
 /// Shell escaping utilities for curl command generation
@@ -166,7 +187,6 @@ mod shell_utils {
         // This closes the current quote, adds an escaped quote, then opens a new quote
         arg.replace('\'', "'\"'\"'")
     }
-
 }
 
 // Re-export shell utilities at module level for internal use
@@ -176,8 +196,8 @@ use shell_utils::escape_argument;
 mod tests {
     use super::*;
     use crate::config::{Environment, Route};
-    use tempfile::TempDir;
     use std::fs;
+    use tempfile::TempDir;
 
     fn create_test_config() -> HttpDiffConfig {
         let mut environments = HashMap::new();
@@ -227,12 +247,16 @@ mod tests {
 
         let user_data = create_test_user_data();
         let route = &generator.config.routes[0];
-        let command = generator.generate_curl_command(route, "test", &user_data).unwrap();
+        let command = generator
+            .generate_curl_command(route, "test", &user_data)
+            .unwrap();
 
         assert_eq!(command.route_name, "user-profile");
         assert_eq!(command.environment, "test");
         assert!(command.command.contains("GET"));
-        assert!(command.command.contains("https://api-test.example.com/api/users/12345"));
+        assert!(command
+            .command
+            .contains("https://api-test.example.com/api/users/12345"));
         assert!(command.command.contains("X-Scope: test"));
         assert!(command.command.contains("Accept: application/json"));
     }
@@ -244,18 +268,20 @@ mod tests {
 
         let user_data = vec![create_test_user_data()];
         let environments = vec!["test".to_string()];
-        
-        let commands = generator.generate_all_curl_commands(&user_data, &environments).unwrap();
+
+        let commands = generator
+            .generate_all_curl_commands(&user_data, &environments)
+            .unwrap();
         assert_eq!(commands.len(), 1);
 
         // Test file generation with timestamp
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("curl_commands.sh");
-        
+
         CurlGenerator::write_curl_commands_file(&commands, &file_path).unwrap();
-        
+
         let content = fs::read_to_string(&file_path).unwrap();
-        
+
         // Verify file structure and content
         assert!(content.contains("#!/bin/bash"));
         assert!(content.contains("# HTTP Diff Test - Generated Curl Commands"));
@@ -271,7 +297,7 @@ mod tests {
     #[test]
     fn test_curl_command_with_special_characters() {
         let mut config = create_test_config();
-        
+
         // Add route with special characters in body and headers
         config.routes.push(Route {
             name: "special-chars".to_string(),
@@ -279,30 +305,39 @@ mod tests {
             path: "/api/test".to_string(),
             headers: Some({
                 let mut headers = HashMap::new();
-                headers.insert("Authorization".to_string(), "Bearer token'with'quotes".to_string());
+                headers.insert(
+                    "Authorization".to_string(),
+                    "Bearer token'with'quotes".to_string(),
+                );
                 headers.insert("Content-Type".to_string(), "application/json".to_string());
                 headers
             }),
             params: None,
             base_urls: None,
-            body: Some(r#"{"message": "Hello 'world' with \"quotes\" and $special chars!"}"#.to_string()),
+            body: Some(
+                r#"{"message": "Hello 'world' with \"quotes\" and $special chars!"}"#.to_string(),
+            ),
         });
 
         let generator = CurlGenerator::new(config);
         let user_data = create_test_user_data();
         let route = &generator.config.routes[1]; // Use the special chars route
-        
-        let command = generator.generate_curl_command(route, "test", &user_data).unwrap();
-        
+
+        let command = generator
+            .generate_curl_command(route, "test", &user_data)
+            .unwrap();
+
         // Verify proper escaping of single quotes in headers and body
         // The actual escaping pattern is '"'"' (close quote, escaped quote, open quote)
-        assert!(command.command.contains("Bearer token'\"'\"'with'\"'\"'quotes"));
-        
+        assert!(command
+            .command
+            .contains("Bearer token'\"'\"'with'\"'\"'quotes"));
+
         // Update the expected body pattern to match actual escaping
         // Single quotes become '"'"' in shell escaping
         let expected_body_pattern = r#"Hello '"'"'world'"'"' with \"quotes\""#;
         assert!(command.command.contains(expected_body_pattern));
-        
+
         // Verify the command structure is valid
         assert!(command.command.starts_with("curl -X POST"));
         assert!(command.command.contains("-H 'Authorization:"));
@@ -312,7 +347,7 @@ mod tests {
     #[test]
     fn test_curl_command_with_url_encoding() {
         let config = create_test_config();
-        
+
         // Modify the user data to include special characters that need URL encoding
         let mut user_data = HashMap::new();
         user_data.insert("userId".to_string(), "user@example.com".to_string());
@@ -320,9 +355,11 @@ mod tests {
 
         let generator = CurlGenerator::new(config);
         let route = &generator.config.routes[0];
-        
-        let command = generator.generate_curl_command(route, "test", &user_data).unwrap();
-        
+
+        let command = generator
+            .generate_curl_command(route, "test", &user_data)
+            .unwrap();
+
         // Should contain URL-encoded userId in path
         // Note: The URL encoding happens in the path substitution, not in our curl generation
         assert!(command.command.contains("user%40example.com"));
@@ -331,7 +368,7 @@ mod tests {
     #[test]
     fn test_generate_all_curl_commands() {
         let mut config = create_test_config();
-        
+
         // Add another environment
         config.environments.insert(
             "prod".to_string(),
@@ -342,37 +379,44 @@ mod tests {
         );
 
         let generator = CurlGenerator::new(config);
-        
-        let user_data = vec![
-            create_test_user_data(),
-            {
-                let mut data = HashMap::new();
-                data.insert("userId".to_string(), "67890".to_string());
-                UserData { data }
-            }
-        ];
+
+        let user_data = vec![create_test_user_data(), {
+            let mut data = HashMap::new();
+            data.insert("userId".to_string(), "67890".to_string());
+            UserData { data }
+        }];
         let environments = vec!["test".to_string(), "prod".to_string()];
-        
-        let commands = generator.generate_all_curl_commands(&user_data, &environments).unwrap();
-        
+
+        let commands = generator
+            .generate_all_curl_commands(&user_data, &environments)
+            .unwrap();
+
         // Should generate: 1 route * 2 environments * 2 users = 4 commands
         assert_eq!(commands.len(), 4);
-        
+
         // Verify different combinations exist
-        let test_commands: Vec<_> = commands.iter().filter(|c| c.environment == "test").collect();
-        let prod_commands: Vec<_> = commands.iter().filter(|c| c.environment == "prod").collect();
-        
+        let test_commands: Vec<_> = commands
+            .iter()
+            .filter(|c| c.environment == "test")
+            .collect();
+        let prod_commands: Vec<_> = commands
+            .iter()
+            .filter(|c| c.environment == "prod")
+            .collect();
+
         assert_eq!(test_commands.len(), 2);
         assert_eq!(prod_commands.len(), 2);
-        
+
         // Verify different users
-        let user_12345_commands: Vec<_> = commands.iter()
+        let user_12345_commands: Vec<_> = commands
+            .iter()
             .filter(|c| c.user_context.get("userId") == Some(&"12345".to_string()))
             .collect();
-        let user_67890_commands: Vec<_> = commands.iter()
+        let user_67890_commands: Vec<_> = commands
+            .iter()
             .filter(|c| c.user_context.get("userId") == Some(&"67890".to_string()))
             .collect();
-        
+
         assert_eq!(user_12345_commands.len(), 2);
         assert_eq!(user_67890_commands.len(), 2);
     }

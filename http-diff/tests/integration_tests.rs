@@ -2,8 +2,8 @@ mod common;
 
 use common::*;
 use http_diff::ErrorSummary;
-use tempfile::TempDir;
 use std::fs;
+use tempfile::TempDir;
 
 // =============================================================================
 // UNIT TESTS - Core Functionality
@@ -30,9 +30,9 @@ mod comparator_tests {
     #[test]
     fn test_error_detection() {
         let all_success = create_comparison_result(
-            "success_route", 
-            vec![("test", 200, "ok"), ("prod", 201, "created")], 
-            true
+            "success_route",
+            vec![("test", 200, "ok"), ("prod", 201, "created")],
+            true,
         );
         assert!(!all_success.has_errors);
         assert!(all_success.error_bodies.is_none());
@@ -49,9 +49,21 @@ mod comparator_tests {
     #[test]
     fn test_error_summary_calculation() {
         let results = vec![
-            create_comparison_result("route1", vec![("test", 200, "ok"), ("prod", 200, "ok")], true),
-            create_comparison_result("route2", vec![("test", 404, "error"), ("prod", 500, "error")], false),
-            create_comparison_result("route3", vec![("test", 200, "ok"), ("prod", 404, "error")], false),
+            create_comparison_result(
+                "route1",
+                vec![("test", 200, "ok"), ("prod", 200, "ok")],
+                true,
+            ),
+            create_comparison_result(
+                "route2",
+                vec![("test", 404, "error"), ("prod", 500, "error")],
+                false,
+            ),
+            create_comparison_result(
+                "route3",
+                vec![("test", 200, "ok"), ("prod", 404, "error")],
+                false,
+            ),
         ];
 
         let summary = ErrorSummary::from_comparison_results(&results);
@@ -74,7 +86,7 @@ mod output_tests {
         // Test that error analysis is generated for results with errors
         assert!(result.has_errors);
         assert!(result.error_bodies.is_some());
-        
+
         let error_bodies = result.error_bodies.as_ref().unwrap();
         assert_eq!(error_bodies["test"], "Not Found");
         assert_eq!(error_bodies["prod"], "Internal Error");
@@ -83,7 +95,7 @@ mod output_tests {
     #[test]
     fn test_curl_generation() {
         let response = create_response(200, "test body", Some("http://example.com/api"));
-        
+
         // Curl generation should work for any response
         assert!(!response.curl_command.is_empty());
         assert!(response.curl_command.contains("curl"));
@@ -97,7 +109,7 @@ mod output_tests {
         ];
 
         let summary = ErrorSummary::from_comparison_results(&results);
-        
+
         // Verify output formatting doesn't break core metrics
         assert_eq!(summary.total_requests, 2);
     }
@@ -111,7 +123,11 @@ mod runner_tests {
     fn test_status_code_tracking() {
         let result = create_comparison_result(
             "api_test",
-            vec![("dev", 200, "ok"), ("staging", 404, "not found"), ("prod", 500, "error")],
+            vec![
+                ("dev", 200, "ok"),
+                ("staging", 404, "not found"),
+                ("prod", 500, "error"),
+            ],
             false,
         );
 
@@ -132,7 +148,7 @@ mod runner_tests {
         assert!(success_result.error_bodies.is_none());
 
         let error_result = create_comparison_result(
-            "error_route", 
+            "error_route",
             vec![("test", 404, "not found"), ("prod", 500, "server error")],
             false,
         );
@@ -163,7 +179,6 @@ mod runner_tests {
 mod integration_tests {
     use super::*;
 
-
     #[tokio::test]
     async fn test_config_file_integration() {
         let temp_dir = TempDir::new().unwrap();
@@ -181,9 +196,21 @@ mod integration_tests {
     #[test]
     fn test_error_summary_comprehensive() {
         let mixed_results = vec![
-            create_comparison_result("health", vec![("test", 200, "ok"), ("prod", 200, "ok")], true),
-            create_comparison_result("users", vec![("test", 404, "not found"), ("prod", 200, "ok")], false),
-            create_comparison_result("orders", vec![("test", 500, "error"), ("prod", 503, "unavailable")], false),
+            create_comparison_result(
+                "health",
+                vec![("test", 200, "ok"), ("prod", 200, "ok")],
+                true,
+            ),
+            create_comparison_result(
+                "users",
+                vec![("test", 404, "not found"), ("prod", 200, "ok")],
+                false,
+            ),
+            create_comparison_result(
+                "orders",
+                vec![("test", 500, "error"), ("prod", 503, "unavailable")],
+                false,
+            ),
             create_comparison_result("auth", vec![("test", 200, "ok"), ("prod", 200, "ok")], true),
         ];
 
@@ -197,32 +224,44 @@ mod integration_tests {
         let test_scenarios = vec![
             // Scenario 1: All environments healthy
             create_comparison_result(
-                "health_check", 
-                vec![("dev", 200, "healthy"), ("staging", 200, "healthy"), ("prod", 200, "healthy")],
-                true
+                "health_check",
+                vec![
+                    ("dev", 200, "healthy"),
+                    ("staging", 200, "healthy"),
+                    ("prod", 200, "healthy"),
+                ],
+                true,
             ),
             // Scenario 2: One environment down
             create_comparison_result(
                 "api_endpoint",
-                vec![("dev", 200, "data"), ("staging", 500, "error"), ("prod", 200, "data")],
-                false
+                vec![
+                    ("dev", 200, "data"),
+                    ("staging", 500, "error"),
+                    ("prod", 200, "data"),
+                ],
+                false,
             ),
             // Scenario 3: Complete failure
             create_comparison_result(
                 "legacy_service",
-                vec![("dev", 404, "not found"), ("staging", 404, "not found"), ("prod", 404, "not found")],
-                false
+                vec![
+                    ("dev", 404, "not found"),
+                    ("staging", 404, "not found"),
+                    ("prod", 404, "not found"),
+                ],
+                false,
             ),
         ];
 
         // Verify the workflow produces expected results
         let summary = ErrorSummary::from_comparison_results(&test_scenarios);
         assert_eq!(summary.total_requests, 3);
-        
+
         // Verify individual scenario tracking
         for scenario in &test_scenarios {
             assert!(!scenario.route_name.is_empty());
             assert!(!scenario.status_codes.is_empty());
         }
     }
-} 
+}

@@ -1,5 +1,5 @@
 //! TUI Design System and Theme
-//! 
+//!
 //! This module provides consistent colors, styles, and UI components for the TUI
 
 use ratatui::{
@@ -12,20 +12,20 @@ pub struct TuiTheme;
 
 impl TuiTheme {
     // Primary Colors
-    pub const FOCUS: Color = Color::Rgb(97, 175, 239);      // Bright Blue
-    pub const SUCCESS: Color = Color::Rgb(152, 195, 121);   // Green
-    pub const WARNING: Color = Color::Rgb(229, 192, 123);   // Yellow
-    pub const ERROR: Color = Color::Rgb(224, 108, 117);     // Red
-    pub const INFO: Color = Color::Rgb(198, 120, 221);      // Purple
-    
+    pub const FOCUS: Color = Color::Rgb(97, 175, 239); // Bright Blue
+    pub const SUCCESS: Color = Color::Rgb(152, 195, 121); // Green
+    pub const WARNING: Color = Color::Rgb(229, 192, 123); // Yellow
+    pub const ERROR: Color = Color::Rgb(224, 108, 117); // Red
+    pub const INFO: Color = Color::Rgb(198, 120, 221); // Purple
+
     // UI Colors
-    pub const TEXT_PRIMARY: Color = Color::Rgb(171, 178, 191);    // Light Gray
-    pub const TEXT_SECONDARY: Color = Color::Rgb(92, 99, 112);    // Dark Gray
-    pub const TEXT_DISABLED: Color = Color::Rgb(92, 99, 112);     // Dark Gray
-    pub const BACKGROUND: Color = Color::Rgb(40, 44, 52);         // Dark Background
+    pub const TEXT_PRIMARY: Color = Color::Rgb(171, 178, 191); // Light Gray
+    pub const TEXT_SECONDARY: Color = Color::Rgb(92, 99, 112); // Dark Gray
+    pub const TEXT_DISABLED: Color = Color::Rgb(92, 99, 112); // Dark Gray
+    pub const BACKGROUND: Color = Color::Rgb(40, 44, 52); // Dark Background
     pub const BACKGROUND_SELECTED: Color = Color::Rgb(61, 67, 81); // Selected Background
-    pub const BORDER_NORMAL: Color = Color::Rgb(92, 99, 112);     // Normal Border
-    pub const BORDER_FOCUSED: Color = Color::Rgb(97, 175, 239);   // Focused Border
+    pub const BORDER_NORMAL: Color = Color::Rgb(92, 99, 112); // Normal Border
+    pub const BORDER_FOCUSED: Color = Color::Rgb(97, 175, 239); // Focused Border
 
     /// Get style for focused/selected elements
     pub fn focused_style() -> Style {
@@ -44,8 +44,7 @@ impl TuiTheme {
 
     /// Get style for disabled/inactive elements
     pub fn disabled_style() -> Style {
-        Style::default()
-            .fg(Self::TEXT_DISABLED)
+        Style::default().fg(Self::TEXT_DISABLED)
     }
 
     /// Get style for error messages
@@ -71,20 +70,17 @@ impl TuiTheme {
 
     /// Get style for info messages
     pub fn info_style() -> Style {
-        Style::default()
-            .fg(Self::INFO)
+        Style::default().fg(Self::INFO)
     }
 
     /// Get style for primary text
     pub fn primary_text_style() -> Style {
-        Style::default()
-            .fg(Self::TEXT_PRIMARY)
+        Style::default().fg(Self::TEXT_PRIMARY)
     }
 
     /// Get style for secondary text
     pub fn secondary_text_style() -> Style {
-        Style::default()
-            .fg(Self::TEXT_SECONDARY)
+        Style::default().fg(Self::TEXT_SECONDARY)
     }
 
     /// Create a focused block with enhanced styling
@@ -92,8 +88,16 @@ impl TuiTheme {
         Block::default()
             .title(format!(" {} {} ", UiSymbols::FOCUSED_INDICATOR, title))
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(Self::BORDER_FOCUSED).add_modifier(Modifier::BOLD))
-            .title_style(Style::default().fg(Self::FOCUS).add_modifier(Modifier::BOLD))
+            .border_style(
+                Style::default()
+                    .fg(Self::BORDER_FOCUSED)
+                    .add_modifier(Modifier::BOLD),
+            )
+            .title_style(
+                Style::default()
+                    .fg(Self::FOCUS)
+                    .add_modifier(Modifier::BOLD),
+            )
     }
 
     /// Create a normal block with standard styling
@@ -106,7 +110,12 @@ impl TuiTheme {
     }
 
     /// Create a block for panels with different states
-    pub fn panel_block(title: &str, is_focused: bool, has_content: bool, has_activity: bool) -> Block {
+    pub fn panel_block(
+        title: &str,
+        is_focused: bool,
+        has_content: bool,
+        has_activity: bool,
+    ) -> Block {
         let icon = if has_activity {
             UiSymbols::QUICK_ACTION
         } else if has_content {
@@ -114,15 +123,17 @@ impl TuiTheme {
         } else {
             UiSymbols::UNFOCUSED_INDICATOR
         };
-        
+
         let full_title = if is_focused {
             format!(" {} {} ", UiSymbols::FOCUSED_INDICATOR, title)
         } else {
             format!(" {} {} ", icon, title)
         };
-        
+
         let border_style = if is_focused {
-            Style::default().fg(Self::BORDER_FOCUSED).add_modifier(Modifier::BOLD)
+            Style::default()
+                .fg(Self::BORDER_FOCUSED)
+                .add_modifier(Modifier::BOLD)
         } else if has_activity {
             Style::default().fg(Self::WARNING)
         } else if has_content {
@@ -130,15 +141,17 @@ impl TuiTheme {
         } else {
             Style::default().fg(Self::BORDER_NORMAL)
         };
-        
+
         let title_style = if is_focused {
-            Style::default().fg(Self::FOCUS).add_modifier(Modifier::BOLD)
+            Style::default()
+                .fg(Self::FOCUS)
+                .add_modifier(Modifier::BOLD)
         } else if has_activity {
             Style::default().fg(Self::WARNING)
         } else {
             Style::default().fg(Self::TEXT_PRIMARY)
         };
-        
+
         Block::default()
             .title(full_title)
             .borders(Borders::ALL)
@@ -156,9 +169,7 @@ impl TuiTheme {
             (false, true) => Style::default()
                 .bg(Self::TEXT_SECONDARY)
                 .fg(Self::TEXT_PRIMARY),
-            (_, false) => Style::default()
-                .bg(Color::Black)
-                .fg(Self::TEXT_DISABLED),
+            (_, false) => Style::default().bg(Color::Black).fg(Self::TEXT_DISABLED),
         }
     }
 }
@@ -172,33 +183,33 @@ impl UiSymbols {
     pub const UNSELECTED: &'static str = "☐";
     pub const FOCUSED_INDICATOR: &'static str = "►";
     pub const UNFOCUSED_INDICATOR: &'static str = " ";
-    
+
     // Status symbols
     pub const SUCCESS: &'static str = "✓";
     pub const ERROR: &'static str = "✗";
     pub const WARNING: &'static str = "⚠";
     pub const INFO: &'static str = "ℹ";
-    
+
     // Action symbols
     pub const PLAY: &'static str = "►";
     pub const PAUSE: &'static str = "⏸";
     pub const STOP: &'static str = "■";
     pub const SETTINGS: &'static str = "⚙";
     pub const HELP: &'static str = "❓";
-    
+
     // Navigation symbols
     pub const UP_DOWN: &'static str = "↑↓";
     pub const LEFT_RIGHT: &'static str = "←→";
     pub const BACK: &'static str = "⟨";
     pub const FORWARD: &'static str = "⟩";
-    
+
     // Content symbols
     pub const RESULTS: &'static str = "📊";
     pub const DETAILS: &'static str = "🔍";
     pub const LIST: &'static str = "📋";
     pub const QUICK_ACTION: &'static str = "⚡";
     pub const TIP: &'static str = "💡";
-    
+
     // Diff symbols
     pub const ROUTE: &'static str = "🛣";
     pub const HEADERS: &'static str = "📤";
@@ -241,10 +252,7 @@ impl KeyHints {
 
     /// Get help text for execution view
     pub fn execution_help() -> Vec<(&'static str, &'static str)> {
-        vec![
-            ("Ctrl+C", "Cancel"),
-            ("q", "Quit"),
-        ]
+        vec![("Ctrl+C", "Cancel"), ("q", "Quit")]
     }
 
     /// Get help text for results view
@@ -261,7 +269,7 @@ impl KeyHints {
             ("q", "Quit"),
         ]
     }
-    
+
     /// Get help text for dashboard view (generic fallback)
     pub fn dashboard_help() -> Vec<(&'static str, &'static str)> {
         vec![
@@ -275,7 +283,7 @@ impl KeyHints {
             ("q", "Quit"),
         ]
     }
-    
+
     /// Get help text for configuration panel
     pub fn configuration_panel_help() -> Vec<(&'static str, &'static str)> {
         vec![
@@ -290,7 +298,7 @@ impl KeyHints {
             ("q", "Quit"),
         ]
     }
-    
+
     /// Get help text for progress panel  
     pub fn progress_panel_help() -> Vec<(&'static str, &'static str)> {
         vec![
@@ -301,7 +309,7 @@ impl KeyHints {
             ("q", "Quit"),
         ]
     }
-    
+
     /// Get help text for results panel
     pub fn results_panel_help() -> Vec<(&'static str, &'static str)> {
         vec![
@@ -315,7 +323,7 @@ impl KeyHints {
             ("q", "Quit"),
         ]
     }
-    
+
     /// Get help text for details panel
     pub fn details_panel_help() -> Vec<(&'static str, &'static str)> {
         vec![

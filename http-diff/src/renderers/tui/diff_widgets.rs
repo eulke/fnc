@@ -4,19 +4,19 @@
 //! ratatui widgets with proper styling, colors, and interactivity.
 
 use ratatui::{
-    prelude::*,
-    widgets::{Table, Row, Cell, List, ListItem, Paragraph, Wrap},
-    style::Modifier,
     layout::{Constraint, Direction, Layout},
+    prelude::*,
+    style::Modifier,
+    widgets::{Cell, List, ListItem, Paragraph, Row, Table, Wrap},
 };
 
-use crate::{
-    types::DiffViewStyle,
-    renderers::diff_data::{DiffData, HeaderDiffData, BodyDiffData, DiffOperation},
-};
 use super::{
     app::TuiApp,
     theme::{TuiTheme, UiSymbols},
+};
+use crate::{
+    renderers::diff_data::{BodyDiffData, DiffData, DiffOperation, HeaderDiffData},
+    types::DiffViewStyle,
 };
 
 /// Rich TUI diff widget renderer
@@ -29,7 +29,13 @@ impl DiffWidgetRenderer {
     }
 
     /// Render complete diff data using proper TUI widgets with custom diff style
-    pub fn render_diff_view_with_style(f: &mut Frame, diff_data: &DiffData, app: &TuiApp, style: &DiffViewStyle, area: Rect) {
+    pub fn render_diff_view_with_style(
+        f: &mut Frame,
+        diff_data: &DiffData,
+        app: &TuiApp,
+        style: &DiffViewStyle,
+        area: Rect,
+    ) {
         if diff_data.is_empty() {
             Self::render_no_differences(f, diff_data, area);
             return;
@@ -37,11 +43,11 @@ impl DiffWidgetRenderer {
 
         // Calculate layout based on what content we have
         let mut constraints = vec![Constraint::Length(3)]; // Route info
-        
+
         if diff_data.headers.is_some() {
             constraints.push(Constraint::Min(8)); // Headers section
         }
-        
+
         if diff_data.body.is_some() {
             constraints.push(Constraint::Min(10)); // Body section
         }
@@ -78,8 +84,10 @@ impl DiffWidgetRenderer {
 
         let info_text = format!(
             "{} Route: {}  {} Style: {}",
-            UiSymbols::ROUTE, diff_data.route_name,
-            UiSymbols::SETTINGS, style_text
+            UiSymbols::ROUTE,
+            diff_data.route_name,
+            UiSymbols::SETTINGS,
+            style_text
         );
 
         let info_paragraph = Paragraph::new(info_text)
@@ -94,7 +102,8 @@ impl DiffWidgetRenderer {
     fn render_no_differences(f: &mut Frame, diff_data: &DiffData, area: Rect) {
         let message = format!(
             "{} No differences found between environments\n\nRoute: {}",
-            UiSymbols::SUCCESS, diff_data.route_name
+            UiSymbols::SUCCESS,
+            diff_data.route_name
         );
 
         let paragraph = Paragraph::new(message)
@@ -107,7 +116,12 @@ impl DiffWidgetRenderer {
     }
 
     /// Render header differences using ratatui Table widget
-    fn render_header_diff_widget(f: &mut Frame, headers: &HeaderDiffData, style: &DiffViewStyle, area: Rect) {
+    fn render_header_diff_widget(
+        f: &mut Frame,
+        headers: &HeaderDiffData,
+        style: &DiffViewStyle,
+        area: Rect,
+    ) {
         match style {
             DiffViewStyle::Unified => Self::render_headers_unified_widget(f, headers, area),
             DiffViewStyle::SideBySide => Self::render_headers_side_by_side_widget(f, headers, area),
@@ -147,7 +161,8 @@ impl DiffWidgetRenderer {
                     if let Some(ref content1) = row.left_content {
                         let env_label = format!("- {}", headers.env1.to_uppercase());
                         rows.push(Row::new(vec![
-                            Cell::from(header_name).style(TuiTheme::primary_text_style().add_modifier(Modifier::BOLD)),
+                            Cell::from(header_name)
+                                .style(TuiTheme::primary_text_style().add_modifier(Modifier::BOLD)),
                             Cell::from(env_label).style(TuiTheme::error_style()),
                             Cell::from(content1.as_str()).style(TuiTheme::error_style()),
                         ]));
@@ -189,10 +204,7 @@ impl DiffWidgetRenderer {
             ],
         )
         .header(header_row)
-        .block(
-            TuiTheme::normal_block(&block_title)
-                .border_style(TuiTheme::warning_style())
-        )
+        .block(TuiTheme::normal_block(&block_title).border_style(TuiTheme::warning_style()))
         .column_spacing(1);
 
         f.render_widget(table, area);
@@ -207,7 +219,9 @@ impl DiffWidgetRenderer {
 
             let (left_content, left_style) = match &row.left_content {
                 Some(content) => match row.operation {
-                    DiffOperation::Removed | DiffOperation::Changed => (content.as_str(), TuiTheme::error_style()),
+                    DiffOperation::Removed | DiffOperation::Changed => {
+                        (content.as_str(), TuiTheme::error_style())
+                    }
                     _ => (content.as_str(), TuiTheme::primary_text_style()),
                 },
                 None => ("(missing)", TuiTheme::secondary_text_style()),
@@ -215,14 +229,18 @@ impl DiffWidgetRenderer {
 
             let (right_content, right_style) = match &row.right_content {
                 Some(content) => match row.operation {
-                    DiffOperation::Added | DiffOperation::Changed => (content.as_str(), TuiTheme::success_style()),
+                    DiffOperation::Added | DiffOperation::Changed => {
+                        (content.as_str(), TuiTheme::success_style())
+                    }
                     _ => (content.as_str(), TuiTheme::primary_text_style()),
                 },
                 None => ("(missing)", TuiTheme::secondary_text_style()),
             };
 
             let header_style = match row.operation {
-                DiffOperation::Changed => TuiTheme::primary_text_style().add_modifier(Modifier::BOLD),
+                DiffOperation::Changed => {
+                    TuiTheme::primary_text_style().add_modifier(Modifier::BOLD)
+                }
                 _ => TuiTheme::primary_text_style(),
             };
 
@@ -236,13 +254,9 @@ impl DiffWidgetRenderer {
         // Create table headers
         let env1_upper = headers.env1.to_uppercase();
         let env2_upper = headers.env2.to_uppercase();
-        let header_row = Row::new(vec![
-            "Header",
-            &env1_upper,
-            &env2_upper,
-        ])
-        .style(TuiTheme::primary_text_style().add_modifier(Modifier::BOLD))
-        .bottom_margin(1);
+        let header_row = Row::new(vec!["Header", &env1_upper, &env2_upper])
+            .style(TuiTheme::primary_text_style().add_modifier(Modifier::BOLD))
+            .bottom_margin(1);
 
         let block_title = format!("{} Header Differences", UiSymbols::HEADERS);
         let table = Table::new(
@@ -254,17 +268,20 @@ impl DiffWidgetRenderer {
             ],
         )
         .header(header_row)
-        .block(
-            TuiTheme::normal_block(&block_title)
-                .border_style(TuiTheme::warning_style())
-        )
+        .block(TuiTheme::normal_block(&block_title).border_style(TuiTheme::warning_style()))
         .column_spacing(1);
 
         f.render_widget(table, area);
     }
 
     /// Render body differences using ratatui List widget
-    fn render_body_diff_widget(f: &mut Frame, body: &BodyDiffData, style: &DiffViewStyle, app: &TuiApp, area: Rect) {
+    fn render_body_diff_widget(
+        f: &mut Frame,
+        body: &BodyDiffData,
+        style: &DiffViewStyle,
+        app: &TuiApp,
+        area: Rect,
+    ) {
         if body.is_large_response {
             Self::render_large_response_widget(f, body, area);
             return;
@@ -307,8 +324,7 @@ impl DiffWidgetRenderer {
                     // For changed lines, show both with different prefixes
                     if let Some(ref content1) = row.left_content {
                         items.push(
-                            ListItem::new(format!("- {}", content1))
-                                .style(TuiTheme::error_style())
+                            ListItem::new(format!("- {}", content1)).style(TuiTheme::error_style()),
                         );
                     }
                     if let Some(ref content2) = row.right_content {
@@ -332,16 +348,18 @@ impl DiffWidgetRenderer {
 
         let block_title = format!("{} Body Differences (Unified)", UiSymbols::BODY);
         let list = List::new(visible_items)
-            .block(
-                TuiTheme::normal_block(&block_title)
-                    .border_style(TuiTheme::warning_style())
-            );
+            .block(TuiTheme::normal_block(&block_title).border_style(TuiTheme::warning_style()));
 
         f.render_widget(list, area);
     }
 
     /// Render side-by-side body diff using layout
-    fn render_body_side_by_side_widget(f: &mut Frame, body: &BodyDiffData, app: &TuiApp, area: Rect) {
+    fn render_body_side_by_side_widget(
+        f: &mut Frame,
+        body: &BodyDiffData,
+        app: &TuiApp,
+        area: Rect,
+    ) {
         // Split area into two columns
         let chunks = Layout::default()
             .direction(Direction::Horizontal)
@@ -356,28 +374,44 @@ impl DiffWidgetRenderer {
             match row.operation {
                 DiffOperation::Unchanged => {
                     if let Some(ref content) = row.left_content {
-                        left_items.push(ListItem::new(format!("  {}", content)).style(TuiTheme::primary_text_style()));
-                        right_items.push(ListItem::new(format!("  {}", content)).style(TuiTheme::primary_text_style()));
+                        left_items.push(
+                            ListItem::new(format!("  {}", content))
+                                .style(TuiTheme::primary_text_style()),
+                        );
+                        right_items.push(
+                            ListItem::new(format!("  {}", content))
+                                .style(TuiTheme::primary_text_style()),
+                        );
                     }
                 }
                 DiffOperation::Removed => {
                     if let Some(ref content) = row.left_content {
-                        left_items.push(ListItem::new(format!("- {}", content)).style(TuiTheme::error_style()));
+                        left_items.push(
+                            ListItem::new(format!("- {}", content)).style(TuiTheme::error_style()),
+                        );
                         right_items.push(ListItem::new("").style(TuiTheme::primary_text_style()));
                     }
                 }
                 DiffOperation::Added => {
                     if let Some(ref content) = row.right_content {
                         left_items.push(ListItem::new("").style(TuiTheme::primary_text_style()));
-                        right_items.push(ListItem::new(format!("+ {}", content)).style(TuiTheme::success_style()));
+                        right_items.push(
+                            ListItem::new(format!("+ {}", content))
+                                .style(TuiTheme::success_style()),
+                        );
                     }
                 }
                 DiffOperation::Changed => {
                     let left_content = row.left_content.as_deref().unwrap_or("");
                     let right_content = row.right_content.as_deref().unwrap_or("");
-                    
-                    left_items.push(ListItem::new(format!("- {}", left_content)).style(TuiTheme::error_style()));
-                    right_items.push(ListItem::new(format!("+ {}", right_content)).style(TuiTheme::success_style()));
+
+                    left_items.push(
+                        ListItem::new(format!("- {}", left_content)).style(TuiTheme::error_style()),
+                    );
+                    right_items.push(
+                        ListItem::new(format!("+ {}", right_content))
+                            .style(TuiTheme::success_style()),
+                    );
                 }
             }
         }
@@ -398,18 +432,12 @@ impl DiffWidgetRenderer {
         // Render left side
         let left_title = body.env1.to_uppercase();
         let left_list = List::new(visible_left_items)
-            .block(
-                TuiTheme::normal_block(&left_title)
-                    .border_style(TuiTheme::error_style())
-            );
+            .block(TuiTheme::normal_block(&left_title).border_style(TuiTheme::error_style()));
 
         // Render right side
         let right_title = body.env2.to_uppercase();
         let right_list = List::new(visible_right_items)
-            .block(
-                TuiTheme::normal_block(&right_title)
-                    .border_style(TuiTheme::success_style())
-            );
+            .block(TuiTheme::normal_block(&right_title).border_style(TuiTheme::success_style()));
 
         f.render_widget(left_list, chunks[0]);
         f.render_widget(right_list, chunks[1]);
@@ -430,8 +458,12 @@ impl DiffWidgetRenderer {
                 {} Sample differences:\n{}",
                 UiSymbols::INFO,
                 UiSymbols::WARNING,
-                body.env1.to_uppercase(), summary.size1, summary.lines1,
-                body.env2.to_uppercase(), summary.size2, summary.lines2,
+                body.env1.to_uppercase(),
+                summary.size1,
+                summary.lines1,
+                body.env2.to_uppercase(),
+                summary.size2,
+                summary.lines2,
                 UiSymbols::COMPARE,
                 (summary.size1 as i64 - summary.size2 as i64).abs(),
                 (summary.lines1 as i64 - summary.lines2 as i64).abs(),
@@ -442,10 +474,7 @@ impl DiffWidgetRenderer {
             let block_title = format!("{} Body Summary", UiSymbols::BODY);
             let paragraph = Paragraph::new(summary_text)
                 .style(TuiTheme::primary_text_style())
-                .block(
-                    TuiTheme::normal_block(&block_title)
-                        .border_style(TuiTheme::info_style())
-                )
+                .block(TuiTheme::normal_block(&block_title).border_style(TuiTheme::info_style()))
                 .wrap(Wrap { trim: true })
                 .alignment(Alignment::Left);
 

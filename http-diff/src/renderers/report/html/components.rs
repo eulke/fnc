@@ -1,7 +1,7 @@
 //! Reusable HTML components for building professional reports
 
-use crate::types::ComparisonResult;
 use super::super::ReportMetadata;
+use crate::types::ComparisonResult;
 
 /// Reusable HTML components for report generation
 pub struct HtmlComponents;
@@ -11,13 +11,25 @@ impl HtmlComponents {
     pub fn executive_dashboard(results: &[ComparisonResult], metadata: &ReportMetadata) -> String {
         let total_tests = results.len();
         let failed_count = results.iter().filter(|r| r.has_errors).count();
-        let identical_count = results.iter().filter(|r| r.is_identical && !r.has_errors).count();
-        let different_count = results.iter().filter(|r| !r.is_identical && !r.has_errors).count();
-        
-        let health_score = Self::calculate_health_score(identical_count, different_count, failed_count, total_tests);
+        let identical_count = results
+            .iter()
+            .filter(|r| r.is_identical && !r.has_errors)
+            .count();
+        let different_count = results
+            .iter()
+            .filter(|r| !r.is_identical && !r.has_errors)
+            .count();
+
+        let health_score = Self::calculate_health_score(
+            identical_count,
+            different_count,
+            failed_count,
+            total_tests,
+        );
         let health_class = Self::health_score_class(health_score);
-        
-        format!(r#"
+
+        format!(
+            r#"
         <div class="dashboard">
             <div class="dashboard-header">
                 <h2>🏥 System Health Overview</h2>
@@ -71,9 +83,14 @@ impl HtmlComponents {
             health_class,
             health_score,
             identical_count,
-            if total_tests > 0 { (identical_count as f32 / total_tests as f32) * 100.0 } else { 0.0 },
+            if total_tests > 0 {
+                (identical_count as f32 / total_tests as f32) * 100.0
+            } else {
+                0.0
+            },
             if different_count > 0 {
-                format!(r#"
+                format!(
+                    r#"
                 <div class="metric-card">
                     <div class="metric-icon">⚠️</div>
                     <div class="metric-content">
@@ -86,12 +103,20 @@ impl HtmlComponents {
                         </div>
                     </div>
                 </div>
-                "#, different_count, if total_tests > 0 { (different_count as f32 / total_tests as f32) * 100.0 } else { 0.0 })
+                "#,
+                    different_count,
+                    if total_tests > 0 {
+                        (different_count as f32 / total_tests as f32) * 100.0
+                    } else {
+                        0.0
+                    }
+                )
             } else {
                 String::new()
             },
             if failed_count > 0 {
-                format!(r#"
+                format!(
+                    r#"
                 <div class="metric-card">
                     <div class="metric-icon">🔥</div>
                     <div class="metric-content">
@@ -104,7 +129,14 @@ impl HtmlComponents {
                         </div>
                     </div>
                 </div>
-                "#, failed_count, if total_tests > 0 { (failed_count as f32 / total_tests as f32) * 100.0 } else { 0.0 })
+                "#,
+                    failed_count,
+                    if total_tests > 0 {
+                        (failed_count as f32 / total_tests as f32) * 100.0
+                    } else {
+                        0.0
+                    }
+                )
             } else {
                 String::new()
             },
@@ -113,11 +145,11 @@ impl HtmlComponents {
             metadata.execution_duration.as_secs_f64()
         )
     }
-    
+
     /// Generate detailed results table
     pub fn results_table(results: &[ComparisonResult]) -> String {
         let mut rows = String::new();
-        
+
         for result in results {
             let status_badge = if result.has_errors {
                 r#"<span class="status-badge error">🔥 Failed</span>"#
@@ -126,25 +158,41 @@ impl HtmlComponents {
             } else {
                 r#"<span class="status-badge success">✅ Identical</span>"#
             };
-            
+
             let user_context = if result.user_context.is_empty() {
                 "default".to_string()
             } else {
-                result.user_context.iter()
+                result
+                    .user_context
+                    .iter()
                     .map(|(k, v)| format!("{}={}", k, v))
                     .collect::<Vec<_>>()
                     .join(", ")
             };
-            
-            let status_codes = result.status_codes.iter()
+
+            let status_codes = result
+                .status_codes
+                .iter()
                 .map(|(env, code)| {
-                    let class = if *code >= 200 && *code < 300 { "success" } else if *code >= 400 { "error" } else { "warning" };
-                    format!(r#"<span class="status-code {}">{}: {}</span>"#, class, env.to_uppercase(), code)
+                    let class = if *code >= 200 && *code < 300 {
+                        "success"
+                    } else if *code >= 400 {
+                        "error"
+                    } else {
+                        "warning"
+                    };
+                    format!(
+                        r#"<span class="status-code {}">{}: {}</span>"#,
+                        class,
+                        env.to_uppercase(),
+                        code
+                    )
                 })
                 .collect::<Vec<_>>()
                 .join(" ");
-            
-            rows.push_str(&format!(r#"
+
+            rows.push_str(&format!(
+                r#"
             <tr>
                 <td><strong>{}</strong></td>
                 <td>{}</td>
@@ -152,10 +200,17 @@ impl HtmlComponents {
                 <td>{}</td>
                 <td class="status-codes">{}</td>
             </tr>
-            "#, result.route_name, user_context, status_badge, result.differences.len(), status_codes));
+            "#,
+                result.route_name,
+                user_context,
+                status_badge,
+                result.differences.len(),
+                status_codes
+            ));
         }
-        
-        format!(r#"
+
+        format!(
+            r#"
         <div class="results-section">
             <h2>📊 Detailed Test Results</h2>
             <div class="table-container">
@@ -175,16 +230,22 @@ impl HtmlComponents {
                 </table>
             </div>
         </div>
-        "#, rows)
+        "#,
+            rows
+        )
     }
-    
+
     /// Generate recommendations section
     pub fn recommendations(results: &[ComparisonResult]) -> String {
         let failed_count = results.iter().filter(|r| r.has_errors).count();
-        let different_count = results.iter().filter(|r| !r.is_identical && !r.has_errors).count();
-        
+        let different_count = results
+            .iter()
+            .filter(|r| !r.is_identical && !r.has_errors)
+            .count();
+
         if failed_count == 0 && different_count == 0 {
-            return format!(r#"
+            return format!(
+                r#"
             <div class="recommendations-section">
                 <h2>🎯 Recommendations</h2>
                 <div class="recommendation success">
@@ -195,13 +256,15 @@ impl HtmlComponents {
                     </div>
                 </div>
             </div>
-            "#);
+            "#
+            );
         }
-        
+
         let mut recommendations = Vec::new();
-        
+
         if failed_count > 0 {
-            recommendations.push(r#"
+            recommendations.push(
+                r#"
             <div class="recommendation error">
                 <div class="recommendation-icon">🔥</div>
                 <div class="recommendation-content">
@@ -209,9 +272,10 @@ impl HtmlComponents {
                     <p>Focus on failed endpoints as they indicate service disruptions or errors.</p>
                 </div>
             </div>
-            "#);
+            "#,
+            );
         }
-        
+
         if different_count > 0 {
             recommendations.push(r#"
             <div class="recommendation warning">
@@ -223,8 +287,9 @@ impl HtmlComponents {
             </div>
             "#);
         }
-        
-        recommendations.push(r#"
+
+        recommendations.push(
+            r#"
         <div class="recommendation info">
             <div class="recommendation-icon">🔧</div>
             <div class="recommendation-content">
@@ -232,31 +297,43 @@ impl HtmlComponents {
                 <p>Copy the provided curl commands to reproduce and investigate issues locally.</p>
             </div>
         </div>
-        "#);
-        
-        format!(r#"
+        "#,
+        );
+
+        format!(
+            r#"
         <div class="recommendations-section">
             <h2>🎯 Recommended Actions</h2>
             {}
         </div>
-        "#, recommendations.join(""))
+        "#,
+            recommendations.join("")
+        )
     }
-    
+
     /// Calculate health score (0-100)
-    fn calculate_health_score(identical: usize, different: usize, failed: usize, total: usize) -> u8 {
-        if total == 0 { return 100; }
-        
+    fn calculate_health_score(
+        identical: usize,
+        different: usize,
+        failed: usize,
+        total: usize,
+    ) -> u8 {
+        if total == 0 {
+            return 100;
+        }
+
         let identical_weight = 100.0;
-        let different_weight = 50.0;  // Partial credit for working but different endpoints
+        let different_weight = 50.0; // Partial credit for working but different endpoints
         let failed_weight = 0.0;
-        
-        let weighted_score = (identical as f32 * identical_weight + 
-                             different as f32 * different_weight + 
-                             failed as f32 * failed_weight) / (total as f32 * identical_weight);
-        
+
+        let weighted_score = (identical as f32 * identical_weight
+            + different as f32 * different_weight
+            + failed as f32 * failed_weight)
+            / (total as f32 * identical_weight);
+
         (weighted_score * 100.0).round() as u8
     }
-    
+
     /// Get CSS class for health score
     fn health_score_class(score: u8) -> &'static str {
         match score {

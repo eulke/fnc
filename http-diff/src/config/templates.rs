@@ -75,7 +75,8 @@ body = '{"name": "Test User", "email": "test@example.com"}'
 
 [routes.headers]
 "Content-Type" = "application/json"
-"#.to_string()
+"#
+    .to_string()
 }
 
 /// Generate default users.csv template
@@ -86,7 +87,8 @@ pub fn generate_default_users_csv() -> String {
 123456789,MLB
 987654321,MCO
 555666777,MLA
-".to_string()
+"
+    .to_string()
 }
 
 /// Check if configuration files exist and optionally generate them
@@ -95,8 +97,8 @@ pub fn ensure_config_files_exist(
     csv_path: &str,
     force_generate: bool,
 ) -> Result<(bool, bool)> {
-    use std::path::Path;
     use std::fs;
+    use std::path::Path;
 
     let config_exists = Path::new(config_path).exists();
     let csv_exists = Path::new(csv_path).exists();
@@ -107,16 +109,14 @@ pub fn ensure_config_files_exist(
     // Generate config file if it doesn't exist
     if !config_exists && force_generate {
         let template = generate_default_config_template();
-        fs::write(config_path, template)
-            .map_err(HttpDiffError::Io)?;
+        fs::write(config_path, template).map_err(HttpDiffError::Io)?;
         config_generated = true;
     }
 
     // Generate CSV file if it doesn't exist
     if !csv_exists && force_generate {
         let template = generate_default_users_csv();
-        fs::write(csv_path, template)
-            .map_err(HttpDiffError::Io)?;
+        fs::write(csv_path, template).map_err(HttpDiffError::Io)?;
         csv_generated = true;
     }
 

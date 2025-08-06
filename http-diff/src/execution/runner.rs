@@ -1,16 +1,16 @@
 use crate::config::HttpDiffConfig;
-use crate::error::{Result, HttpDiffError};
-use crate::traits::{HttpClient, ResponseComparator, TestRunner, ErrorCollector};
-use crate::types::{ExecutionResult, ExecutionError};
-use crate::execution::progress::{ProgressTracker, ProgressCallback};
-use std::collections::HashMap;
+use crate::error::{HttpDiffError, Result};
+use crate::execution::progress::{ProgressCallback, ProgressTracker};
+use crate::traits::{ErrorCollector, HttpClient, ResponseComparator, TestRunner};
+use crate::types::{ExecutionError, ExecutionResult};
 use futures::stream::{FuturesUnordered, StreamExt};
-use tokio::sync::Semaphore;
+use std::collections::HashMap;
 use std::sync::Arc;
+use tokio::sync::Semaphore;
 
 /// Test runner implementation
-pub struct TestRunnerImpl<C, R> 
-where 
+pub struct TestRunnerImpl<C, R>
+where
     C: HttpClient,
     R: ResponseComparator,
 {
@@ -26,11 +26,7 @@ where
     R: ResponseComparator,
 {
     /// Create a new test runner
-    pub fn new(
-        config: HttpDiffConfig,
-        client: C,
-        comparator: R,
-    ) -> Result<Self> {
+    pub fn new(config: HttpDiffConfig, client: C, comparator: R) -> Result<Self> {
         Ok(Self {
             config,
             client: Arc::new(client),
@@ -57,7 +53,7 @@ where
         // Calculate total requests and set up progress tracking
         let total_requests = routes.len() * user_data.len() * environments.len();
         let mut progress = ProgressTracker::new(total_requests);
-        
+
         if let Some(ref callback) = progress_callback {
             callback(&progress);
         }
@@ -65,7 +61,7 @@ where
         // Use semaphore to limit concurrent requests
         let semaphore = Arc::new(Semaphore::new(self.max_concurrent_requests));
         let mut request_futures = FuturesUnordered::new();
-        
+
         // Create all request tasks upfront
         for route in routes {
             for user in user_data {
@@ -75,18 +71,18 @@ where
                 let environments_clone = environments.to_vec();
                 let client = self.client.clone();
                 let semaphore_clone = semaphore.clone();
-                
+
                 let request_task = async move {
                     let mut responses = HashMap::new();
                     let mut request_results = Vec::new();
                     let mut errors = Vec::new();
-                    
+
                     // Execute requests to all environments for this route-user combination
                     for env in &environments_clone {
                         let _permit = semaphore_clone.acquire().await.map_err(|e| {
                             HttpDiffError::general(format!("Failed to acquire semaphore: {}", e))
                         })?;
-                        
+
                         match client.execute_request(&route_clone, env, &user_clone).await {
                             Ok(response) => {
                                 let success = response.is_success();
@@ -104,17 +100,17 @@ where
                             }
                         }
                     }
-                    
+
                     Result::<_>::Ok((route_clone, user_clone, responses, request_results, errors))
                 };
-                
+
                 request_futures.push(request_task);
             }
         }
 
         let mut results = Vec::new();
         let mut all_errors = Vec::new();
-        
+
         // Process completed requests as they finish
         while let Some(request_result) = request_futures.next().await {
             match request_result {
@@ -123,19 +119,23 @@ where
                     for success in &request_success_flags {
                         progress.request_completed(*success);
                     }
-                    
+
                     if let Some(ref callback) = progress_callback {
                         callback(&progress);
                     }
-                    
+
                     // Collect request errors
                     for error in &errors {
                         if let Some(ref collector) = error_collector {
-                            collector.record_request_error(&error.route, error.environment.as_ref().unwrap_or(&"unknown".to_string()), error.message.clone());
+                            collector.record_request_error(
+                                &error.route,
+                                error.environment.as_ref().unwrap_or(&"unknown".to_string()),
+                                error.message.clone(),
+                            );
                         }
                     }
                     all_errors.append(&mut errors);
-                    
+
                     // Only create comparison result if we have at least 2 responses
                     if responses.len() >= 2 {
                         match self.comparator.compare_responses(
@@ -147,9 +147,15 @@ where
                                 results.push(comparison_result);
                             }
                             Err(e) => {
-                                let error = ExecutionError::comparison_error(route.name.clone(), e.to_string());
+                                let error = ExecutionError::comparison_error(
+                                    route.name.clone(),
+                                    e.to_string(),
+                                );
                                 if let Some(ref collector) = error_collector {
-                                    collector.record_comparison_error(&error.route, error.message.clone());
+                                    collector.record_comparison_error(
+                                        &error.route,
+                                        error.message.clone(),
+                                    );
                                 }
                                 all_errors.push(error);
                             }
@@ -162,12 +168,12 @@ where
                         collector.record_execution_error(error.message.clone());
                     }
                     all_errors.push(error);
-                    
+
                     // Still need to update progress for failed requests
                     for _ in 0..environments.len() {
                         progress.request_completed(false);
                     }
-                    
+
                     if let Some(ref callback) = progress_callback {
                         callback(&progress);
                     }
@@ -178,7 +184,6 @@ where
         Ok(ExecutionResult::new(results, progress, all_errors))
     }
 
-
     /// Resolve environment names
     fn resolve_environments(&self, environments: Option<Vec<String>>) -> Result<Vec<String>> {
         match environments {
@@ -186,7 +191,9 @@ where
                 // Validate that all requested environments exist
                 for env in &envs {
                     if !self.config.environments.contains_key(env) {
-                        return Err(HttpDiffError::InvalidEnvironment { environment: env.clone() });
+                        return Err(HttpDiffError::InvalidEnvironment {
+                            environment: env.clone(),
+                        });
                     }
                 }
                 Ok(envs)
@@ -203,13 +210,14 @@ where
         match routes {
             Some(route_names) => {
                 let mut filtered_routes = Vec::new();
-                
+
                 // Validate that all requested routes exist and collect them
                 for route_name in &route_names {
                     if let Some(route) = self.config.routes.iter().find(|r| r.name == *route_name) {
                         filtered_routes.push(route);
                     } else {
-                        let available_routes: Vec<String> = self.config.routes.iter().map(|r| r.name.clone()).collect();
+                        let available_routes: Vec<String> =
+                            self.config.routes.iter().map(|r| r.name.clone()).collect();
                         return Err(HttpDiffError::invalid_config(format!(
                             "Route '{}' not found in configuration. Available routes: {}",
                             route_name,
@@ -242,7 +250,14 @@ where
     ) -> Result<ExecutionResult> {
         let environments = self.resolve_environments(environments)?;
         let routes = self.resolve_routes(routes)?;
-        
-        self.execute_concurrent_with_error_collection(user_data, &environments, &routes, error_collector, progress_callback).await
+
+        self.execute_concurrent_with_error_collection(
+            user_data,
+            &environments,
+            &routes,
+            error_collector,
+            progress_callback,
+        )
+        .await
     }
 }

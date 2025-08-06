@@ -1,4 +1,4 @@
-use crate::config::types::{HttpDiffConfig, Environment, GlobalConfig, Route};
+use crate::config::types::{Environment, GlobalConfig, HttpDiffConfig, Route};
 use crate::error::Result;
 use std::collections::HashMap;
 
@@ -85,7 +85,11 @@ impl HttpDiffConfigBuilder {
         if global.headers.is_none() {
             global.headers = Some(HashMap::new());
         }
-        global.headers.as_mut().unwrap().insert(key.into(), value.into());
+        global
+            .headers
+            .as_mut()
+            .unwrap()
+            .insert(key.into(), value.into());
         self.global = Some(global);
         self
     }
@@ -135,13 +139,13 @@ impl HttpDiffConfigBuilder {
             global: self.global,
             routes: self.routes,
         };
-        
+
         // Basic validation
         use crate::config::validator::ConfigValidatorImpl;
         use crate::traits::ConfigValidator;
         let validator = ConfigValidatorImpl;
         validator.validate(&config)?;
-        
+
         Ok(config)
     }
 }

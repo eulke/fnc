@@ -3,9 +3,9 @@
 //! This module handles rendering of generic diff data structures into
 //! TUI-compatible text format with proper styling and layout.
 
-use crate::types::DiffViewStyle;
-use crate::renderers::diff_data::{DiffData, HeaderDiffData, BodyDiffData, DiffOperation};
 use super::theme::UiSymbols;
+use crate::renderers::diff_data::{BodyDiffData, DiffData, DiffOperation, HeaderDiffData};
+use crate::types::DiffViewStyle;
 use std::fmt::Write;
 
 /// TUI-specific diff renderer
@@ -32,16 +32,32 @@ impl TuiDiffRenderer {
         let mut output = String::new();
 
         // Add route information
-        writeln!(output, "{} Route: {}", UiSymbols::ROUTE, diff_data.route_name).unwrap();
-        writeln!(output, "{} Diff Style: {}", UiSymbols::SETTINGS, 
-                match style {
-                    DiffViewStyle::Unified => "Unified",
-                    DiffViewStyle::SideBySide => "Side-by-Side",
-                }).unwrap();
+        writeln!(
+            output,
+            "{} Route: {}",
+            UiSymbols::ROUTE,
+            diff_data.route_name
+        )
+        .unwrap();
+        writeln!(
+            output,
+            "{} Diff Style: {}",
+            UiSymbols::SETTINGS,
+            match style {
+                DiffViewStyle::Unified => "Unified",
+                DiffViewStyle::SideBySide => "Side-by-Side",
+            }
+        )
+        .unwrap();
         writeln!(output).unwrap();
 
         if !diff_data.has_differences {
-            writeln!(output, "{} No differences found between environments", UiSymbols::SUCCESS).unwrap();
+            writeln!(
+                output,
+                "{} No differences found between environments",
+                UiSymbols::SUCCESS
+            )
+            .unwrap();
             return output;
         }
 
@@ -104,8 +120,12 @@ impl TuiDiffRenderer {
                         let env_label = format!("- {}", headers.env1.to_uppercase());
                         let truncated_env = self.truncate_text(&env_label, 19);
                         let truncated_value = self.truncate_text(content, 39);
-                        writeln!(output, "│ {} │ {} │ {} │", 
-                                truncated_header, truncated_env, truncated_value).unwrap();
+                        writeln!(
+                            output,
+                            "│ {} │ {} │ {} │",
+                            truncated_header, truncated_env, truncated_value
+                        )
+                        .unwrap();
                     }
                 }
                 DiffOperation::Added => {
@@ -113,8 +133,12 @@ impl TuiDiffRenderer {
                         let env_label = format!("+ {}", headers.env2.to_uppercase());
                         let truncated_env = self.truncate_text(&env_label, 19);
                         let truncated_value = self.truncate_text(content, 39);
-                        writeln!(output, "│ {} │ {} │ {} │", 
-                                truncated_header, truncated_env, truncated_value).unwrap();
+                        writeln!(
+                            output,
+                            "│ {} │ {} │ {} │",
+                            truncated_header, truncated_env, truncated_value
+                        )
+                        .unwrap();
                     }
                 }
                 DiffOperation::Changed => {
@@ -123,15 +147,23 @@ impl TuiDiffRenderer {
                         let env_label = format!("- {}", headers.env1.to_uppercase());
                         let truncated_env = self.truncate_text(&env_label, 19);
                         let truncated_value = self.truncate_text(content1, 39);
-                        writeln!(output, "│ {} │ {} │ {} │", 
-                                truncated_header, truncated_env, truncated_value).unwrap();
+                        writeln!(
+                            output,
+                            "│ {} │ {} │ {} │",
+                            truncated_header, truncated_env, truncated_value
+                        )
+                        .unwrap();
                     }
                     if let Some(ref content2) = row.right_content {
                         let env_label = format!("+ {}", headers.env2.to_uppercase());
                         let truncated_env = self.truncate_text(&env_label, 19);
                         let truncated_value = self.truncate_text(content2, 39);
-                        writeln!(output, "│ {} │ {} │ {} │", 
-                                truncated_header, truncated_env, truncated_value).unwrap();
+                        writeln!(
+                            output,
+                            "│ {} │ {} │ {} │",
+                            truncated_header, truncated_env, truncated_value
+                        )
+                        .unwrap();
                     }
                 }
                 DiffOperation::Unchanged => {
@@ -140,8 +172,12 @@ impl TuiDiffRenderer {
                         let env_label = format!("  {}", headers.env1.to_uppercase());
                         let truncated_env = self.truncate_text(&env_label, 19);
                         let truncated_value = self.truncate_text(content, 39);
-                        writeln!(output, "│ {} │ {} │ {} │", 
-                                truncated_header, truncated_env, truncated_value).unwrap();
+                        writeln!(
+                            output,
+                            "│ {} │ {} │ {} │",
+                            truncated_header, truncated_env, truncated_value
+                        )
+                        .unwrap();
                     }
                 }
             }
@@ -156,9 +192,13 @@ impl TuiDiffRenderer {
         let mut output = String::new();
 
         writeln!(output, "┌─────────────────────┬─────────────────────────────────┬─────────────────────────────────┐").unwrap();
-        writeln!(output, "│ Header              │ {} │ {} │", 
-                self.truncate_text(&headers.env1.to_uppercase(), 31),
-                self.truncate_text(&headers.env2.to_uppercase(), 31)).unwrap();
+        writeln!(
+            output,
+            "│ Header              │ {} │ {} │",
+            self.truncate_text(&headers.env1.to_uppercase(), 31),
+            self.truncate_text(&headers.env2.to_uppercase(), 31)
+        )
+        .unwrap();
         writeln!(output, "├─────────────────────┼─────────────────────────────────┼─────────────────────────────────┤").unwrap();
 
         for row in &headers.rows {
@@ -175,8 +215,12 @@ impl TuiDiffRenderer {
                 None => self.truncate_text("(missing)", 31),
             };
 
-            writeln!(output, "│ {} │ {} │ {} │", 
-                    truncated_header, left_value, right_value).unwrap();
+            writeln!(
+                output,
+                "│ {} │ {} │ {} │",
+                truncated_header, left_value, right_value
+            )
+            .unwrap();
         }
 
         writeln!(output, "└─────────────────────┴─────────────────────────────────┴─────────────────────────────────┘").unwrap();
@@ -214,10 +258,20 @@ impl TuiDiffRenderer {
                     // For changed lines, show both with - and +
                     let mut lines = String::new();
                     if let Some(ref content1) = row.left_content {
-                        writeln!(lines, "- {}", self.truncate_text(content1, self.max_width - 3)).unwrap();
+                        writeln!(
+                            lines,
+                            "- {}",
+                            self.truncate_text(content1, self.max_width - 3)
+                        )
+                        .unwrap();
                     }
                     if let Some(ref content2) = row.right_content {
-                        writeln!(lines, "+ {}", self.truncate_text(content2, self.max_width - 3)).unwrap();
+                        writeln!(
+                            lines,
+                            "+ {}",
+                            self.truncate_text(content2, self.max_width - 3)
+                        )
+                        .unwrap();
                     }
                     lines.trim_end().to_string()
                 }
@@ -235,39 +289,63 @@ impl TuiDiffRenderer {
         let col_width = (self.max_width - 7) / 2; // Account for borders and separators
 
         // Header
-        writeln!(output, "┌{}┬{}┐", 
-                "─".repeat(col_width + 2), 
-                "─".repeat(col_width + 2)).unwrap();
-        writeln!(output, "│ {} │ {} │", 
-                self.pad_text(&body.env1.to_uppercase(), col_width),
-                self.pad_text(&body.env2.to_uppercase(), col_width)).unwrap();
-        writeln!(output, "├{}┼{}┤", 
-                "─".repeat(col_width + 2), 
-                "─".repeat(col_width + 2)).unwrap();
+        writeln!(
+            output,
+            "┌{}┬{}┐",
+            "─".repeat(col_width + 2),
+            "─".repeat(col_width + 2)
+        )
+        .unwrap();
+        writeln!(
+            output,
+            "│ {} │ {} │",
+            self.pad_text(&body.env1.to_uppercase(), col_width),
+            self.pad_text(&body.env2.to_uppercase(), col_width)
+        )
+        .unwrap();
+        writeln!(
+            output,
+            "├{}┼{}┤",
+            "─".repeat(col_width + 2),
+            "─".repeat(col_width + 2)
+        )
+        .unwrap();
 
         for row in &body.rows {
             let left_content = match row.operation {
-                DiffOperation::Unchanged | DiffOperation::Removed | DiffOperation::Changed => {
-                    row.left_content.as_ref().map(|c| self.truncate_text(c, col_width)).unwrap_or_else(|| " ".repeat(col_width))
-                }
+                DiffOperation::Unchanged | DiffOperation::Removed | DiffOperation::Changed => row
+                    .left_content
+                    .as_ref()
+                    .map(|c| self.truncate_text(c, col_width))
+                    .unwrap_or_else(|| " ".repeat(col_width)),
                 DiffOperation::Added => " ".repeat(col_width),
             };
 
             let right_content = match row.operation {
-                DiffOperation::Unchanged | DiffOperation::Added | DiffOperation::Changed => {
-                    row.right_content.as_ref().map(|c| self.truncate_text(c, col_width)).unwrap_or_else(|| " ".repeat(col_width))
-                }
+                DiffOperation::Unchanged | DiffOperation::Added | DiffOperation::Changed => row
+                    .right_content
+                    .as_ref()
+                    .map(|c| self.truncate_text(c, col_width))
+                    .unwrap_or_else(|| " ".repeat(col_width)),
                 DiffOperation::Removed => " ".repeat(col_width),
             };
 
-            writeln!(output, "│ {} │ {} │", 
-                    self.pad_text(&left_content, col_width),
-                    self.pad_text(&right_content, col_width)).unwrap();
+            writeln!(
+                output,
+                "│ {} │ {} │",
+                self.pad_text(&left_content, col_width),
+                self.pad_text(&right_content, col_width)
+            )
+            .unwrap();
         }
 
-        writeln!(output, "└{}┴{}┘", 
-                "─".repeat(col_width + 2), 
-                "─".repeat(col_width + 2)).unwrap();
+        writeln!(
+            output,
+            "└{}┴{}┘",
+            "─".repeat(col_width + 2),
+            "─".repeat(col_width + 2)
+        )
+        .unwrap();
 
         output
     }
@@ -277,23 +355,57 @@ impl TuiDiffRenderer {
         let mut output = String::new();
 
         if let Some(ref summary) = body.summary {
-            writeln!(output, "{} Large Response Comparison Summary", UiSymbols::INFO).unwrap();
-            writeln!(output, "{} Responses are too large for detailed diff - showing summary only", UiSymbols::WARNING).unwrap();
+            writeln!(
+                output,
+                "{} Large Response Comparison Summary",
+                UiSymbols::INFO
+            )
+            .unwrap();
+            writeln!(
+                output,
+                "{} Responses are too large for detailed diff - showing summary only",
+                UiSymbols::WARNING
+            )
+            .unwrap();
             writeln!(output).unwrap();
 
             // Size comparison table
-            writeln!(output, "┌─────────────────────┬─────────────────────┬─────────────────────┐").unwrap();
-            writeln!(output, "│ Environment         │ Size (bytes)        │ Lines               │").unwrap();
-            writeln!(output, "├─────────────────────┼─────────────────────┼─────────────────────┤").unwrap();
-            writeln!(output, "│ {} │ {} │ {} │", 
-                    self.pad_text(&body.env1.to_uppercase(), 19),
-                    self.pad_text(&summary.size1.to_string(), 19),
-                    self.pad_text(&summary.lines1.to_string(), 19)).unwrap();
-            writeln!(output, "│ {} │ {} │ {} │", 
-                    self.pad_text(&body.env2.to_uppercase(), 19),
-                    self.pad_text(&summary.size2.to_string(), 19),
-                    self.pad_text(&summary.lines2.to_string(), 19)).unwrap();
-            writeln!(output, "└─────────────────────┴─────────────────────┴─────────────────────┘").unwrap();
+            writeln!(
+                output,
+                "┌─────────────────────┬─────────────────────┬─────────────────────┐"
+            )
+            .unwrap();
+            writeln!(
+                output,
+                "│ Environment         │ Size (bytes)        │ Lines               │"
+            )
+            .unwrap();
+            writeln!(
+                output,
+                "├─────────────────────┼─────────────────────┼─────────────────────┤"
+            )
+            .unwrap();
+            writeln!(
+                output,
+                "│ {} │ {} │ {} │",
+                self.pad_text(&body.env1.to_uppercase(), 19),
+                self.pad_text(&summary.size1.to_string(), 19),
+                self.pad_text(&summary.lines1.to_string(), 19)
+            )
+            .unwrap();
+            writeln!(
+                output,
+                "│ {} │ {} │ {} │",
+                self.pad_text(&body.env2.to_uppercase(), 19),
+                self.pad_text(&summary.size2.to_string(), 19),
+                self.pad_text(&summary.lines2.to_string(), 19)
+            )
+            .unwrap();
+            writeln!(
+                output,
+                "└─────────────────────┴─────────────────────┴─────────────────────┘"
+            )
+            .unwrap();
             writeln!(output).unwrap();
 
             // Differences summary
@@ -313,7 +425,12 @@ impl TuiDiffRenderer {
                 }
             }
 
-            writeln!(output, "\n{} Tip: Use curl commands or reduce response size for detailed comparison", UiSymbols::TIP).unwrap();
+            writeln!(
+                output,
+                "\n{} Tip: Use curl commands or reduce response size for detailed comparison",
+                UiSymbols::TIP
+            )
+            .unwrap();
         }
 
         output
@@ -349,14 +466,17 @@ impl Default for TuiDiffRenderer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::renderers::diff_data::{DiffRow, DiffOperation};
+    use crate::renderers::diff_data::{DiffOperation, DiffRow};
 
     #[test]
     fn test_truncate_text() {
         let renderer = TuiDiffRenderer::new();
-        
+
         assert_eq!(renderer.truncate_text("short", 10), "short");
-        assert_eq!(renderer.truncate_text("this is a very long text", 10), "this is...");
+        assert_eq!(
+            renderer.truncate_text("this is a very long text", 10),
+            "this is..."
+        );
         assert_eq!(renderer.truncate_text("ab", 2), "ab");
         assert_eq!(renderer.truncate_text("abc", 2), "ab");
     }
@@ -364,7 +484,7 @@ mod tests {
     #[test]
     fn test_pad_text() {
         let renderer = TuiDiffRenderer::new();
-        
+
         assert_eq!(renderer.pad_text("short", 10), "short     ");
         assert_eq!(renderer.pad_text("exact", 5), "exact");
         assert_eq!(renderer.pad_text("toolong", 5), "to...");
@@ -373,15 +493,15 @@ mod tests {
     #[test]
     fn test_render_header_diff_unified() {
         let renderer = TuiDiffRenderer::new();
-        
+
         let mut headers = HeaderDiffData::new("test".to_string(), "prod".to_string());
         headers.add_row(
             DiffRow::changed("1.0".to_string(), "2.0".to_string())
-                .with_context("X-Version".to_string())
+                .with_context("X-Version".to_string()),
         );
 
         let output = renderer.render_headers_unified(&headers);
-        
+
         assert!(output.contains("X-Version"));
         assert!(output.contains("1.0"));
         assert!(output.contains("2.0"));

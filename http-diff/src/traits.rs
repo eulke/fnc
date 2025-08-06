@@ -1,6 +1,6 @@
 use crate::config::{Route, UserData};
-use crate::types::{HttpResponse, ComparisonResult};
 use crate::error::Result;
+use crate::types::{ComparisonResult, HttpResponse};
 use std::collections::HashMap;
 use std::future::Future;
 
@@ -69,18 +69,14 @@ pub trait ResponseConverter: Send + Sync {
 /// Trait for URL building
 pub trait UrlBuilder: Send + Sync {
     /// Build a complete URL for a request
-    fn build_url(
-        &self,
-        route: &Route,
-        environment: &str,
-        user_data: &UserData,
-    ) -> Result<url::Url>;
+    fn build_url(&self, route: &Route, environment: &str, user_data: &UserData)
+        -> Result<url::Url>;
 }
 
 /// Trait for configuration validation
 pub trait ConfigValidator: Send + Sync {
     type Config;
-    
+
     /// Validate configuration
     fn validate(&self, config: &Self::Config) -> Result<()>;
 }
@@ -92,10 +88,10 @@ pub type ProgressCallback = Box<dyn Fn(&crate::execution::progress::ProgressTrac
 pub trait ErrorCollector: Send + Sync {
     /// Record a request execution error
     fn record_request_error(&self, route: &str, environment: &str, error: String);
-    
+
     /// Record a response comparison error  
     fn record_comparison_error(&self, route: &str, error: String);
-    
+
     /// Record a general execution error
     fn record_execution_error(&self, error: String);
 }

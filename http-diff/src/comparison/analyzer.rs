@@ -1,6 +1,6 @@
-/// Response difference analysis and categorization
-use crate::types::{HttpResponse, Difference, DifferenceCategory};
 use crate::comparison::content::{ContentNormalizer, HeaderNormalizer};
+/// Response difference analysis and categorization
+use crate::types::{Difference, DifferenceCategory, HttpResponse};
 use std::collections::HashMap;
 
 /// Raw header difference data for later formatting
@@ -8,7 +8,7 @@ use std::collections::HashMap;
 pub struct HeaderDiff {
     pub name: String,
     pub value1: Option<String>, // Value in first environment
-    pub value2: Option<String>, // Value in second environment  
+    pub value2: Option<String>, // Value in second environment
 }
 
 /// Raw body difference data for later formatting
@@ -66,7 +66,8 @@ impl DifferenceAnalyzer {
 
         // Compare headers if enabled
         if compare_headers {
-            if let Some(header_diff) = self.analyze_headers(&response1.headers, &response2.headers) {
+            if let Some(header_diff) = self.analyze_headers(&response1.headers, &response2.headers)
+            {
                 differences.push(Difference {
                     category: DifferenceCategory::Headers,
                     description: "Header differences detected".to_string(),
@@ -175,7 +176,7 @@ impl DifferenceAnalyzer {
         if compare_headers {
             let normalized_headers1 = self.header_normalizer.normalize(&response1.headers);
             let normalized_headers2 = self.header_normalizer.normalize(&response2.headers);
-            
+
             if normalized_headers1 != normalized_headers2 {
                 return false;
             }
@@ -227,11 +228,13 @@ mod tests {
         let response2 = create_test_response(404, r#"{"error": "not found"}"#);
 
         let differences = analyzer.analyze_responses(&response1, &response2, "test", "prod", false);
-        
+
         // Should have status and body differences
         assert_eq!(differences.len(), 2);
-        
-        let status_diff = differences.iter().find(|d| d.category == DifferenceCategory::Status);
+
+        let status_diff = differences
+            .iter()
+            .find(|d| d.category == DifferenceCategory::Status);
         assert!(status_diff.is_some());
         assert!(status_diff.unwrap().description.contains("200 vs 404"));
 
@@ -246,14 +249,14 @@ mod tests {
         let response2 = create_test_response(200, r#"{"status": "ok", "data": "prod"}"#);
 
         let differences = analyzer.analyze_responses(&response1, &response2, "test", "prod", false);
-        
+
         assert_eq!(differences.len(), 1);
         assert_eq!(differences[0].category, DifferenceCategory::Body);
 
         // Should contain serialized BodyDiff data
         assert!(differences[0].diff_output.is_some());
         let body_diff_json = differences[0].diff_output.as_ref().unwrap();
-        
+
         // Verify we can deserialize the body diff data
         let body_diff: BodyDiff = serde_json::from_str(body_diff_json).unwrap();
         assert!(!body_diff.is_large_response);
@@ -268,18 +271,22 @@ mod tests {
         let mut response1 = create_test_response(200, r#"{"status": "ok"}"#);
         let mut response2 = create_test_response(200, r#"{"status": "ok"}"#);
 
-        response1.headers.insert("X-Version".to_string(), "1.0".to_string());
-        response2.headers.insert("X-Version".to_string(), "2.0".to_string());
+        response1
+            .headers
+            .insert("X-Version".to_string(), "1.0".to_string());
+        response2
+            .headers
+            .insert("X-Version".to_string(), "2.0".to_string());
 
         let differences = analyzer.analyze_responses(&response1, &response2, "test", "prod", true);
-        
+
         assert_eq!(differences.len(), 1);
         assert_eq!(differences[0].category, DifferenceCategory::Headers);
 
         // Should contain serialized HeaderDiff data
         let header_diff_json = differences[0].diff_output.as_ref().unwrap();
         let header_diffs: Vec<HeaderDiff> = serde_json::from_str(header_diff_json).unwrap();
-        
+
         assert_eq!(header_diffs.len(), 1);
         assert_eq!(header_diffs[0].name, "X-Version");
         assert_eq!(header_diffs[0].value1, Some("1.0".to_string()));
@@ -287,7 +294,7 @@ mod tests {
 
         // Without header comparison, should be identical
         assert!(analyzer.are_identical(&response1, &response2, false));
-        // With header comparison, should not be identical  
+        // With header comparison, should not be identical
         assert!(!analyzer.are_identical(&response1, &response2, true));
     }
 
@@ -302,13 +309,13 @@ mod tests {
         let response2 = create_test_response(200, &large_body2);
 
         let differences = analyzer.analyze_responses(&response1, &response2, "test", "prod", false);
-        
+
         assert_eq!(differences.len(), 1);
         assert_eq!(differences[0].category, DifferenceCategory::Body);
 
         let body_diff_json = differences[0].diff_output.as_ref().unwrap();
         let body_diff: BodyDiff = serde_json::from_str(body_diff_json).unwrap();
-        
+
         assert!(body_diff.is_large_response);
         assert_eq!(body_diff.total_size, 120);
     }
@@ -322,11 +329,17 @@ mod tests {
         let mut response2 = create_test_response(200, r#"{"status": "ok"}"#);
 
         // Add headers that should be ignored
-        response1.headers.insert("date".to_string(), "Mon, 01 Jan 2024 00:00:00 GMT".to_string());
-        response2.headers.insert("date".to_string(), "Tue, 02 Jan 2024 00:00:00 GMT".to_string());
+        response1.headers.insert(
+            "date".to_string(),
+            "Mon, 01 Jan 2024 00:00:00 GMT".to_string(),
+        );
+        response2.headers.insert(
+            "date".to_string(),
+            "Tue, 02 Jan 2024 00:00:00 GMT".to_string(),
+        );
 
         let differences = analyzer.analyze_responses(&response1, &response2, "test", "prod", true);
-        
+
         // Should be identical because ignored headers are not compared
         assert!(differences.is_empty());
         assert!(analyzer.are_identical(&response1, &response2, true));

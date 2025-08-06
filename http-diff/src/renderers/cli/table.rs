@@ -20,13 +20,13 @@ impl TableBuilder {
     /// Create a new table builder with default styling
     pub fn new() -> Self {
         let mut table = Table::new();
-        
+
         // Apply base configuration that works well in terminals
         table
             .load_preset(UTF8_FULL)
             .apply_modifier(UTF8_ROUND_CORNERS)
             .set_content_arrangement(ContentArrangement::Dynamic);
-            
+
         Self { table }
     }
 
@@ -52,7 +52,7 @@ impl TableBuilder {
     }
 
     /// Set table headers with optional styling
-    pub fn headers<I, S>(&mut self, headers: I) -> &mut Self 
+    pub fn headers<I, S>(&mut self, headers: I) -> &mut Self
     where
         I: IntoIterator<Item = S>,
         S: Into<String>,
@@ -61,13 +61,13 @@ impl TableBuilder {
             .into_iter()
             .map(|h| Cell::new(h.into()).add_attribute(Attribute::Bold))
             .collect();
-        
+
         self.table.set_header(header_cells);
         self
     }
 
     /// Add a row to the table
-    pub fn row<I, S>(&mut self, cells: I) -> &mut Self 
+    pub fn row<I, S>(&mut self, cells: I) -> &mut Self
     where
         I: IntoIterator<Item = S>,
         S: Into<String>,
@@ -76,7 +76,7 @@ impl TableBuilder {
             .into_iter()
             .map(|cell| Cell::new(cell.into()))
             .collect();
-        
+
         self.table.add_row(row_cells);
         self
     }
@@ -95,7 +95,7 @@ impl TableBuilder {
     }
 
     /// Add multiple lines as individual rows (preserving formatting)
-    pub fn lines<I, S>(&mut self, lines: I) -> &mut Self 
+    pub fn lines<I, S>(&mut self, lines: I) -> &mut Self
     where
         I: IntoIterator<Item = S>,
         S: Into<String>,
@@ -123,7 +123,6 @@ impl Default for TableBuilder {
     }
 }
 
-
 /// Helper functions for creating styled cells
 pub mod cells {
     use super::*;
@@ -133,22 +132,15 @@ pub mod cells {
         Cell::new(text.into()).add_attribute(Attribute::Bold)
     }
 
-
     /// Create an error cell (red background)
     pub fn error<S: Into<String>>(text: S) -> Cell {
-        Cell::new(text.into())
-            .fg(Color::White)
-            .bg(Color::Red)
+        Cell::new(text.into()).fg(Color::White).bg(Color::Red)
     }
 
     /// Create a success cell (green background)
     pub fn success<S: Into<String>>(text: S) -> Cell {
-        Cell::new(text.into())
-            .fg(Color::White)
-            .bg(Color::Green)
+        Cell::new(text.into()).fg(Color::White).bg(Color::Green)
     }
-
-
 
     /// Create a muted/dimmed cell (gray text)
     pub fn muted<S: Into<String>>(text: S) -> Cell {
@@ -219,14 +211,8 @@ mod tests {
     fn test_styled_cells() {
         let mut builder = TableBuilder::new();
         builder.headers(vec!["Type", "Status"]);
-        builder.styled_row(vec![
-            cells::bold("Error"),
-            cells::error("Failed")
-        ]);
-        builder.styled_row(vec![
-            cells::bold("Success"),
-            cells::success("OK")
-        ]);
+        builder.styled_row(vec![cells::bold("Error"), cells::error("Failed")]);
+        builder.styled_row(vec![cells::bold("Success"), cells::success("OK")]);
         let table = builder.build();
 
         assert!(table.contains("Error"));
@@ -237,11 +223,7 @@ mod tests {
 
     #[test]
     fn test_multiple_lines() {
-        let lines = vec![
-            "Line 1",
-            "Line 2", 
-            "Line 3"
-        ];
+        let lines = vec!["Line 1", "Line 2", "Line 3"];
 
         let mut builder = TableBuilder::with_style(TableStyle::Diff);
         builder.lines(lines);
@@ -251,4 +233,4 @@ mod tests {
         assert!(table.contains("Line 2"));
         assert!(table.contains("Line 3"));
     }
-} 
+}

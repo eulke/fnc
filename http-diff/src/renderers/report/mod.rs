@@ -1,5 +1,5 @@
 //! Executive summary report renderers for multiple output formats
-//! 
+//!
 //! This module provides a generic interface for generating professional reports
 //! that can be shared with executives and team members. It supports multiple
 //! output formats through an extensible architecture.
@@ -11,10 +11,10 @@ use std::path::Path;
 pub trait ReportRenderer {
     /// Render comparison results to a formatted report string
     fn render_report(&self, results: &[ComparisonResult], metadata: &ReportMetadata) -> String;
-    
+
     /// Get the file extension this renderer supports
     fn supported_extension(&self) -> &'static str;
-    
+
     /// Get the MIME type for this format
     fn mime_type(&self) -> &'static str;
 }
@@ -45,13 +45,13 @@ impl ReportMetadata {
             context: std::collections::HashMap::new(),
         }
     }
-    
+
     /// Set execution duration
     pub fn with_duration(mut self, duration: std::time::Duration) -> Self {
         self.execution_duration = duration;
         self
     }
-    
+
     /// Add context information
     pub fn with_context<K: Into<String>, V: Into<String>>(mut self, key: K, value: V) -> Self {
         self.context.insert(key.into(), value.into());
@@ -71,7 +71,7 @@ impl ReportRendererFactory {
             .and_then(|ext| ext.to_str())
             .unwrap_or("html") // Default to HTML
             .to_lowercase();
-        
+
         match extension.as_str() {
             "html" | "htm" => Box::new(html::HtmlReportRenderer::new()),
             // Future formats can be added here:
@@ -79,12 +79,15 @@ impl ReportRendererFactory {
             // "json" => Box::new(json::JsonReportRenderer::new()),
             _ => {
                 // Default to HTML for unknown extensions
-                eprintln!("Warning: Unknown report format '{}', defaulting to HTML", extension);
+                eprintln!(
+                    "Warning: Unknown report format '{}', defaulting to HTML",
+                    extension
+                );
                 Box::new(html::HtmlReportRenderer::new())
             }
         }
     }
-    
+
     /// Get all supported formats
     pub fn supported_formats() -> Vec<&'static str> {
         vec!["html", "htm"]

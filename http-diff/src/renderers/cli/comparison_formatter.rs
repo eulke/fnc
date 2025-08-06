@@ -1,8 +1,8 @@
-/// Comparison-specific formatting for diff output - handles presentation of differences
-use crate::comparison::analyzer::{HeaderDiff, BodyDiff};
-use crate::types::DiffViewStyle;
-use super::table::{TableBuilder, TableStyle, cells};
+use super::table::{cells, TableBuilder, TableStyle};
 use super::text_formatter::TextFormatter;
+/// Comparison-specific formatting for diff output - handles presentation of differences
+use crate::comparison::analyzer::{BodyDiff, HeaderDiff};
+use crate::types::DiffViewStyle;
 
 /// Formatter for comparison differences - handles all presentation logic
 pub struct ComparisonFormatter {
@@ -31,7 +31,7 @@ impl ComparisonFormatter {
         }
     }
 
-    /// Format unified diff table for headers 
+    /// Format unified diff table for headers
     fn format_headers_unified(
         &self,
         header_diffs: &[HeaderDiff],
@@ -41,24 +41,24 @@ impl ComparisonFormatter {
         let mut table = TableBuilder::new();
         table.apply_style(TableStyle::Diff); // Remove horizontal lines
         table.headers(vec!["Header", "Environment", "Value"]);
-        
+
         for diff in header_diffs {
             if let Some(value1) = &diff.value1 {
                 table.styled_row(vec![
                     cells::normal(&diff.name),
                     cells::removed(format!("- {}", env1.to_uppercase())),
-                    cells::removed(value1)
+                    cells::removed(value1),
                 ]);
             }
             if let Some(value2) = &diff.value2 {
                 table.styled_row(vec![
                     cells::normal(&diff.name),
                     cells::added(format!("+ {}", env2.to_uppercase())),
-                    cells::added(value2)
+                    cells::added(value2),
                 ]);
             }
         }
-        
+
         table.build()
     }
 
@@ -72,28 +72,28 @@ impl ComparisonFormatter {
         let mut table = TableBuilder::new();
         table.apply_style(TableStyle::Diff);
         table.headers(vec!["Header", &env1.to_uppercase(), &env2.to_uppercase()]);
-        
+
         for diff in header_diffs {
             let left_value = match &diff.value1 {
                 Some(value) => cells::normal(value),
-                None => cells::muted("(missing)")
+                None => cells::muted("(missing)"),
             };
-            
+
             let right_value = match &diff.value2 {
                 Some(value) => cells::normal(value),
-                None => cells::muted("(missing)")
+                None => cells::muted("(missing)"),
             };
-            
+
             // Color the header name if values are different
             let header_cell = if diff.value1 != diff.value2 {
                 cells::bold(&diff.name)
             } else {
                 cells::normal(&diff.name)
             };
-            
+
             table.styled_row(vec![header_cell, left_value, right_value]);
         }
-        
+
         table.build()
     }
 
@@ -110,12 +110,18 @@ impl ComparisonFormatter {
         }
 
         match diff_style {
-            DiffViewStyle::Unified => {
-                self.format_unified_body_diff(&body_diff.normalized_body1, &body_diff.normalized_body2, env1, env2)
-            }
-            DiffViewStyle::SideBySide => {
-                self.format_side_by_side_body_diff(&body_diff.normalized_body1, &body_diff.normalized_body2, env1, env2)
-            }
+            DiffViewStyle::Unified => self.format_unified_body_diff(
+                &body_diff.normalized_body1,
+                &body_diff.normalized_body2,
+                env1,
+                env2,
+            ),
+            DiffViewStyle::SideBySide => self.format_side_by_side_body_diff(
+                &body_diff.normalized_body1,
+                &body_diff.normalized_body2,
+                env1,
+                env2,
+            ),
         }
     }
 
@@ -134,12 +140,24 @@ impl ComparisonFormatter {
     }
 
     /// Format side-by-side diff for body content
-    fn format_side_by_side_body_diff(&self, text1: &str, text2: &str, env1: &str, env2: &str) -> String {
-        self.text_formatter.side_by_side_diff(text1, text2, env1, env2)
+    fn format_side_by_side_body_diff(
+        &self,
+        text1: &str,
+        text2: &str,
+        env1: &str,
+        env2: &str,
+    ) -> String {
+        self.text_formatter
+            .side_by_side_diff(text1, text2, env1, env2)
     }
 
     /// Format large response summary
-    fn format_large_response_summary(&self, body_diff: &BodyDiff, env1: &str, env2: &str) -> String {
+    fn format_large_response_summary(
+        &self,
+        body_diff: &BodyDiff,
+        env1: &str,
+        env2: &str,
+    ) -> String {
         let lines1 = body_diff.normalized_body1.lines().count();
         let lines2 = body_diff.normalized_body2.lines().count();
         let size1 = body_diff.normalized_body1.len();
@@ -166,7 +184,9 @@ impl ComparisonFormatter {
             output.push_str(&format!("   Line count difference: {} lines\n", line_diff));
         }
 
-        output.push_str("\n💡 Tip: Use curl commands or reduce response size for detailed comparison\n");
+        output.push_str(
+            "\n💡 Tip: Use curl commands or reduce response size for detailed comparison\n",
+        );
         output
     }
 }
@@ -184,7 +204,7 @@ mod tests {
     #[test]
     fn test_header_unified_formatting() {
         let formatter = ComparisonFormatter::new();
-        
+
         let header_diffs = vec![
             HeaderDiff {
                 name: "X-Version".to_string(),
@@ -198,8 +218,13 @@ mod tests {
             },
         ];
 
-        let output = formatter.format_header_differences(&header_diffs, "test", "prod", DiffViewStyle::Unified);
-        
+        let output = formatter.format_header_differences(
+            &header_diffs,
+            "test",
+            "prod",
+            DiffViewStyle::Unified,
+        );
+
         assert!(output.contains("X-Version"));
         assert!(output.contains("X-New-Header"));
         assert!(output.contains("1.0"));
@@ -212,17 +237,20 @@ mod tests {
     #[test]
     fn test_header_side_by_side_formatting() {
         let formatter = ComparisonFormatter::new();
-        
-        let header_diffs = vec![
-            HeaderDiff {
-                name: "X-Version".to_string(),
-                value1: Some("1.0".to_string()),
-                value2: Some("2.0".to_string()),
-            },
-        ];
 
-        let output = formatter.format_header_differences(&header_diffs, "test", "prod", DiffViewStyle::SideBySide);
-        
+        let header_diffs = vec![HeaderDiff {
+            name: "X-Version".to_string(),
+            value1: Some("1.0".to_string()),
+            value2: Some("2.0".to_string()),
+        }];
+
+        let output = formatter.format_header_differences(
+            &header_diffs,
+            "test",
+            "prod",
+            DiffViewStyle::SideBySide,
+        );
+
         assert!(output.contains("X-Version"));
         assert!(output.contains("1.0"));
         assert!(output.contains("2.0"));
@@ -233,7 +261,7 @@ mod tests {
     #[test]
     fn test_body_diff_formatting() {
         let formatter = ComparisonFormatter::new();
-        
+
         let body_diff = BodyDiff {
             normalized_body1: "line1\nline2\nline3".to_string(),
             normalized_body2: "line1\nmodified_line2\nline3".to_string(),
@@ -241,10 +269,12 @@ mod tests {
             total_size: 100,
         };
 
-        let unified_output = formatter.format_body_difference(&body_diff, "test", "prod", DiffViewStyle::Unified);
+        let unified_output =
+            formatter.format_body_difference(&body_diff, "test", "prod", DiffViewStyle::Unified);
         assert!(!unified_output.is_empty());
 
-        let side_by_side_output = formatter.format_body_difference(&body_diff, "test", "prod", DiffViewStyle::SideBySide);
+        let side_by_side_output =
+            formatter.format_body_difference(&body_diff, "test", "prod", DiffViewStyle::SideBySide);
         assert!(!side_by_side_output.is_empty());
         assert!(side_by_side_output.contains("TEST"));
         assert!(side_by_side_output.contains("PROD"));
@@ -253,7 +283,7 @@ mod tests {
     #[test]
     fn test_large_response_summary() {
         let formatter = ComparisonFormatter::new();
-        
+
         let body_diff = BodyDiff {
             normalized_body1: "x".repeat(60_000),
             normalized_body2: "y".repeat(60_000),
@@ -261,8 +291,9 @@ mod tests {
             total_size: 120_000,
         };
 
-        let output = formatter.format_body_difference(&body_diff, "test", "prod", DiffViewStyle::Unified);
-        
+        let output =
+            formatter.format_body_difference(&body_diff, "test", "prod", DiffViewStyle::Unified);
+
         assert!(output.contains("Large Response Comparison Summary"));
         assert!(output.contains("Environment"));
         assert!(output.contains("Response Size"));
@@ -274,17 +305,20 @@ mod tests {
     #[test]
     fn test_missing_header_formatting() {
         let formatter = ComparisonFormatter::new();
-        
-        let header_diffs = vec![
-            HeaderDiff {
-                name: "X-Missing".to_string(),
-                value1: Some("exists".to_string()),
-                value2: None,
-            },
-        ];
 
-        let output = formatter.format_header_differences(&header_diffs, "test", "prod", DiffViewStyle::SideBySide);
-        
+        let header_diffs = vec![HeaderDiff {
+            name: "X-Missing".to_string(),
+            value1: Some("exists".to_string()),
+            value2: None,
+        }];
+
+        let output = formatter.format_header_differences(
+            &header_diffs,
+            "test",
+            "prod",
+            DiffViewStyle::SideBySide,
+        );
+
         assert!(output.contains("X-Missing"));
         assert!(output.contains("exists"));
         assert!(output.contains("(missing)"));

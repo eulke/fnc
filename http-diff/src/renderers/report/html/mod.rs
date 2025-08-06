@@ -1,13 +1,13 @@
 //! HTML report renderer for executive summary reports
 
+use super::{ReportMetadata, ReportRenderer};
 use crate::types::ComparisonResult;
-use super::{ReportRenderer, ReportMetadata};
 
-mod templates;
 mod components;
+mod templates;
 
-pub use templates::HtmlTemplate;
 pub use components::HtmlComponents;
+pub use templates::HtmlTemplate;
 
 /// HTML report renderer that generates professional, self-contained HTML reports
 pub struct HtmlReportRenderer {
@@ -22,7 +22,7 @@ impl HtmlReportRenderer {
             include_technical_details: true,
         }
     }
-    
+
     /// Create an HTML renderer for executive summary (minimal technical details)
     pub fn executive_summary() -> Self {
         Self {
@@ -42,11 +42,11 @@ impl ReportRenderer for HtmlReportRenderer {
         let template = HtmlTemplate::new();
         template.render(results, metadata, self.include_technical_details)
     }
-    
+
     fn supported_extension(&self) -> &'static str {
         "html"
     }
-    
+
     fn mime_type(&self) -> &'static str {
         "text/html"
     }

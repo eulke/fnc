@@ -53,16 +53,16 @@ pub struct RouteError {
 pub trait ErrorAnalyzer: Send + Sync {
     /// Analyze comparison results and return structured error data
     fn analyze_errors(&self, results: &[ComparisonResult]) -> ErrorAnalysis;
-    
+
     /// Extract error type from response body
     fn extract_error_type(&self, body: &str) -> String;
-    
+
     /// Determine severity based on error type and status codes
     fn determine_severity(&self, error_type: &str, status_codes: &[u16]) -> ErrorSeverity;
-    
+
     /// Get debugging suggestion for error type and status
     fn get_debugging_suggestion(&self, error_type: &str, status: u16) -> Option<String>;
-    
+
     /// Format error body for analysis (business logic only)
     fn format_error_message(&self, body: &str, status_code: Option<u16>) -> String;
 }
@@ -85,28 +85,31 @@ impl Default for ErrorClassifierImpl {
 impl ErrorAnalyzer for ErrorClassifierImpl {
     fn analyze_errors(&self, results: &[ComparisonResult]) -> ErrorAnalysis {
         let total_requests = results.len();
-        let failed_results: Vec<&ComparisonResult> = results.iter().filter(|r| r.has_errors).collect();
+        let failed_results: Vec<&ComparisonResult> =
+            results.iter().filter(|r| r.has_errors).collect();
         let total_failed = failed_results.len();
-        
+
         // Calculate critical issues (different failures across environments)
-        let critical_issues = results.iter()
+        let critical_issues = results
+            .iter()
             .filter(|r| r.has_errors && !r.has_consistent_status())
             .count();
-        
+
         // Calculate consistent failures (same errors in all environments)
-        let consistent_failures = results.iter()
+        let consistent_failures = results
+            .iter()
             .filter(|r| r.has_errors && r.has_consistent_status())
             .count();
-        
+
         let failure_percentage = if total_requests > 0 {
             (total_failed as f32 / total_requests as f32) * 100.0
         } else {
             0.0
         };
-        
+
         // Group errors by type
         let error_groups = self.group_errors_by_type(&failed_results);
-        
+
         ErrorAnalysis {
             critical_issues,
             consistent_failures,
@@ -116,14 +119,14 @@ impl ErrorAnalyzer for ErrorClassifierImpl {
             error_groups,
         }
     }
-    
+
     fn extract_error_type(&self, body: &str) -> String {
         if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(body) {
             if let Some(error) = json_value.get("error").and_then(|v| v.as_str()) {
                 return error.to_string();
             }
         }
-        
+
         // Fallback: try to extract from common patterns
         if body.contains("DependencyError") || body.contains("dependency") {
             "DependencyError".to_string()
@@ -132,61 +135,100 @@ impl ErrorAnalyzer for ErrorClassifierImpl {
         } else if body.contains("ValidationError") || body.contains("validation") {
             "ValidationError".to_string()
         // Connection and network error patterns
-        } else if body.contains("error sending request") || body.contains("connection refused") || 
-                  body.contains("Connection refused") || body.contains("connect refused") {
+        } else if body.contains("error sending request")
+            || body.contains("connection refused")
+            || body.contains("Connection refused")
+            || body.contains("connect refused")
+        {
             "ConnectionError".to_string()
-        } else if body.contains("timeout") || body.contains("timed out") || body.contains("Timeout") {
+        } else if body.contains("timeout") || body.contains("timed out") || body.contains("Timeout")
+        {
             "TimeoutError".to_string()
-        } else if body.contains("dns") || body.contains("DNS") || body.contains("name resolution") ||
-                  body.contains("Name resolution") || body.contains("failed to resolve") {
+        } else if body.contains("dns")
+            || body.contains("DNS")
+            || body.contains("name resolution")
+            || body.contains("Name resolution")
+            || body.contains("failed to resolve")
+        {
             "DNSError".to_string()
-        } else if body.contains("certificate") || body.contains("Certificate") || body.contains("SSL") ||
-                  body.contains("TLS") || body.contains("ssl") || body.contains("tls") {
+        } else if body.contains("certificate")
+            || body.contains("Certificate")
+            || body.contains("SSL")
+            || body.contains("TLS")
+            || body.contains("ssl")
+            || body.contains("tls")
+        {
             "CertificateError".to_string()
         } else {
             "Unknown".to_string()
         }
     }
-    
+
     fn determine_severity(&self, error_type: &str, status_codes: &[u16]) -> ErrorSeverity {
         let max_status = status_codes.iter().max().unwrap_or(&0);
-        
+
         match (error_type, max_status) {
             (_, status) if *status >= 500 => ErrorSeverity::Critical,
-            ("DependencyError", _) | ("ConnectionError", _) | ("TimeoutError", _) | 
-            ("DNSError", _) | ("CertificateError", _) | (_, 424 | 502 | 503 | 504) => ErrorSeverity::Dependency,
+            ("DependencyError", _)
+            | ("ConnectionError", _)
+            | ("TimeoutError", _)
+            | ("DNSError", _)
+            | ("CertificateError", _)
+            | (_, 424 | 502 | 503 | 504) => ErrorSeverity::Dependency,
             (_, status) if *status >= 400 => ErrorSeverity::Client,
             _ => ErrorSeverity::Client, // Default for all other cases
         }
     }
-    
+
     fn get_debugging_suggestion(&self, error_type: &str, status: u16) -> Option<String> {
         match (error_type, status) {
-            ("DependencyError", 424) => Some("Check dependent service health and connectivity".to_string()),
-            ("ConnectionError", 503) => Some("Check if the service is running and accessible at the specified host:port".to_string()),
-            ("TimeoutError", 504) => Some("Service is responding slowly - check service health and network connectivity".to_string()),
-            ("DNSError", 502) => Some("DNS resolution failed - verify the hostname is correct and DNS is working".to_string()),
-            ("CertificateError", 502) => Some("SSL/TLS certificate issue - check certificate validity and trust chain".to_string()),
-            ("UnhandledError", 500) => Some("Review request payload structure and required fields".to_string()),
-            ("ValidationError", 400) => Some("Verify request parameters and data format".to_string()),
+            ("DependencyError", 424) => {
+                Some("Check dependent service health and connectivity".to_string())
+            }
+            ("ConnectionError", 503) => Some(
+                "Check if the service is running and accessible at the specified host:port"
+                    .to_string(),
+            ),
+            ("TimeoutError", 504) => Some(
+                "Service is responding slowly - check service health and network connectivity"
+                    .to_string(),
+            ),
+            ("DNSError", 502) => Some(
+                "DNS resolution failed - verify the hostname is correct and DNS is working"
+                    .to_string(),
+            ),
+            ("CertificateError", 502) => Some(
+                "SSL/TLS certificate issue - check certificate validity and trust chain"
+                    .to_string(),
+            ),
+            ("UnhandledError", 500) => {
+                Some("Review request payload structure and required fields".to_string())
+            }
+            ("ValidationError", 400) => {
+                Some("Verify request parameters and data format".to_string())
+            }
             (_, 500) => Some("Check application logs for internal errors".to_string()),
-            (_, 503) => Some("Service is unavailable - verify it's running and not overloaded".to_string()),
-            (_, 504) => Some("Request timed out - service may be overloaded or network issues".to_string()),
+            (_, 503) => {
+                Some("Service is unavailable - verify it's running and not overloaded".to_string())
+            }
+            (_, 504) => {
+                Some("Request timed out - service may be overloaded or network issues".to_string())
+            }
             (_, 424) => Some("Verify dependent services are operational".to_string()),
             _ => None,
         }
     }
-    
+
     fn format_error_message(&self, body: &str, status_code: Option<u16>) -> String {
         // Try to parse as JSON for better structure
         if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(body) {
             if let Some(obj) = json_value.as_object() {
                 let mut parts = Vec::new();
-                
+
                 if let Some(error) = obj.get("error").and_then(|v| v.as_str()) {
                     parts.push(format!("Type: {}", error));
                 }
-                
+
                 if let Some(message) = obj.get("message").and_then(|v| v.as_str()) {
                     let truncated = if message.len() > 100 {
                         format!("{}...", &message[..100])
@@ -195,20 +237,20 @@ impl ErrorAnalyzer for ErrorClassifierImpl {
                     };
                     parts.push(format!("Message: {}", truncated));
                 }
-                
+
                 if let Some(status_code) = obj.get("statusCode").and_then(|v| v.as_u64()) {
                     parts.push(format!("Code: {}", status_code));
                 }
-                
+
                 if !parts.is_empty() {
                     return parts.join(" | ");
                 }
             }
         }
-        
+
         // Fallback to truncated original body
         let formatted_body = self.truncate_response_body(body, 150);
-        
+
         // If the body is empty or whitespace-only, use status code description
         if formatted_body.trim().is_empty() {
             if let Some(status) = status_code {
@@ -226,7 +268,7 @@ impl ErrorClassifierImpl {
     /// Group failed requests by error type - pure business logic
     fn group_errors_by_type(&self, failed_results: &[&ComparisonResult]) -> Vec<ErrorGroup> {
         let mut error_groups: HashMap<String, Vec<&ComparisonResult>> = HashMap::new();
-        
+
         for result in failed_results {
             let error_type = if let Some(error_bodies) = &result.error_bodies {
                 if let Some(first_body) = error_bodies.values().next() {
@@ -237,22 +279,24 @@ impl ErrorClassifierImpl {
             } else {
                 "Unknown".to_string()
             };
-            
+
             error_groups.entry(error_type).or_default().push(result);
         }
-        
+
         // Convert to structured error groups
         let mut groups = Vec::new();
-        
+
         for (error_type, group_results) in error_groups {
-            let status_codes: Vec<u16> = group_results.iter()
+            let status_codes: Vec<u16> = group_results
+                .iter()
                 .flat_map(|r| r.status_codes.values())
                 .copied()
                 .collect();
-            
+
             let severity = self.determine_severity(&error_type, &status_codes);
-            
-            let affected_routes: Vec<RouteError> = group_results.iter()
+
+            let affected_routes: Vec<RouteError> = group_results
+                .iter()
                 .map(|result| RouteError {
                     route_name: result.route_name.clone(),
                     user_context: result.user_context.clone(),
@@ -260,7 +304,7 @@ impl ErrorClassifierImpl {
                     has_consistent_status: result.has_consistent_status(),
                 })
                 .collect();
-            
+
             // Collect unique error messages
             let mut unique_errors = HashSet::new();
             for result in &group_results {
@@ -272,7 +316,7 @@ impl ErrorClassifierImpl {
                     }
                 }
             }
-            
+
             // Get debugging suggestion for this error type
             let debugging_suggestion = if let Some(sample_result) = group_results.first() {
                 if let Some(status) = sample_result.status_codes.values().next() {
@@ -283,7 +327,7 @@ impl ErrorClassifierImpl {
             } else {
                 None
             };
-            
+
             groups.push(ErrorGroup {
                 error_type,
                 severity,
@@ -292,7 +336,7 @@ impl ErrorClassifierImpl {
                 debugging_suggestion,
             });
         }
-        
+
         // Sort by severity: Critical > Dependency > Client
         groups.sort_by(|a, b| {
             let severity_order = |s: &ErrorSeverity| match s {
@@ -302,10 +346,10 @@ impl ErrorClassifierImpl {
             };
             severity_order(&a.severity).cmp(&severity_order(&b.severity))
         });
-        
+
         groups
     }
-    
+
     /// Truncate response body - utility function
     fn truncate_response_body(&self, body: &str, max_length: usize) -> String {
         if body.len() <= max_length {
@@ -314,7 +358,7 @@ impl ErrorClassifierImpl {
             format!("{}... (truncated)", &body[..max_length])
         }
     }
-    
+
     /// Get friendly error message based on status code - business logic only
     fn get_friendly_error_message(&self, status: u16) -> String {
         match status {
@@ -325,9 +369,13 @@ impl ErrorClassifierImpl {
             424 => "Dependent service is unavailable or failing".to_string(),
             500 => "Internal server error occurred - check application logs".to_string(),
             502 => "Gateway error - upstream service not responding correctly".to_string(),
-            503 => "Service temporarily unavailable - likely overloaded or under maintenance".to_string(),
+            503 => "Service temporarily unavailable - likely overloaded or under maintenance"
+                .to_string(),
             504 => "Request timed out - service taking too long to respond".to_string(),
-            _ => format!("Service returned error status {} with no additional details", status),
+            _ => format!(
+                "Service returned error status {} with no additional details",
+                status
+            ),
         }
     }
 }
@@ -338,34 +386,38 @@ mod tests {
     use crate::types::ComparisonResult;
     use std::collections::HashMap;
 
-    fn create_test_result_with_error(route_name: &str, status: u16, error_body: &str) -> ComparisonResult {
+    fn create_test_result_with_error(
+        route_name: &str,
+        status: u16,
+        error_body: &str,
+    ) -> ComparisonResult {
         let mut result = ComparisonResult::new(route_name.to_string(), HashMap::new());
-        
+
         let mut status_codes = HashMap::new();
         status_codes.insert("test".to_string(), status);
         result.status_codes = status_codes;
-        
+
         if status >= 400 {
             result.has_errors = true;
             let mut error_bodies = HashMap::new();
             error_bodies.insert("test".to_string(), error_body.to_string());
             result.error_bodies = Some(error_bodies);
         }
-        
+
         result
     }
 
     #[test]
     fn test_error_analysis_calculation() {
         let analyzer = ErrorClassifierImpl::new();
-        
+
         let results = vec![
             create_test_result_with_error("route1", 500, r#"{"error": "UnhandledError"}"#),
             create_test_result_with_error("route2", 400, r#"{"error": "ValidationError"}"#),
         ];
-        
+
         let analysis = analyzer.analyze_errors(&results);
-        
+
         assert_eq!(analysis.total_requests, 2);
         assert_eq!(analysis.total_failed, 2);
         assert_eq!(analysis.failure_percentage, 100.0);
@@ -375,18 +427,33 @@ mod tests {
     #[test]
     fn test_error_type_extraction() {
         let analyzer = ErrorClassifierImpl::new();
-        
-        assert_eq!(analyzer.extract_error_type(r#"{"error": "ValidationError"}"#), "ValidationError");
-        assert_eq!(analyzer.extract_error_type("DependencyError occurred"), "DependencyError");
+
+        assert_eq!(
+            analyzer.extract_error_type(r#"{"error": "ValidationError"}"#),
+            "ValidationError"
+        );
+        assert_eq!(
+            analyzer.extract_error_type("DependencyError occurred"),
+            "DependencyError"
+        );
         assert_eq!(analyzer.extract_error_type("random text"), "Unknown");
     }
 
     #[test]
     fn test_severity_determination() {
         let analyzer = ErrorClassifierImpl::new();
-        
-        assert_eq!(analyzer.determine_severity("any", &[500]), ErrorSeverity::Critical);
-        assert_eq!(analyzer.determine_severity("DependencyError", &[400]), ErrorSeverity::Dependency);
-        assert_eq!(analyzer.determine_severity("ValidationError", &[400]), ErrorSeverity::Client);
+
+        assert_eq!(
+            analyzer.determine_severity("any", &[500]),
+            ErrorSeverity::Critical
+        );
+        assert_eq!(
+            analyzer.determine_severity("DependencyError", &[400]),
+            ErrorSeverity::Dependency
+        );
+        assert_eq!(
+            analyzer.determine_severity("ValidationError", &[400]),
+            ErrorSeverity::Client
+        );
     }
 }

@@ -4,15 +4,11 @@ use crate::progress::ProgressTracker as CliProgressTracker;
 use crate::ui;
 use dialoguer::{Confirm, theme::ColorfulTheme};
 use http_diff::{
-    config::{load_user_data, HttpDiffConfig, ensure_config_files_exist},
+    CliRenderer, DefaultHttpClient, DefaultResponseComparator, DefaultTestRunner, ErrorCollector,
+    OutputRenderer, ProgressTracker as HttpProgressTracker, TestRunner,
+    config::{HttpDiffConfig, ensure_config_files_exist, load_user_data},
     curl::CurlGenerator,
-    DefaultTestRunner, DefaultHttpClient, DefaultResponseComparator,
-    CliRenderer,
-    OutputRenderer,
-    TestRunner,
-    ErrorCollector,
-    ProgressTracker as HttpProgressTracker,
-    renderers::{ReportRendererFactory, ReportMetadata},
+    renderers::{ReportMetadata, ReportRendererFactory},
 };
 use indicatif::{ProgressBar, ProgressStyle};
 use std::fs;
@@ -62,19 +58,17 @@ impl ErrorCollector for CliErrorCollector {
     }
 }
 
-
 pub fn execute(args: HttpDiffArgs) -> Result<()> {
     // Determine whether to use TUI or CLI based on arguments and environment
     let use_tui = should_use_tui(&args);
-    
+
     if use_tui {
         // Launch TUI immediately - it will handle the complete workflow
         launch_tui_workflow(args)
     } else {
         // Create async runtime for CLI-only execution
-        let rt = Runtime::new().map_err(|e| {
-            CliError::Other(format!("Failed to create async runtime: {}", e))
-        })?;
+        let rt = Runtime::new()
+            .map_err(|e| CliError::Other(format!("Failed to create async runtime: {}", e)))?;
 
         rt.block_on(execute_async(args.clone()))?;
         Ok(())
@@ -107,41 +101,46 @@ async fn execute_async(args: HttpDiffArgs) -> Result<()> {
             ensure_config_files_exist(
                 &config_path.to_string_lossy(),
                 &users_path.to_string_lossy(),
-                true
-            ).map_err(|e| {
-                CliError::Other(format!("Failed to create configuration files: {}", e))
-            })?;
-            
+                true,
+            )
+            .map_err(|e| CliError::Other(format!("Failed to create configuration files: {}", e)))?;
+
             ui::success_message("Configuration files created successfully!");
-            ui::info_message(&format!("Edit {} to configure your environments and routes", config_path.display()));
-            ui::info_message(&format!("Edit {} to add test user data", users_path.display()));
-            
+            ui::info_message(&format!(
+                "Edit {} to configure your environments and routes",
+                config_path.display()
+            ));
+            ui::info_message(&format!(
+                "Edit {} to add test user data",
+                users_path.display()
+            ));
+
             if !args.init {
                 return Ok(());
             }
         } else {
             return Err(CliError::Other(
-                "Configuration files are required to run HTTP diff tests".to_string()
+                "Configuration files are required to run HTTP diff tests".to_string(),
             ));
         }
     }
 
     // Load configuration
     ui::status_message("Loading configuration...");
-    let config = HttpDiffConfig::load_from_file(config_path).map_err(|e| {
-        CliError::Other(format!("Failed to load configuration: {}", e))
-    })?;
+    let config = HttpDiffConfig::load_from_file(config_path)
+        .map_err(|e| CliError::Other(format!("Failed to load configuration: {}", e)))?;
 
     // Validate that we have environments and routes
     if config.environments.is_empty() {
         return Err(CliError::Other(
-            "No environments configured. Please add environments to your configuration file".to_string()
+            "No environments configured. Please add environments to your configuration file"
+                .to_string(),
         ));
     }
 
     if config.routes.is_empty() {
         return Err(CliError::Other(
-            "No routes configured. Please add routes to your configuration file".to_string()
+            "No routes configured. Please add routes to your configuration file".to_string(),
         ));
     }
 
@@ -174,7 +173,12 @@ async fn execute_async(args: HttpDiffArgs) -> Result<()> {
                 return Err(CliError::Other(format!(
                     "Environment '{}' not found in configuration. Available environments: {}",
                     env,
-                    config.environments.keys().cloned().collect::<Vec<_>>().join(", ")
+                    config
+                        .environments
+                        .keys()
+                        .cloned()
+                        .collect::<Vec<_>>()
+                        .join(", ")
                 )));
             }
         }
@@ -196,9 +200,8 @@ async fn execute_async(args: HttpDiffArgs) -> Result<()> {
 
     // Load user data
     ui::status_message("Loading user test data...");
-    let user_data = load_user_data(users_path).map_err(|e| {
-        CliError::Other(format!("Failed to load user data: {}", e))
-    })?;
+    let user_data = load_user_data(users_path)
+        .map_err(|e| CliError::Other(format!("Failed to load user data: {}", e)))?;
 
     if user_data.is_empty() {
         ui::warning_message("No user data found. Tests will run without parameter substitution.");
@@ -207,10 +210,16 @@ async fn execute_async(args: HttpDiffArgs) -> Result<()> {
     }
 
     // Setup progress tracking
-    let env_count = env_list.as_ref().map(|e| e.len()).unwrap_or(config.environments.len());
-    let route_count = route_list.as_ref().map(|r| r.len()).unwrap_or(config.routes.len());
+    let env_count = env_list
+        .as_ref()
+        .map(|e| e.len())
+        .unwrap_or(config.environments.len());
+    let route_count = route_list
+        .as_ref()
+        .map(|r| r.len())
+        .unwrap_or(config.routes.len());
     let total_tests = route_count * user_data.len().max(1) * env_count;
-    
+
     let mut progress = CliProgressTracker::new("HTTP Diff Testing").with_steps(vec![
         "Initializing test runner".to_string(),
         format!("Executing {} HTTP tests", total_tests),
@@ -220,42 +229,64 @@ async fn execute_async(args: HttpDiffArgs) -> Result<()> {
 
     // Initialize test runner with headers comparison and diff view settings
     progress.start_step();
-    
+
     // Convert CLI DiffViewType to http-diff DiffViewStyle
     let diff_view_style = match args.diff_view {
         crate::cli::DiffViewType::Unified => http_diff::DiffViewStyle::Unified,
         crate::cli::DiffViewType::SideBySide => http_diff::DiffViewStyle::SideBySide,
     };
-    
+
     // Create test runner with custom comparator settings
-    let client = DefaultHttpClient::new(config.clone()).map_err(|e| {
-        CliError::Other(format!("Failed to create HTTP client: {}", e))
-    })?;
-    
-    let mut comparator = DefaultResponseComparator::new().with_diff_view_style(diff_view_style.clone());
+    let client = DefaultHttpClient::new(config.clone())
+        .map_err(|e| CliError::Other(format!("Failed to create HTTP client: {}", e)))?;
+
+    let mut comparator =
+        DefaultResponseComparator::new().with_diff_view_style(diff_view_style.clone());
     if args.include_headers {
         comparator = comparator.with_headers_comparison();
     }
-    
-    let runner = DefaultTestRunner::new(config.clone(), client, comparator).map_err(|e| {
-        CliError::Other(format!("Failed to initialize test runner: {}", e))
-    })?;
+
+    let runner = DefaultTestRunner::new(config.clone(), client, comparator)
+        .map_err(|e| CliError::Other(format!("Failed to initialize test runner: {}", e)))?;
     progress.complete_step();
 
     // Execute HTTP diff tests with visual progress bar
     progress.start_step();
     if args.verbose {
-        let env_names = env_list.as_ref()
+        let env_names = env_list
+            .as_ref()
             .map(|envs| envs.join(", "))
-            .unwrap_or_else(|| config.environments.keys().cloned().collect::<Vec<_>>().join(", "));
+            .unwrap_or_else(|| {
+                config
+                    .environments
+                    .keys()
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            });
         ui::info_message(&format!("Testing environments: {}", env_names));
-        
-        let route_names = route_list.as_ref()
+
+        let route_names = route_list
+            .as_ref()
             .map(|routes| routes.join(", "))
-            .unwrap_or_else(|| config.routes.iter().map(|r| r.name.clone()).collect::<Vec<_>>().join(", "));
+            .unwrap_or_else(|| {
+                config
+                    .routes
+                    .iter()
+                    .map(|r| r.name.clone())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            });
         ui::info_message(&format!("Testing routes: {}", route_names));
-        
-        ui::info_message(&format!("Headers comparison: {}", if args.include_headers { "enabled" } else { "disabled" }));
+
+        ui::info_message(&format!(
+            "Headers comparison: {}",
+            if args.include_headers {
+                "enabled"
+            } else {
+                "disabled"
+            }
+        ));
         let diff_view_name = match args.diff_view {
             crate::cli::DiffViewType::Unified => "unified",
             crate::cli::DiffViewType::SideBySide => "side-by-side",
@@ -265,72 +296,78 @@ async fn execute_async(args: HttpDiffArgs) -> Result<()> {
 
     // Create progress bar for HTTP requests with clean, simple template
     let pb = Arc::new(ProgressBar::new(total_tests as u64));
-    let style = ProgressStyle::with_template(
-        "{spinner} [{elapsed}] [{bar:40}] {pos}/{len} {msg}"
-    ).unwrap_or_else(|_| ProgressStyle::default_bar())
-    .progress_chars("█▉▊▋▌▍▎▏  ");
+    let style = ProgressStyle::with_template("{spinner} [{elapsed}] [{bar:40}] {pos}/{len} {msg}")
+        .unwrap_or_else(|_| ProgressStyle::default_bar())
+        .progress_chars("█▉▊▋▌▍▎▏  ");
     pb.set_style(style);
     pb.set_message("Executing HTTP requests...");
 
     // Create error collector for structured error handling
     let error_collector = CliErrorCollector::new(args.verbose);
-    
+
     // Execute with progress callback and error collection
     let pb_clone = Arc::clone(&pb);
-    let execution_result = runner.execute_with_data(
-        &user_data,
-        env_list.clone(),
-        route_list,
-        Some(Box::new(error_collector)),
-        Some(Box::new(move |p: &HttpProgressTracker| {
-            pb_clone.set_position(p.completed_requests as u64);
-        }))
-    ).await.map_err(|e| {
-        CliError::Other(format!("HTTP diff execution failed: {}", e))
-    })?;
-    
+    let execution_result = runner
+        .execute_with_data(
+            &user_data,
+            env_list.clone(),
+            route_list,
+            Some(Box::new(error_collector)),
+            Some(Box::new(move |p: &HttpProgressTracker| {
+                pb_clone.set_position(p.completed_requests as u64);
+            })),
+        )
+        .await
+        .map_err(|e| CliError::Other(format!("HTTP diff execution failed: {}", e)))?;
+
     pb.finish_with_message("✅ All HTTP requests completed!");
-    
-    
+
     progress.complete_step();
 
     // Analyze and display results
     progress.start_step();
     let total_results = execution_result.comparisons.len();
-    let identical_count = execution_result.comparisons.iter().filter(|r| r.is_identical).count();
+    let identical_count = execution_result
+        .comparisons
+        .iter()
+        .filter(|r| r.is_identical)
+        .count();
     let different_count = total_results - identical_count;
 
     if args.verbose {
-        ui::info_message(&format!("Test results: {} total, {} identical, {} different", 
-                                 total_results, identical_count, different_count));
-        
+        ui::info_message(&format!(
+            "Test results: {} total, {} identical, {} different",
+            total_results, identical_count, different_count
+        ));
+
         // Display error summary if there were errors
         if execution_result.has_errors() {
             let request_errors = execution_result.request_errors();
             let comparison_errors = execution_result.comparison_errors();
             let execution_errors = execution_result.execution_errors();
-            
-            ui::info_message(&format!("Errors encountered: {} request errors, {} comparison errors, {} execution errors",
-                                     request_errors.len(), comparison_errors.len(), execution_errors.len()));
+
+            ui::info_message(&format!(
+                "Errors encountered: {} request errors, {} comparison errors, {} execution errors",
+                request_errors.len(),
+                comparison_errors.len(),
+                execution_errors.len()
+            ));
         }
     }
-    
+
     progress.complete_step();
 
     // Generate output files
     progress.start_step();
     let _curl_generator = CurlGenerator::new(config.clone());
-    
+
     // Generate curl commands file
     let mut curl_commands = Vec::new();
     for result in &execution_result.comparisons {
         for (env_name, response) in &result.responses {
             curl_commands.push(format!(
                 "# Route: {} | Environment: {} | User: {:?}\n{}",
-                result.route_name,
-                env_name,
-                result.user_context,
-                response.curl_command
+                result.route_name, env_name, result.user_context, response.curl_command
             ));
         }
     }
@@ -341,9 +378,8 @@ async fn execute_async(args: HttpDiffArgs) -> Result<()> {
         curl_commands.join("\n\n")
     );
 
-    fs::write(&args.output_file, curl_content).map_err(|e| {
-        CliError::Other(format!("Failed to write curl commands file: {}", e))
-    })?;
+    fs::write(&args.output_file, curl_content)
+        .map_err(|e| CliError::Other(format!("Failed to write curl commands file: {}", e)))?;
 
     ui::success_message(&format!("Curl commands saved to {}", args.output_file));
     progress.complete_step();
@@ -353,31 +389,35 @@ async fn execute_async(args: HttpDiffArgs) -> Result<()> {
     // Generate executive report if requested (do this before TUI/CLI output)
     if let Some(report_file) = &args.report_file {
         ui::status_message("Generating executive report...");
-        
+
         let report_renderer = ReportRendererFactory::create_renderer(report_file);
-        let env_names: Vec<String> = env_list.unwrap_or_else(|| config.environments.keys().cloned().collect());
+        let env_names: Vec<String> =
+            env_list.unwrap_or_else(|| config.environments.keys().cloned().collect());
         let metadata = ReportMetadata::new(env_names, total_tests)
             .with_duration(std::time::Duration::from_secs(0)) // TODO: Track actual duration
             .with_context("config_file", &args.config_path)
-            .with_context("diff_view", match args.diff_view {
-                crate::cli::DiffViewType::Unified => "unified",
-                crate::cli::DiffViewType::SideBySide => "side-by-side",
-            })
+            .with_context(
+                "diff_view",
+                match args.diff_view {
+                    crate::cli::DiffViewType::Unified => "unified",
+                    crate::cli::DiffViewType::SideBySide => "side-by-side",
+                },
+            )
             .with_context("headers_included", args.include_headers.to_string())
             .with_context("errors_included", args.include_errors.to_string());
-        
-        let report_content = report_renderer.render_report(&execution_result.comparisons, &metadata);
-        
-        fs::write(report_file, report_content).map_err(|e| {
-            CliError::Other(format!("Failed to write report file: {}", e))
-        })?;
-        
+
+        let report_content =
+            report_renderer.render_report(&execution_result.comparisons, &metadata);
+
+        fs::write(report_file, report_content)
+            .map_err(|e| CliError::Other(format!("Failed to write report file: {}", e)))?;
+
         ui::success_message(&format!("Executive report saved to {}", report_file));
     }
 
     // Determine whether to use TUI or CLI output
     let use_tui = should_use_tui(&args);
-    
+
     if use_tui {
         // Use TUI for interactive display
         ui::status_message("Launching interactive TUI...");
@@ -396,9 +436,18 @@ async fn execute_async(args: HttpDiffArgs) -> Result<()> {
         if different_count > 0 {
             ui::section_header("Next Steps");
             ui::step_message(1, "Review differences above");
-            ui::step_message(2, &format!("Use curl commands from {} to reproduce issues", args.output_file));
+            ui::step_message(
+                2,
+                &format!(
+                    "Use curl commands from {} to reproduce issues",
+                    args.output_file
+                ),
+            );
             if !args.include_headers {
-                ui::step_message(3, "Re-run with --include-headers to compare headers if needed");
+                ui::step_message(
+                    3,
+                    "Re-run with --include-headers to compare headers if needed",
+                );
             }
             if args.report_file.is_some() {
                 ui::step_message(4, "Share the executive report with stakeholders");
@@ -415,30 +464,30 @@ fn should_use_tui(args: &HttpDiffArgs) -> bool {
     if args.force_tui {
         return true;
     }
-    
+
     // If explicitly disabled, don't use TUI
     if args.no_tui {
         return false;
     }
-    
+
     // Use TUI by default if stdout is a TTY (terminal)
     atty::is(atty::Stream::Stdout)
 }
 
 /// Launch the TUI workflow that handles everything from configuration to results
 fn launch_tui_workflow(args: HttpDiffArgs) -> Result<()> {
-    use http_diff::{TuiRenderer, InteractiveRenderer};
-    
+    use http_diff::{InteractiveRenderer, TuiRenderer};
+
     // Create a TUI renderer that will handle the complete workflow
     let tui_renderer = TuiRenderer::new()
         .with_diff_style(convert_diff_view_style(args.diff_view.clone()))
         .with_headers(args.include_headers)
         .with_errors(args.include_errors);
-    
+
     // Run the TUI synchronously - it will handle async internally
-    tui_renderer.run_workflow(args).map_err(|e| {
-        CliError::Other(format!("TUI failed: {}", e))
-    })
+    tui_renderer
+        .run_workflow(args)
+        .map_err(|e| CliError::Other(format!("TUI failed: {}", e)))
 }
 
 /// Launch the TUI interface for interactive result viewing (legacy function for CLI mode)
@@ -447,16 +496,16 @@ fn launch_tui(
     args: &HttpDiffArgs,
     diff_view_style: http_diff::DiffViewStyle,
 ) -> Result<()> {
-    use http_diff::{TuiRenderer, InteractiveRenderer};
-    
+    use http_diff::{InteractiveRenderer, TuiRenderer};
+
     let tui_renderer = TuiRenderer::new()
         .with_diff_style(diff_view_style)
         .with_headers(args.include_headers)
         .with_errors(args.include_errors);
-    
-    tui_renderer.run_interactive(results).map_err(|e| {
-        CliError::Other(format!("TUI failed: {}", e))
-    })
+
+    tui_renderer
+        .run_interactive(results)
+        .map_err(|e| CliError::Other(format!("TUI failed: {}", e)))
 }
 
 /// Convert CLI DiffViewType to http-diff DiffViewStyle
@@ -470,8 +519,8 @@ fn convert_diff_view_style(diff_view: crate::cli::DiffViewType) -> http_diff::Di
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::tempdir;
     use std::fs;
+    use tempfile::tempdir;
 
     #[test]
     fn test_execute_with_missing_config() {
@@ -482,7 +531,7 @@ mod tests {
         // Ensure files don't exist
         assert!(!config_path.exists());
         assert!(!users_path.exists());
-        
+
         // When files don't exist and init=false, the function should prompt the user
         // This test just verifies the initial condition check
         assert!(!config_path.exists() || !users_path.exists());
@@ -499,18 +548,18 @@ mod tests {
         let result = http_diff::config::ensure_config_files_exist(
             &config_path.to_string_lossy(),
             &users_path.to_string_lossy(),
-            true
+            true,
         );
 
         // Should succeed and create configuration files
         assert!(result.is_ok());
         assert!(config_path.exists());
         assert!(users_path.exists());
-        
+
         // Verify config content is valid
         let config = http_diff::config::HttpDiffConfig::load_from_file(&config_path);
         assert!(config.is_ok());
-        
+
         let config = config.unwrap();
         assert!(!config.environments.is_empty());
         assert!(!config.routes.is_empty());
@@ -523,7 +572,9 @@ mod tests {
         let users_path = temp_dir.path().join("users.csv");
 
         // Create minimal config
-        fs::write(&config_path, r#"
+        fs::write(
+            &config_path,
+            r#"
 [environments.test]
 base_url = "https://api-test.example.com"
 
@@ -531,7 +582,9 @@ base_url = "https://api-test.example.com"
 name = "test-route"
 method = "GET"
 path = "/api/test"
-"#).unwrap();
+"#,
+        )
+        .unwrap();
 
         fs::write(&users_path, "userId,siteId\n123,MCO\n").unwrap();
 
@@ -547,21 +600,33 @@ path = "/api/test"
             init: false,
             verbose: false,
             output_file: "curl_commands.txt".to_string(),
-        }).await;
+        })
+        .await;
 
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Environment 'invalid_env' not found"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Environment 'invalid_env' not found")
+        );
     }
 
     #[test]
     fn test_cli_argument_parsing() {
-        use clap::Parser;
         use crate::cli::{Cli, Commands};
+        use clap::Parser;
 
         // Test basic http-diff command
         let cli = Cli::try_parse_from(["fnc", "http-diff"]).unwrap();
-        
-        if let Commands::HttpDiff { environments, routes, include_headers, .. } = cli.command {
+
+        if let Commands::HttpDiff {
+            environments,
+            routes,
+            include_headers,
+            ..
+        } = cli.command
+        {
             assert_eq!(environments, None);
             assert_eq!(routes, None);
             assert!(!include_headers);
@@ -571,18 +636,24 @@ path = "/api/test"
 
         // Test with all flags
         let cli = Cli::try_parse_from([
-            "fnc", "http-diff", 
-            "--environments", "test,prod",
+            "fnc",
+            "http-diff",
+            "--environments",
+            "test,prod",
             "--include-headers",
-            "--config", "custom.toml",
-            "--users-file", "custom.csv",
+            "--config",
+            "custom.toml",
+            "--users-file",
+            "custom.csv",
             "--init",
             "--verbose",
-            "--output-file", "output.txt"
-        ]).unwrap();
-        
-        if let Commands::HttpDiff { 
-            environments, 
+            "--output-file",
+            "output.txt",
+        ])
+        .unwrap();
+
+        if let Commands::HttpDiff {
+            environments,
             routes: _,
             include_headers,
             include_errors: _,
@@ -592,7 +663,8 @@ path = "/api/test"
             init,
             verbose,
             output_file,
-        } = cli.command {
+        } = cli.command
+        {
             assert_eq!(environments, Some("test,prod".to_string()));
             assert!(include_headers);
             assert_eq!(config, "custom.toml");

@@ -1,8 +1,8 @@
 //! HTML templates with embedded CSS for self-contained reports
 
-use crate::types::ComparisonResult;
 use super::super::ReportMetadata;
 use super::components::HtmlComponents;
+use crate::types::ComparisonResult;
 
 /// HTML template generator for executive reports
 pub struct HtmlTemplate;
@@ -12,10 +12,16 @@ impl HtmlTemplate {
     pub fn new() -> Self {
         Self
     }
-    
+
     /// Render complete HTML report
-    pub fn render(&self, results: &[ComparisonResult], metadata: &ReportMetadata, include_technical: bool) -> String {
-        format!(r#"<!DOCTYPE html>
+    pub fn render(
+        &self,
+        results: &[ComparisonResult],
+        metadata: &ReportMetadata,
+        include_technical: bool,
+    ) -> String {
+        format!(
+            r#"<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -56,36 +62,48 @@ impl HtmlTemplate {
             HtmlComponents::executive_dashboard(results, metadata),
             HtmlComponents::results_table(results),
             HtmlComponents::recommendations(results),
-            if include_technical { Self::technical_appendix(results) } else { String::new() },
+            if include_technical {
+                Self::technical_appendix(results)
+            } else {
+                String::new()
+            },
             metadata.timestamp.format("%Y-%m-%d %H:%M %Z"),
             metadata.environments.len()
         )
     }
-    
+
     /// Generate technical appendix with curl commands (if enabled)
     fn technical_appendix(results: &[ComparisonResult]) -> String {
         let mut curl_sections = String::new();
-        
+
         for result in results.iter().filter(|r| r.has_errors || !r.is_identical) {
-            curl_sections.push_str(&format!(r#"
+            curl_sections.push_str(&format!(
+                r#"
             <div class="curl-section">
                 <h4>📍 {} <span class="user-context">({})</span></h4>
                 <div class="curl-commands">
-            "#, 
+            "#,
                 result.route_name,
-                if result.user_context.is_empty() { 
-                    "default".to_string() 
-                } else { 
-                    result.user_context.iter()
+                if result.user_context.is_empty() {
+                    "default".to_string()
+                } else {
+                    result
+                        .user_context
+                        .iter()
                         .map(|(k, v)| format!("{}={}", k, v))
                         .collect::<Vec<_>>()
                         .join(", ")
                 }
             ));
-            
+
             for (env_name, response) in &result.responses {
-                let status_class = if response.is_error() { "error" } else { "success" };
-                curl_sections.push_str(&format!(r#"
+                let status_class = if response.is_error() {
+                    "error"
+                } else {
+                    "success"
+                };
+                curl_sections.push_str(&format!(
+                    r#"
                 <div class="curl-command">
                     <div class="env-header">
                         <span class="env-name">{}</span>
@@ -96,17 +114,23 @@ impl HtmlTemplate {
                         <button class="copy-btn" onclick="copyToClipboard(this)">📋</button>
                     </div>
                 </div>
-                "#, env_name.to_uppercase(), status_class, response.status, response.curl_command));
+                "#,
+                    env_name.to_uppercase(),
+                    status_class,
+                    response.status,
+                    response.curl_command
+                ));
             }
-            
+
             curl_sections.push_str("</div></div>");
         }
-        
+
         if curl_sections.is_empty() {
             return String::new();
         }
-        
-        format!(r#"
+
+        format!(
+            r#"
         <div class="technical-appendix">
             <h2>🔧 Technical Reproduction Guide</h2>
             <div class="appendix-note">
@@ -124,9 +148,11 @@ impl HtmlTemplate {
             }});
         }}
         </script>
-        "#, curl_sections)
+        "#,
+            curl_sections
+        )
     }
-    
+
     /// Embedded CSS for self-contained reports
     fn embedded_css() -> &'static str {
         r#"

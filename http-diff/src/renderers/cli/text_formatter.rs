@@ -3,8 +3,8 @@
 //! This module provides utilities for generating unified and side-by-side diffs
 //! with configurable formatting options.
 
+use super::table::{cells, TableBuilder, TableStyle};
 use std::fmt::Write;
-use super::table::{TableBuilder, TableStyle, cells};
 
 /// Configuration for text formatting operations
 #[derive(Debug, Clone)]
@@ -55,13 +55,7 @@ impl TextFormatter {
     }
 
     /// Generate a unified diff between two texts
-    pub fn unified_diff(
-        &self,
-        text1: &str,
-        text2: &str,
-        label1: &str,
-        label2: &str,
-    ) -> String {
+    pub fn unified_diff(&self, text1: &str, text2: &str, label1: &str, label2: &str) -> String {
         let total_size = text1.len() + text2.len();
 
         // For very large responses, provide a summary instead of full diff
@@ -89,7 +83,7 @@ impl TextFormatter {
             return self.large_response_summary(text1, text2, label1, label2);
         }
 
-        // Use simplified side-by-side formatting 
+        // Use simplified side-by-side formatting
         self.format_side_by_side(text1, text2, label1, label2)
     }
 
@@ -108,12 +102,24 @@ impl TextFormatter {
 
         let mut table = TableBuilder::new();
         table.headers(vec!["Environment", "Size (bytes)", "Lines"]);
-        table.row(vec![&label1.to_uppercase(), &size1.to_string(), &lines1.to_string()]);
-        table.row(vec![&label2.to_uppercase(), &size2.to_string(), &lines2.to_string()]);
-        
+        table.row(vec![
+            &label1.to_uppercase(),
+            &size1.to_string(),
+            &lines1.to_string(),
+        ]);
+        table.row(vec![
+            &label2.to_uppercase(),
+            &size2.to_string(),
+            &lines2.to_string(),
+        ]);
+
         let mut output = String::new();
         writeln!(output, "🔍 Large Response Comparison Summary").unwrap();
-        writeln!(output, "⚠️  Responses are too large for detailed diff - showing summary only\n").unwrap();
+        writeln!(
+            output,
+            "⚠️  Responses are too large for detailed diff - showing summary only\n"
+        )
+        .unwrap();
         output.push_str(&table.build());
         writeln!(output).unwrap();
 
@@ -148,29 +154,23 @@ impl TextFormatter {
     }
 
     /// Format a side-by-side diff using proper table rendering with diff styling
-    fn format_side_by_side(
-        &self,
-        text1: &str,
-        text2: &str,
-        label1: &str,
-        label2: &str,
-    ) -> String {
-        use prettydiff::{diff_slice, basic::DiffOp};
+    fn format_side_by_side(&self, text1: &str, text2: &str, label1: &str, label2: &str) -> String {
+        use prettydiff::{basic::DiffOp, diff_slice};
 
         // Create table with diff styling (no horizontal lines between rows)
         let mut table = TableBuilder::new();
         table.apply_style(TableStyle::Diff);
-        
+
         // Add headers with uppercase environment names
         table.headers(vec![&label1.to_uppercase(), &label2.to_uppercase()]);
 
         // Convert texts to line vectors for prettydiff
         let lines1: Vec<&str> = text1.lines().collect();
         let lines2: Vec<&str> = text2.lines().collect();
-        
+
         // Generate diff using prettydiff's proper diff algorithm
         let diff = diff_slice(&lines1, &lines2);
-        
+
         // Process diff operations to create side-by-side view
         for op in diff.diff {
             match op {
@@ -180,7 +180,7 @@ impl TextFormatter {
                         let truncated = self.truncate_line_simple(line);
                         table.styled_row(vec![
                             cells::normal(format!("  {}", truncated)),
-                            cells::normal(format!("  {}", truncated))
+                            cells::normal(format!("  {}", truncated)),
                         ]);
                     }
                 }
@@ -190,7 +190,7 @@ impl TextFormatter {
                         let truncated = self.truncate_line_simple(line);
                         table.styled_row(vec![
                             cells::removed(format!("- {}", truncated)),
-                            cells::normal("")
+                            cells::normal(""),
                         ]);
                     }
                 }
@@ -200,14 +200,14 @@ impl TextFormatter {
                         let truncated = self.truncate_line_simple(line);
                         table.styled_row(vec![
                             cells::normal(""),
-                            cells::added(format!("+ {}", truncated))
+                            cells::added(format!("+ {}", truncated)),
                         ]);
                     }
                 }
                 DiffOp::Replace(old_lines, new_lines) => {
                     // Lines were replaced - show old on left, new on right
                     let max_lines = old_lines.len().max(new_lines.len());
-                    
+
                     for i in 0..max_lines {
                         let left_content = if let Some(line) = old_lines.get(i) {
                             let truncated = self.truncate_line_simple(line);
@@ -215,14 +215,14 @@ impl TextFormatter {
                         } else {
                             cells::normal("")
                         };
-                        
+
                         let right_content = if let Some(line) = new_lines.get(i) {
                             let truncated = self.truncate_line_simple(line);
                             cells::added(format!("+ {}", truncated))
                         } else {
                             cells::normal("")
                         };
-                        
+
                         table.styled_row(vec![left_content, right_content]);
                     }
                 }
@@ -262,7 +262,7 @@ mod tests {
     fn test_unified_diff() {
         let formatter = TextFormatter::new();
         let diff = formatter.unified_diff("hello\nworld", "hello\nrust", "old", "new");
-        
+
         assert!(!diff.is_empty());
         // We can't easily test the exact content since prettydiff uses ANSI colors
     }
@@ -273,7 +273,7 @@ mod tests {
             large_response_threshold: 10,
             ..Default::default()
         });
-        
+
         assert!(formatter.is_large_response("123456", "67890")); // 11 bytes total > 10 threshold
         assert!(!formatter.is_large_response("123", "456")); // 6 bytes total < 10 threshold
     }

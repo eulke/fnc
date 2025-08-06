@@ -1,5 +1,5 @@
+use crate::renderers::report::{ReportMetadata, ReportRendererFactory};
 use crate::types::{ComparisonResult, DiffViewStyle};
-use crate::renderers::report::{ReportRendererFactory, ReportMetadata};
 use ratatui::widgets::ListState;
 use std::fs;
 
@@ -130,7 +130,7 @@ impl DetailsTab {
             DetailsTab::Suggestions => 3,
         }
     }
-    
+
     /// Create from tab index
     pub fn from_index(index: usize) -> Self {
         match index {
@@ -141,7 +141,7 @@ impl DetailsTab {
             _ => DetailsTab::Overview,
         }
     }
-    
+
     /// Get tab title
     pub fn title(&self) -> &'static str {
         match self {
@@ -177,7 +177,7 @@ pub struct TuiApp {
     pub scroll_offset: usize,
     /// Filter state for results view
     pub filter_state: FilterState,
-    
+
     // Configuration state
     /// Available environments from config
     pub available_environments: Vec<String>,
@@ -193,7 +193,7 @@ pub struct TuiApp {
     pub users_file: String,
     /// Error message to display
     pub error_message: Option<String>,
-    
+
     // Execution state
     /// Total number of tests to execute
     pub total_tests: usize,
@@ -209,7 +209,7 @@ pub struct TuiApp {
     pub execution_running: bool,
     /// Execution has been cancelled
     pub execution_cancelled: bool,
-    
+
     // UI State for better UX
     /// Currently focused panel (for better navigation)
     pub focused_panel: FocusedPanel,
@@ -221,13 +221,13 @@ pub struct TuiApp {
     pub selected_env_index: usize,
     /// Selected route index for keyboard navigation
     pub selected_route_index: usize,
-    
+
     // List state for proper cursor positioning
     /// ListState for environments list widget
     pub env_list_state: ListState,
     /// ListState for routes list widget  
     pub route_list_state: ListState,
-    
+
     // Details panel state
     /// Current tab in details panel
     pub details_current_tab: DetailsTab,
@@ -371,7 +371,7 @@ impl TuiApp {
     pub fn next_view(&mut self) {
         self.view_mode = match self.view_mode {
             ViewMode::Configuration => ViewMode::Configuration, // Stay in config
-            ViewMode::Execution => ViewMode::Execution, // Stay in execution
+            ViewMode::Execution => ViewMode::Execution,         // Stay in execution
             ViewMode::ResultsList => ViewMode::ResultDetail,
             ViewMode::ResultDetail => ViewMode::DiffView,
             ViewMode::DiffView => ViewMode::ResultsList,
@@ -384,7 +384,7 @@ impl TuiApp {
     pub fn previous_view(&mut self) {
         self.view_mode = match self.view_mode {
             ViewMode::Configuration => ViewMode::Configuration, // Stay in config
-            ViewMode::Execution => ViewMode::Execution, // Stay in execution
+            ViewMode::Execution => ViewMode::Execution,         // Stay in execution
             ViewMode::ResultsList => ViewMode::DiffView,
             ViewMode::ResultDetail => ViewMode::ResultsList,
             ViewMode::DiffView => ViewMode::ResultDetail,
@@ -469,11 +469,14 @@ impl TuiApp {
             }
             ViewMode::DiffView => {
                 if let Some(result) = self.current_result() {
-                    format!("Diff View - {} ({})", result.route_name, 
-                           match self.diff_style {
-                               DiffViewStyle::Unified => "Unified",
-                               DiffViewStyle::SideBySide => "Side-by-Side",
-                           })
+                    format!(
+                        "Diff View - {} ({})",
+                        result.route_name,
+                        match self.diff_style {
+                            DiffViewStyle::Unified => "Unified",
+                            DiffViewStyle::SideBySide => "Side-by-Side",
+                        }
+                    )
                 } else {
                     "Diff View".to_string()
                 }
@@ -488,7 +491,10 @@ impl TuiApp {
             PanelFocus::Configuration => "Configuration".to_string(),
             PanelFocus::Progress => {
                 if self.execution_running {
-                    format!("Execution Progress ({}/{})", self.completed_tests, self.total_tests)
+                    format!(
+                        "Execution Progress ({}/{})",
+                        self.completed_tests, self.total_tests
+                    )
                 } else if self.results.is_empty() {
                     "Execution Ready".to_string()
                 } else {
@@ -583,7 +589,7 @@ impl TuiApp {
         };
         self.panel_sizes.insert(panel, new_size);
     }
-    
+
     /// Switch to the next tab in details panel
     pub fn next_details_tab(&mut self) {
         self.details_current_tab = match self.details_current_tab {
@@ -593,7 +599,7 @@ impl TuiApp {
             DetailsTab::Suggestions => DetailsTab::Overview,
         };
     }
-    
+
     /// Switch to the previous tab in details panel
     pub fn previous_details_tab(&mut self) {
         self.details_current_tab = match self.details_current_tab {
@@ -603,14 +609,14 @@ impl TuiApp {
             DetailsTab::Suggestions => DetailsTab::Errors,
         };
     }
-    
+
     /// Switch to specific details tab by number (1-4)
     pub fn switch_details_tab(&mut self, tab_number: usize) {
         if tab_number >= 1 && tab_number <= 4 {
             self.details_current_tab = DetailsTab::from_index(tab_number - 1);
         }
     }
-    
+
     /// Toggle details panel specific diff style
     pub fn toggle_details_diff_style(&mut self) {
         self.details_diff_style = match self.details_diff_style {
@@ -626,12 +632,18 @@ impl TuiApp {
         // When results change, update related panel states
         if self.view_mode == ViewMode::Dashboard {
             // If no results and not executing, ensure configuration panel is accessible
-            if self.results.is_empty() && !self.execution_running && self.panel_focus == PanelFocus::Results {
+            if self.results.is_empty()
+                && !self.execution_running
+                && self.panel_focus == PanelFocus::Results
+            {
                 self.panel_focus = PanelFocus::Configuration;
             }
-            
+
             // If results available and focused on progress, switch to results
-            if !self.results.is_empty() && self.panel_focus == PanelFocus::Progress && !self.execution_running {
+            if !self.results.is_empty()
+                && self.panel_focus == PanelFocus::Progress
+                && !self.execution_running
+            {
                 self.panel_focus = PanelFocus::Results;
             }
         }
@@ -641,9 +653,9 @@ impl TuiApp {
     pub fn on_result_selection_changed(&mut self) {
         if self.view_mode == ViewMode::Dashboard {
             // When result selection changes, the details panel should update
-            // This is handled automatically by the rendering system, 
+            // This is handled automatically by the rendering system,
             // but we could add specific reactions here if needed
-            
+
             // Reset scroll when changing selection
             self.scroll_offset = 0;
         }
@@ -657,12 +669,12 @@ impl TuiApp {
                 // Don't clear during execution
                 return;
             }
-            
+
             // Reset execution state when config changes
             self.execution_requested = false;
             self.execution_cancelled = false;
             self.current_operation = "Ready to execute".to_string();
-            
+
             // Update reactive state
             self.update_panel_reactive_state();
         }
@@ -677,13 +689,12 @@ impl TuiApp {
         }
     }
 
-
     /// Load configuration and populate available environments/routes
     pub fn load_configuration(&mut self) -> Result<(), String> {
         use crate::HttpDiffConfig;
-        
+
         let config_path = std::path::Path::new(&self.config_path);
-        
+
         if !config_path.exists() {
             return Err("Configuration file not found. Press 'i' to initialize.".to_string());
         }
@@ -693,25 +704,29 @@ impl TuiApp {
 
         self.available_environments = config.environments.keys().cloned().collect();
         self.available_routes = config.routes.iter().map(|r| r.name.clone()).collect();
-        
+
         // Select all by default
         self.selected_environments = self.available_environments.clone();
         self.selected_routes = self.available_routes.clone();
-        
+
         // Sync ListState after loading configuration
         self.sync_env_list_state();
         self.sync_route_list_state();
-        
+
         // Trigger inter-panel communication
         self.on_configuration_changed();
-        
+
         Ok(())
     }
 
     /// Toggle environment selection
     pub fn toggle_environment(&mut self, index: usize) {
         if let Some(env_name) = self.available_environments.get(index) {
-            if let Some(pos) = self.selected_environments.iter().position(|x| x == env_name) {
+            if let Some(pos) = self
+                .selected_environments
+                .iter()
+                .position(|x| x == env_name)
+            {
                 self.selected_environments.remove(pos);
             } else {
                 self.selected_environments.push(env_name.clone());
@@ -755,7 +770,8 @@ impl TuiApp {
     /// Request HTTP test execution (doesn't start immediately, just requests it)
     pub fn request_execution(&mut self) {
         if self.selected_environments.is_empty() || self.selected_routes.is_empty() {
-            self.error_message = Some("Please select at least one environment and route".to_string());
+            self.error_message =
+                Some("Please select at least one environment and route".to_string());
             return;
         }
 
@@ -816,7 +832,7 @@ impl TuiApp {
         self.execution_requested = false;
         self.execution_cancelled = false;
         self.current_operation = "Execution completed".to_string();
-        
+
         // Trigger inter-panel update
         self.update_panel_reactive_state();
     }
@@ -911,7 +927,8 @@ impl TuiApp {
     /// Sync route ListState with current index  
     pub fn sync_route_list_state(&mut self) {
         if !self.available_routes.is_empty() {
-            self.route_list_state.select(Some(self.selected_route_index));
+            self.route_list_state
+                .select(Some(self.selected_route_index));
         } else {
             self.route_list_state.select(None);
         }
@@ -944,7 +961,7 @@ impl TuiApp {
             is_brief: false,
         });
     }
-    
+
     /// Show brief feedback message (1.5 seconds instead of 3)
     pub fn show_brief_feedback(&mut self, message: &str, feedback_type: FeedbackType) {
         self.action_feedback = Some(ActionFeedback {
@@ -1009,58 +1026,75 @@ impl TuiApp {
     }
 
     // === Filter Management ===
-    
+
     /// Get filtered results based on current filter state
     pub fn filtered_results(&self) -> Vec<&ComparisonResult> {
-        self.results.iter().filter(|result| {
-            // Status filter
-            match self.filter_state.status_filter {
-                StatusFilter::All => true,
-                StatusFilter::Identical => result.is_identical && !result.has_errors,
-                StatusFilter::Different => !result.is_identical && !result.has_errors,
-                StatusFilter::ErrorsOnly => result.has_errors,
-            }
-        })
-        .filter(|result| {
-            // Environment filter
-            if let Some(ref env_filter) = self.filter_state.environment_filter {
-                result.responses.contains_key(env_filter)
-            } else {
-                true
-            }
-        })
-        .filter(|result| {
-            // Route pattern filter
-            if let Some(ref pattern) = self.filter_state.route_pattern {
-                result.route_name.to_lowercase().contains(&pattern.to_lowercase())
-            } else {
-                true
-            }
-        })
-        .collect()
+        self.results
+            .iter()
+            .filter(|result| {
+                // Status filter
+                match self.filter_state.status_filter {
+                    StatusFilter::All => true,
+                    StatusFilter::Identical => result.is_identical && !result.has_errors,
+                    StatusFilter::Different => !result.is_identical && !result.has_errors,
+                    StatusFilter::ErrorsOnly => result.has_errors,
+                }
+            })
+            .filter(|result| {
+                // Environment filter
+                if let Some(ref env_filter) = self.filter_state.environment_filter {
+                    result.responses.contains_key(env_filter)
+                } else {
+                    true
+                }
+            })
+            .filter(|result| {
+                // Route pattern filter
+                if let Some(ref pattern) = self.filter_state.route_pattern {
+                    result
+                        .route_name
+                        .to_lowercase()
+                        .contains(&pattern.to_lowercase())
+                } else {
+                    true
+                }
+            })
+            .collect()
     }
-    
+
     /// Get count for each filter tab
     pub fn get_filter_counts(&self) -> (usize, usize, usize, usize) {
         let total = self.results.len();
-        let identical = self.results.iter().filter(|r| r.is_identical && !r.has_errors).count();
-        let different = self.results.iter().filter(|r| !r.is_identical && !r.has_errors).count();
+        let identical = self
+            .results
+            .iter()
+            .filter(|r| r.is_identical && !r.has_errors)
+            .count();
+        let different = self
+            .results
+            .iter()
+            .filter(|r| !r.is_identical && !r.has_errors)
+            .count();
         let errors = self.results.iter().filter(|r| r.has_errors).count();
         (total, identical, different, errors)
     }
-    
+
     /// Switch to next filter tab
     pub fn next_filter_tab(&mut self) {
         self.filter_state.current_tab = (self.filter_state.current_tab + 1) % 4;
         self.update_filter_from_tab();
     }
-    
+
     /// Switch to previous filter tab
     pub fn previous_filter_tab(&mut self) {
-        self.filter_state.current_tab = if self.filter_state.current_tab == 0 { 3 } else { self.filter_state.current_tab - 1 };
+        self.filter_state.current_tab = if self.filter_state.current_tab == 0 {
+            3
+        } else {
+            self.filter_state.current_tab - 1
+        };
         self.update_filter_from_tab();
     }
-    
+
     /// Update filter based on current tab
     fn update_filter_from_tab(&mut self) {
         self.filter_state.status_filter = match self.filter_state.current_tab {
@@ -1073,82 +1107,91 @@ impl TuiApp {
         // Reset selection when filter changes
         self.selected_index = 0;
     }
-    
+
     /// Toggle filter panel visibility
     pub fn toggle_filter_panel(&mut self) {
         self.filter_state.show_filter_panel = !self.filter_state.show_filter_panel;
     }
-    
+
     /// Set route pattern filter
     pub fn set_route_pattern(&mut self, pattern: Option<String>) {
         self.filter_state.route_pattern = pattern;
         self.selected_index = 0; // Reset selection when filter changes
     }
-    
+
     /// Set environment filter
     pub fn set_environment_filter(&mut self, env: Option<String>) {
         self.filter_state.environment_filter = env;
         self.selected_index = 0; // Reset selection when filter changes
     }
-    
+
     /// Clear all filters
     pub fn clear_filters(&mut self) {
         self.filter_state = FilterState::default();
         self.selected_index = 0;
     }
-    
+
     /// Get current result accounting for filters
     pub fn current_filtered_result(&self) -> Option<&ComparisonResult> {
         let filtered = self.filtered_results();
         filtered.get(self.selected_index).copied()
     }
-    
+
     /// Get position info for current result
     pub fn get_filter_position_info(&self) -> (usize, usize) {
         let filtered = self.filtered_results();
-        let current_pos = if filtered.is_empty() { 0 } else { self.selected_index + 1 };
+        let current_pos = if filtered.is_empty() {
+            0
+        } else {
+            self.selected_index + 1
+        };
         (current_pos, filtered.len())
     }
-    
+
     /// Generate and save HTML report from current results
     pub fn generate_html_report(&mut self) -> Result<String, String> {
         if self.results.is_empty() {
             return Err("No results available to generate report".to_string());
         }
-        
+
         // Always use HTML format - generate filename with timestamp
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs();
         let report_filename = format!("http-diff-report-{}.html", timestamp);
-        
+
         // Create report renderer (always HTML)
         let report_renderer = ReportRendererFactory::create_renderer(&report_filename);
-        
+
         // Create metadata
         let env_names: Vec<String> = self.available_environments.clone();
         let metadata = ReportMetadata::new(env_names, self.results.len())
             .with_duration(std::time::Duration::from_secs(0))
             .with_context("source", "TUI")
-            .with_context("diff_view", match self.diff_style {
-                DiffViewStyle::Unified => "unified",
-                DiffViewStyle::SideBySide => "side-by-side",
-            })
+            .with_context(
+                "diff_view",
+                match self.diff_style {
+                    DiffViewStyle::Unified => "unified",
+                    DiffViewStyle::SideBySide => "side-by-side",
+                },
+            )
             .with_context("headers_included", self.show_headers.to_string())
             .with_context("errors_included", self.show_errors.to_string());
-        
+
         // Generate report content
         let report_content = report_renderer.render_report(&self.results, &metadata);
-        
+
         // Write to file
-        fs::write(&report_filename, report_content).map_err(|e| {
-            format!("Failed to write report file: {}", e)
-        })?;
-        
+        fs::write(&report_filename, report_content)
+            .map_err(|e| format!("Failed to write report file: {}", e))?;
+
         // Show success feedback
-        self.show_feedback(&format!("HTML report saved to {}", report_filename), FeedbackType::Success);
-        
+        self.show_feedback(
+            &format!("HTML report saved to {}", report_filename),
+            FeedbackType::Success,
+        );
+
         Ok(report_filename)
     }
 }

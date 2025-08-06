@@ -25,7 +25,8 @@ impl RequestBuilderImpl {
         environment: &str,
         user_data: &UserData,
     ) -> Result<reqwest::RequestBuilder> {
-        let headers = crate::url_builder::resolve_headers(&self.config, route, environment, user_data)?;
+        let headers =
+            crate::url_builder::resolve_headers(&self.config, route, environment, user_data)?;
         let mut rb = request_builder;
         for (key, value) in headers {
             rb = rb.header(key, value);
@@ -46,8 +47,9 @@ impl RequestBuilder for RequestBuilderImpl {
         let url = url_builder.build()?;
 
         // Parse HTTP method
-        let method = Method::from_bytes(route.method.as_bytes())
-            .map_err(|_| HttpDiffError::invalid_config(format!("Invalid HTTP method: {}", route.method)))?;
+        let method = Method::from_bytes(route.method.as_bytes()).map_err(|_| {
+            HttpDiffError::invalid_config(format!("Invalid HTTP method: {}", route.method))
+        })?;
 
         // Start building request
         let mut request_builder = self.client.request(method, url);

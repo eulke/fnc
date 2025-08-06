@@ -4,9 +4,9 @@
 //! from raw comparison results into generic data structures that can be
 //! rendered by different presentation layers.
 
-use crate::comparison::analyzer::{HeaderDiff, BodyDiff};
+use super::diff_data::{BodyDiffData, BodyDiffSummary, DiffData, DiffRow, HeaderDiffData};
+use crate::comparison::analyzer::{BodyDiff, HeaderDiff};
 use crate::types::{ComparisonResult, DifferenceCategory};
-use super::diff_data::{DiffData, HeaderDiffData, BodyDiffData, DiffRow, BodyDiffSummary};
 
 /// Processor for extracting and organizing diff data
 pub struct DiffProcessor {
@@ -44,9 +44,10 @@ impl DiffProcessor {
                     if let Some(ref diff_output) = difference.diff_output {
                         let header_diffs: Vec<HeaderDiff> = serde_json::from_str(diff_output)
                             .map_err(|e| format!("Failed to parse header diff data: {}", e))?;
-                        
+
                         let envs = self.extract_environment_names(result)?;
-                        let header_diff_data = self.process_header_diffs(&header_diffs, &envs.0, &envs.1);
+                        let header_diff_data =
+                            self.process_header_diffs(&header_diffs, &envs.0, &envs.1);
                         diff_data.set_headers(header_diff_data);
                     }
                 }
@@ -54,7 +55,7 @@ impl DiffProcessor {
                     if let Some(ref diff_output) = difference.diff_output {
                         let body_diff: BodyDiff = serde_json::from_str(diff_output)
                             .map_err(|e| format!("Failed to parse body diff data: {}", e))?;
-                        
+
                         let envs = self.extract_environment_names(result)?;
                         let body_diff_data = self.process_body_diff(&body_diff, &envs.0, &envs.1);
                         diff_data.set_body(body_diff_data);
@@ -86,23 +87,19 @@ impl DiffProcessor {
             let row = match (&diff.value1, &diff.value2) {
                 (Some(val1), Some(val2)) if val1 != val2 => {
                     // Header exists in both but with different values
-                    DiffRow::changed(val1.clone(), val2.clone())
-                        .with_context(diff.name.clone())
+                    DiffRow::changed(val1.clone(), val2.clone()).with_context(diff.name.clone())
                 }
                 (Some(val1), None) => {
                     // Header only exists in first environment
-                    DiffRow::removed(val1.clone())
-                        .with_context(diff.name.clone())
+                    DiffRow::removed(val1.clone()).with_context(diff.name.clone())
                 }
                 (None, Some(val2)) => {
                     // Header only exists in second environment
-                    DiffRow::added(val2.clone())
-                        .with_context(diff.name.clone())
+                    DiffRow::added(val2.clone()).with_context(diff.name.clone())
                 }
                 (Some(val), Some(_)) => {
                     // Headers are identical (shouldn't happen in diff data, but handle gracefully)
-                    DiffRow::unchanged(val.clone())
-                        .with_context(diff.name.clone())
+                    DiffRow::unchanged(val.clone()).with_context(diff.name.clone())
                 }
                 (None, None) => {
                     // This shouldn't happen in real diff data
@@ -117,12 +114,7 @@ impl DiffProcessor {
     }
 
     /// Process body differences into generic diff data
-    pub fn process_body_diff(
-        &self,
-        body_diff: &BodyDiff,
-        env1: &str,
-        env2: &str,
-    ) -> BodyDiffData {
+    pub fn process_body_diff(&self, body_diff: &BodyDiff, env1: &str, env2: &str) -> BodyDiffData {
         // Check if this is a large response that should be summarized
         if body_diff.is_large_response || body_diff.total_size > self.large_response_threshold {
             let summary = self.create_body_summary(body_diff);
@@ -143,7 +135,7 @@ impl DiffProcessor {
         let lines2: Vec<&str> = body_diff.normalized_body2.lines().collect();
 
         // Generate diff using prettydiff
-        use prettydiff::{diff_slice, basic::DiffOp};
+        use prettydiff::{basic::DiffOp, diff_slice};
         let diff = diff_slice(&lines1, &lines2);
 
         // Convert prettydiff operations to our generic diff rows
@@ -170,7 +162,7 @@ impl DiffProcessor {
                 DiffOp::Replace(old_lines, new_lines) => {
                     // Lines were replaced
                     let max_lines = old_lines.len().max(new_lines.len());
-                    
+
                     for i in 0..max_lines {
                         match (old_lines.get(i), new_lines.get(i)) {
                             (Some(old), Some(new)) => {
@@ -234,7 +226,10 @@ impl DiffProcessor {
     }
 
     /// Extract environment names from comparison result
-    fn extract_environment_names(&self, result: &ComparisonResult) -> Result<(String, String), String> {
+    fn extract_environment_names(
+        &self,
+        result: &ComparisonResult,
+    ) -> Result<(String, String), String> {
         let envs: Vec<String> = result.responses.keys().cloned().collect();
         if envs.len() < 2 {
             return Err("Need at least 2 environments for comparison".to_string());
@@ -243,7 +238,7 @@ impl DiffProcessor {
         // Sort to ensure consistent ordering
         let mut sorted_envs = envs;
         sorted_envs.sort();
-        
+
         Ok((sorted_envs[0].clone(), sorted_envs[1].clone()))
     }
 }
@@ -262,7 +257,7 @@ mod tests {
     #[test]
     fn test_process_header_diffs() {
         let processor = DiffProcessor::new();
-        
+
         let header_diffs = vec![
             HeaderDiff {
                 name: "X-Version".to_string(),
@@ -277,18 +272,18 @@ mod tests {
         ];
 
         let result = processor.process_header_diffs(&header_diffs, "test", "prod");
-        
+
         assert_eq!(result.env1, "test");
         assert_eq!(result.env2, "prod");
         assert_eq!(result.rows.len(), 2);
         assert!(result.has_differences);
-        
+
         // Check first row (changed header)
         assert_eq!(result.rows[0].operation, DiffOperation::Changed);
         assert_eq!(result.rows[0].left_content, Some("1.0".to_string()));
         assert_eq!(result.rows[0].right_content, Some("2.0".to_string()));
         assert_eq!(result.rows[0].context, Some("X-Version".to_string()));
-        
+
         // Check second row (added header)
         assert_eq!(result.rows[1].operation, DiffOperation::Added);
         assert_eq!(result.rows[1].left_content, None);
@@ -299,7 +294,7 @@ mod tests {
     #[test]
     fn test_body_diff_processing() {
         let processor = DiffProcessor::new();
-        
+
         let body_diff = BodyDiff {
             normalized_body1: "line1\nline2\nline3".to_string(),
             normalized_body2: "line1\nmodified_line2\nline3".to_string(),
@@ -308,7 +303,7 @@ mod tests {
         };
 
         let result = processor.process_body_diff(&body_diff, "test", "prod");
-        
+
         assert_eq!(result.env1, "test");
         assert_eq!(result.env2, "prod");
         assert!(!result.is_large_response);
@@ -320,7 +315,7 @@ mod tests {
     #[test]
     fn test_large_response_summary() {
         let processor = DiffProcessor::with_threshold(10); // Very small threshold for testing
-        
+
         let body_diff = BodyDiff {
             normalized_body1: "This is a long response body".to_string(),
             normalized_body2: "This is a different long response body".to_string(),
@@ -329,11 +324,11 @@ mod tests {
         };
 
         let result = processor.process_body_diff(&body_diff, "test", "prod");
-        
+
         assert!(result.is_large_response);
         assert!(result.summary.is_some());
         assert!(result.rows.is_empty()); // No detailed rows for large responses
-        
+
         let summary = result.summary.unwrap();
         assert_eq!(summary.size1, 29);
         assert_eq!(summary.size2, 39);

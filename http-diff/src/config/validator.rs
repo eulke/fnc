@@ -8,7 +8,7 @@ pub struct ConfigValidatorImpl;
 
 impl ConfigValidator for ConfigValidatorImpl {
     type Config = HttpDiffConfig;
-    
+
     /// Validate configuration
     fn validate(&self, config: &HttpDiffConfig) -> Result<()> {
         // Basic validation
@@ -42,9 +42,13 @@ impl ConfigValidatorImpl {
     pub fn new() -> Self {
         Self
     }
-    
+
     /// Validation with enhanced error context
-    pub fn validate_with_context<P: AsRef<Path>>(&self, config: &HttpDiffConfig, config_path: P) -> Result<()> {
+    pub fn validate_with_context<P: AsRef<Path>>(
+        &self,
+        config: &HttpDiffConfig,
+        config_path: P,
+    ) -> Result<()> {
         if config.environments.is_empty() {
             return Err(HttpDiffError::invalid_config(format!(
                 "No environments configured in {}. Add at least one environment to [environments] section.",
@@ -90,8 +94,7 @@ impl ConfigValidatorImpl {
                 if url::Url::parse(&env.base_url).is_err() {
                     return Err(HttpDiffError::invalid_config(format!(
                         "Invalid base_url '{}' in environment '{}'. Must be a valid URL.",
-                        env.base_url,
-                        env_name
+                        env.base_url, env_name
                     )));
                 }
             }
@@ -102,7 +105,7 @@ impl ConfigValidatorImpl {
             if let Some(timeout) = global.timeout_seconds {
                 if timeout == 0 || timeout > 300 {
                     return Err(HttpDiffError::invalid_config(
-                        "timeout_seconds must be between 1 and 300 seconds".to_string()
+                        "timeout_seconds must be between 1 and 300 seconds".to_string(),
                     ));
                 }
             }

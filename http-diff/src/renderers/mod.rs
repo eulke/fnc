@@ -1,5 +1,5 @@
 //! Result renderers organized by output format
-//! 
+//!
 //! This module provides a clean way to render execution results in different formats
 //! while keeping the core business logic separate from presentation concerns.
 
@@ -22,5 +22,5 @@ pub mod tui;
 
 // Re-export main renderers for convenience
 pub use cli::CliRenderer;
-pub use report::{ReportRendererFactory, ReportMetadata};
-pub use tui::{TuiRenderer, InteractiveRenderer};
+pub use report::{ReportMetadata, ReportRendererFactory};
+pub use tui::{InteractiveRenderer, TuiRenderer};

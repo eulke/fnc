@@ -1,6 +1,6 @@
-use crate::types::HttpResponse;
 use crate::error::Result;
 use crate::traits::ResponseConverter;
+use crate::types::HttpResponse;
 use reqwest::Response;
 use std::collections::HashMap;
 
@@ -22,10 +22,14 @@ impl Default for ResponseConverterImpl {
 }
 
 impl ResponseConverter for ResponseConverterImpl {
-    async fn convert_response(&self, response: Response, curl_command: String) -> Result<HttpResponse> {
+    async fn convert_response(
+        &self,
+        response: Response,
+        curl_command: String,
+    ) -> Result<HttpResponse> {
         let status = response.status().as_u16();
         let url = response.url().to_string();
-        
+
         // Extract headers
         let mut headers = HashMap::new();
         for (name, value) in response.headers() {

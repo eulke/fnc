@@ -1,12 +1,12 @@
+pub mod analyzer;
 /// Response comparison module with pure business logic
 pub mod content;
-pub mod analyzer;
 
 use crate::error::Result;
-use crate::types::{HttpResponse, ComparisonResult, DiffViewStyle};
 use crate::traits::ResponseComparator as ResponseComparatorTrait;
-use analyzer::DifferenceAnalyzer;
+use crate::types::{ComparisonResult, DiffViewStyle, HttpResponse};
 use crate::validation::ResponseValidatorImpl;
+use analyzer::DifferenceAnalyzer;
 use std::collections::HashMap;
 
 /// Response comparator with configurable comparison strategies - pure business logic only
@@ -51,7 +51,11 @@ impl ResponseComparator {
         large_response_threshold: usize,
     ) -> Self {
         Self {
-            analyzer: DifferenceAnalyzer::new(ignore_headers, ignore_whitespace, large_response_threshold),
+            analyzer: DifferenceAnalyzer::new(
+                ignore_headers,
+                ignore_whitespace,
+                large_response_threshold,
+            ),
             compare_headers,
             diff_view_style: DiffViewStyle::Unified,
         }
@@ -141,7 +145,6 @@ impl ResponseComparator {
     pub fn headers_comparison_enabled(&self) -> bool {
         self.compare_headers
     }
-
 }
 
 impl Default for ResponseComparator {
@@ -170,7 +173,7 @@ impl ResponseComparatorTrait for ResponseComparator {
 }
 
 // Re-export key types for convenience
-pub use analyzer::{HeaderDiff, BodyDiff};
+pub use analyzer::{BodyDiff, HeaderDiff};
 
 #[cfg(test)]
 mod tests {
@@ -241,8 +244,12 @@ mod tests {
         let mut response2 = create_test_response(200, r#"{"status": "ok"}"#);
 
         // Add different headers
-        response1.headers.insert("X-Version".to_string(), "1.0".to_string());
-        response2.headers.insert("X-Version".to_string(), "2.0".to_string());
+        response1
+            .headers
+            .insert("X-Version".to_string(), "1.0".to_string());
+        response2
+            .headers
+            .insert("X-Version".to_string(), "2.0".to_string());
 
         let mut responses = HashMap::new();
         responses.insert("test".to_string(), response1);
@@ -264,8 +271,12 @@ mod tests {
         let mut response1 = create_test_response(200, r#"{"status": "ok"}"#);
         let mut response2 = create_test_response(200, r#"{"status": "ok"}"#);
 
-        response1.headers.insert("X-Version".to_string(), "1.0".to_string());
-        response2.headers.insert("X-Version".to_string(), "2.0".to_string());
+        response1
+            .headers
+            .insert("X-Version".to_string(), "1.0".to_string());
+        response2
+            .headers
+            .insert("X-Version".to_string(), "2.0".to_string());
 
         let mut responses = HashMap::new();
         responses.insert("test".to_string(), response1);
@@ -285,9 +296,11 @@ mod tests {
         assert_eq!(default_comparator.diff_view_style(), DiffViewStyle::Unified);
 
         let side_by_side_comparator = ResponseComparator::new().with_side_by_side_diff();
-        assert_eq!(side_by_side_comparator.diff_view_style(), DiffViewStyle::SideBySide);
+        assert_eq!(
+            side_by_side_comparator.diff_view_style(),
+            DiffViewStyle::SideBySide
+        );
     }
-
 
     #[test]
     fn test_error_response_handling() {
@@ -303,7 +316,7 @@ mod tests {
 
         assert!(result.has_errors);
         assert!(result.error_bodies.is_some());
-        
+
         let error_bodies = result.error_bodies.unwrap();
         assert_eq!(error_bodies.get("prod"), Some(&"not found".to_string()));
     }
@@ -316,12 +329,14 @@ mod tests {
         let mut responses = HashMap::new();
         responses.insert("test".to_string(), create_test_response(200, "ok"));
 
-        let result = comparator.compare_responses("test-route".to_string(), HashMap::new(), responses);
+        let result =
+            comparator.compare_responses("test-route".to_string(), HashMap::new(), responses);
         assert!(result.is_err());
-        
+
         // Test with empty responses
         let empty_responses = HashMap::new();
-        let result = comparator.compare_responses("test-route".to_string(), HashMap::new(), empty_responses);
+        let result =
+            comparator.compare_responses("test-route".to_string(), HashMap::new(), empty_responses);
         assert!(result.is_err());
     }
 }

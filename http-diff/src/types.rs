@@ -1,4 +1,3 @@
-
 use std::collections::HashMap;
 
 /// HTTP response data with metadata
@@ -39,7 +38,6 @@ impl HttpResponse {
         !self.is_success()
     }
 
-
     /// Get the number of lines in the response body
     pub fn line_count(&self) -> usize {
         self.body.lines().count()
@@ -77,7 +75,8 @@ impl ComparisonResult {
 
     /// Add a response for an environment
     pub fn add_response(&mut self, environment: String, response: HttpResponse) {
-        self.status_codes.insert(environment.clone(), response.status);
+        self.status_codes
+            .insert(environment.clone(), response.status);
         if response.is_error() {
             self.has_errors = true;
             if self.error_bodies.is_none() {
@@ -101,7 +100,6 @@ impl ComparisonResult {
         let statuses: Vec<u16> = self.status_codes.values().copied().collect();
         statuses.windows(2).all(|w| w[0] == w[1])
     }
-
 }
 
 /// Represents a difference between responses
@@ -123,7 +121,11 @@ impl Difference {
     }
 
     /// Create a new difference with diff output
-    pub fn with_diff(category: DifferenceCategory, description: String, diff_output: String) -> Self {
+    pub fn with_diff(
+        category: DifferenceCategory,
+        description: String,
+        diff_output: String,
+    ) -> Self {
         Self {
             category,
             description,
@@ -149,15 +151,14 @@ impl DifferenceCategory {
             DifferenceCategory::Body => "Response Body",
         }
     }
-
 }
 
 /// Error severity classification for failed requests
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum ErrorSeverity {
-    Critical,    // 5xx errors
-    Dependency,  // 424, 502, 503 errors
-    Client,      // 4xx errors
+    Critical,   // 5xx errors
+    Dependency, // 424, 502, 503 errors
+    Client,     // 4xx errors
 }
 
 /// Diff view style configuration for text differences
@@ -168,7 +169,6 @@ pub enum DiffViewStyle {
     /// Side-by-side diff view for easier comparison
     SideBySide,
 }
-
 
 /// Summary of error statistics across all comparison results
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -232,7 +232,6 @@ impl ErrorSummary {
 
         summary
     }
-
 }
 
 /// Types of execution errors that can occur during test runs
@@ -323,7 +322,10 @@ impl ExecutionResult {
 
     /// Get errors by type
     pub fn errors_by_type(&self, error_type: ExecutionErrorType) -> Vec<&ExecutionError> {
-        self.errors.iter().filter(|e| e.error_type == error_type).collect()
+        self.errors
+            .iter()
+            .filter(|e| e.error_type == error_type)
+            .collect()
     }
 
     /// Get request errors
@@ -367,10 +369,7 @@ mod tests {
 
     #[test]
     fn test_comparison_result() {
-        let mut result = ComparisonResult::new(
-            "test_route".to_string(),
-            HashMap::new(),
-        );
+        let mut result = ComparisonResult::new("test_route".to_string(), HashMap::new());
 
         let response = HttpResponse::new(
             200,
@@ -402,12 +401,10 @@ mod tests {
         assert_eq!(summary.failed_requests, 2);
     }
 
-
     #[test]
     fn test_difference_category() {
         assert_eq!(DifferenceCategory::Status.name(), "Status Code");
         assert_eq!(DifferenceCategory::Headers.name(), "Headers");
         assert_eq!(DifferenceCategory::Body.name(), "Response Body");
     }
-
-} 
+}

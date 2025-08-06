@@ -17,11 +17,11 @@ pub fn byte_size(text: &str) -> usize {
 pub fn truncate_lines(text: &str, max_lines: usize) -> String {
     let lines: Vec<&str> = text.lines().take(max_lines).collect();
     let mut result = lines.join("\n");
-    
+
     if text.lines().count() > max_lines {
         result.push_str("\n... (truncated)");
     }
-    
+
     result
 }
 
@@ -35,7 +35,6 @@ pub fn are_identical(text1: &str, text2: &str) -> bool {
     text1 == text2
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -43,11 +42,10 @@ mod tests {
     #[test]
     fn test_text_utilities() {
         let text = "line1\nline2\nline3\nline4";
-        
+
         assert_eq!(line_count(text), 4);
         assert_eq!(byte_size(text), text.len());
         assert_eq!(truncate_lines(text, 2), "line1\nline2\n... (truncated)");
         assert_eq!(preview(text, 3), "line1\nline2\nline3\n... (truncated)");
     }
-
 }

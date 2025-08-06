@@ -1,8 +1,10 @@
-use crate::traits::{HttpClient, ResponseComparator, TestRunner, RequestBuilder, ResponseConverter};
-use crate::types::{HttpResponse, ComparisonResult, DiffViewStyle, Difference, DifferenceCategory};
 use crate::config::{Route, UserData};
 use crate::error::Result;
 use crate::execution::progress::ProgressTracker;
+use crate::traits::{
+    HttpClient, RequestBuilder, ResponseComparator, ResponseConverter, TestRunner,
+};
+use crate::types::{ComparisonResult, DiffViewStyle, Difference, DifferenceCategory, HttpResponse};
 use std::collections::HashMap;
 
 /// Mock HTTP client for testing
@@ -21,7 +23,7 @@ impl MockHttpClient {
             failure_message: "Mock failure".to_string(),
         }
     }
-    
+
     pub fn with_response(mut self, key: String, response: HttpResponse) -> Self {
         self.responses.insert(key, response);
         self
@@ -61,9 +63,12 @@ impl HttpClient for MockHttpClient {
         }
 
         let key = Self::make_key(route, environment);
-        self.responses.get(&key)
-            .cloned()
-            .ok_or_else(|| crate::error::HttpDiffError::general(format!("Mock response not found for key: {}", key)))
+        self.responses.get(&key).cloned().ok_or_else(|| {
+            crate::error::HttpDiffError::general(format!(
+                "Mock response not found for key: {}",
+                key
+            ))
+        })
     }
 }
 
@@ -116,18 +121,18 @@ impl ResponseComparator for MockResponseComparator {
         responses: HashMap<String, HttpResponse>,
     ) -> Result<ComparisonResult> {
         let mut result = ComparisonResult::new(route_name, user_context);
-        
+
         for (env, response) in responses {
             result.add_response(env, response);
         }
-        
+
         if self.should_find_differences {
             result.is_identical = false;
             for diff in &self.mock_differences {
                 result.differences.push(diff.clone());
             }
         }
-        
+
         Ok(result)
     }
 
@@ -190,7 +195,7 @@ impl TestRunner for MockTestRunner {
         Ok(crate::types::ExecutionResult::new(
             self.mock_results.clone(),
             progress,
-            Vec::new() // No errors in mock
+            Vec::new(), // No errors in mock
         ))
     }
 }
@@ -232,7 +237,7 @@ impl RequestBuilder for MockRequestBuilder {
         if self.should_fail {
             return Err(crate::error::HttpDiffError::general(&self.failure_message));
         }
-        
+
         // Create a basic mock request
         let url = url::Url::parse("https://example.com/test").unwrap();
         let request = reqwest::Request::new(reqwest::Method::GET, url);

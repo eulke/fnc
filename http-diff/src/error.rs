@@ -1,5 +1,5 @@
-use thiserror::Error;
 use std::path::PathBuf;
+use thiserror::Error;
 
 /// Result type alias for http-diff operations
 pub type Result<T> = std::result::Result<T, HttpDiffError>;
@@ -31,9 +31,10 @@ pub enum HttpDiffError {
     #[error("No environments configured")]
     NoEnvironments,
 
-
-    #[error("Path parameter '{param}' not found in user data. Available parameters: {available_params}")]
-    MissingPathParameter { 
+    #[error(
+        "Path parameter '{param}' not found in user data. Available parameters: {available_params}"
+    )]
+    MissingPathParameter {
         param: String,
         available_params: String,
     },
@@ -42,7 +43,7 @@ pub enum HttpDiffError {
     InvalidConfig { message: String },
 
     #[error("Request execution failed for {route} in {environment}: {message}")]
-    RequestFailed { 
+    RequestFailed {
         route: String,
         environment: String,
         message: String,
@@ -85,4 +86,4 @@ impl HttpDiffError {
             message: message.into(),
         }
     }
-} 
+}

@@ -1,5 +1,5 @@
 //! HTTP Diff - Multi-environment HTTP request testing and comparison tool
-//! 
+//!
 //! This crate provides functionality to execute HTTP requests across multiple
 //! configurable environments and compare responses to identify differences.
 
@@ -12,8 +12,8 @@ pub mod error;
 pub mod types;
 
 // New structured modules
-pub mod http;
 pub mod execution;
+pub mod http;
 pub mod validation;
 
 // Business logic modules
@@ -35,31 +35,30 @@ pub mod testing;
 
 // Re-export core traits
 pub use traits::{
-    HttpClient, ResponseComparator, TestRunner,
-    RequestBuilder, ResponseConverter, UrlBuilder as UrlBuilderTrait,
-    ConfigValidator, ProgressReporter, ProgressCallback,
-    ErrorCollector, UserDataProvider
+    ConfigValidator, ErrorCollector, HttpClient, ProgressCallback, ProgressReporter,
+    RequestBuilder, ResponseComparator, ResponseConverter, TestRunner,
+    UrlBuilder as UrlBuilderTrait, UserDataProvider,
 };
 
 // Re-export analysis types
-pub use analysis::{ErrorAnalyzer, ErrorAnalysis, ErrorGroup, RouteError, ErrorClassifierImpl};
+pub use analysis::{ErrorAnalysis, ErrorAnalyzer, ErrorClassifierImpl, ErrorGroup, RouteError};
 
 // Re-export main types
-pub use config::{HttpDiffConfig, HttpDiffConfigBuilder, Environment, Route, UserData};
+pub use config::{Environment, HttpDiffConfig, HttpDiffConfigBuilder, Route, UserData};
 pub use types::{
-    HttpResponse, ComparisonResult, Difference, DifferenceCategory, 
-    DiffViewStyle, ErrorSummary, ExecutionResult, ExecutionError, ExecutionErrorType
+    ComparisonResult, DiffViewStyle, Difference, DifferenceCategory, ErrorSummary, ExecutionError,
+    ExecutionErrorType, ExecutionResult, HttpResponse,
 };
 
 // Re-export implementations (clean API without "Impl" suffix)
-pub use http::{HttpClientImpl as DefaultHttpClient, RequestBuilderImpl, ResponseConverterImpl};
-pub use execution::{TestRunnerImpl as DefaultTestRunner, ProgressTracker};
-pub use validation::ResponseValidatorImpl;
 pub use comparison::ResponseComparator as DefaultResponseComparator;
+pub use execution::{ProgressTracker, TestRunnerImpl as DefaultTestRunner};
+pub use http::{HttpClientImpl as DefaultHttpClient, RequestBuilderImpl, ResponseConverterImpl};
+pub use validation::ResponseValidatorImpl;
 
 // Re-export renderers
-pub use renderers::{OutputRenderer, CliRenderer, TuiRenderer, InteractiveRenderer};
 pub use renderers::cli::{ComparisonFormatter, ErrorRenderer, TableBuilder, TableStyle};
+pub use renderers::{CliRenderer, InteractiveRenderer, OutputRenderer, TuiRenderer};
 
 // Re-export error types
 pub use error::{HttpDiffError, Result};
@@ -82,7 +81,9 @@ pub fn create_test_runner(
 }
 
 /// Create a test runner with default implementations
-pub fn create_default_test_runner(config: HttpDiffConfig) -> Result<DefaultTestRunner<DefaultHttpClient, DefaultResponseComparator>> {
+pub fn create_default_test_runner(
+    config: HttpDiffConfig,
+) -> Result<DefaultTestRunner<DefaultHttpClient, DefaultResponseComparator>> {
     let client = create_http_client(config.clone())?;
     let comparator = DefaultResponseComparator::new();
     DefaultTestRunner::new(config, client, comparator)
@@ -98,7 +99,15 @@ pub async fn run_http_diff_with_data(
     progress_callback: Option<ProgressCallback>,
 ) -> Result<ExecutionResult> {
     let runner = create_default_test_runner(config)?;
-    runner.execute_with_data(user_data, environments, routes, error_collector, progress_callback).await
+    runner
+        .execute_with_data(
+            user_data,
+            environments,
+            routes,
+            error_collector,
+            progress_callback,
+        )
+        .await
 }
 
 #[cfg(test)]
@@ -112,7 +121,7 @@ mod tests {
         // Test that we can create basic configuration structures
         let environments = HashMap::new();
         let routes = Vec::new();
-        
+
         let config = HttpDiffConfig {
             environments,
             global: None,
@@ -128,7 +137,7 @@ mod tests {
     fn test_error_types() {
         let error = HttpDiffError::invalid_config("test error");
         assert!(error.to_string().contains("Invalid configuration"));
-        
+
         let error = HttpDiffError::NoEnvironments;
         assert!(error.to_string().contains("No environments"));
     }
@@ -139,9 +148,9 @@ mod tests {
         let mut data = HashMap::new();
         data.insert("userId".to_string(), "123".to_string());
         data.insert("siteId".to_string(), "MCO".to_string());
-        
+
         let user_data = UserData { data };
-        
+
         assert_eq!(user_data.data.get("userId"), Some(&"123".to_string()));
         assert_eq!(user_data.data.get("siteId"), Some(&"MCO".to_string()));
     }
@@ -151,26 +160,26 @@ mod tests {
     fn test_shared_utilities() {
         // Test text utilities
         use crate::utils::text;
-        
+
         assert_eq!(text::line_count("line1\nline2"), 2);
-        
+
         // Test table builder
         let mut builder = TableBuilder::new();
         builder.headers(vec!["Name", "Value"]);
         builder.row(vec!["test", "123"]);
         let table = builder.build();
-        
+
         assert!(!table.is_empty());
-        
+
         // Test URL builder utilities
         use url_builder::utils;
-        
+
         assert!(utils::has_path_parameters("/api/users/{userId}"));
         assert!(!utils::has_path_parameters("/api/users"));
     }
 
     /// Test type construction and methods
-    #[test] 
+    #[test]
     fn test_types() {
         let response = types::HttpResponse::new(
             200,
@@ -183,10 +192,8 @@ mod tests {
         assert!(response.is_success());
         assert!(!response.is_error());
 
-        let mut comparison_result = types::ComparisonResult::new(
-            "test_route".to_string(),
-            HashMap::new(),
-        );
+        let mut comparison_result =
+            types::ComparisonResult::new("test_route".to_string(), HashMap::new());
 
         comparison_result.add_response("dev".to_string(), response);
         assert!(!comparison_result.has_errors);
@@ -214,19 +221,19 @@ mod tests {
     #[cfg(test)]
     mod mock_tests {
         use super::*;
-        use crate::testing::mocks::*;
         use crate::testing::mocks::test_helpers::*;
+        use crate::testing::mocks::*;
 
         #[tokio::test]
         async fn test_mock_http_client() {
             let route = create_mock_route("test", "GET", "/test");
             let response = create_mock_response(200, "test body");
-            
-            let client = MockHttpClient::new()
-                .with_response("test:dev".to_string(), response.clone());
+
+            let client =
+                MockHttpClient::new().with_response("test:dev".to_string(), response.clone());
 
             let user_data = create_mock_user_data(vec![("userId", "123")]);
-            
+
             let result = client.execute_request(&route, "dev", &user_data).await;
             assert!(result.is_ok());
             assert_eq!(result.unwrap().body, "test body");
@@ -235,14 +242,11 @@ mod tests {
         #[test]
         fn test_mock_response_comparator() {
             let comparator = MockResponseComparator::new();
-            
+
             let responses = HashMap::new();
-            let result = comparator.compare_responses(
-                "test".to_string(),
-                HashMap::new(),
-                responses,
-            );
-            
+            let result =
+                comparator.compare_responses("test".to_string(), HashMap::new(), responses);
+
             assert!(result.is_ok());
             assert!(result.unwrap().is_identical);
         }
@@ -251,7 +255,9 @@ mod tests {
         async fn test_mock_test_runner() {
             let runner = MockTestRunner::new();
             let user_data = vec![create_mock_user_data(vec![("userId", "123")])];
-            let result = runner.execute_with_data(&user_data, None, None, None, None).await;
+            let result = runner
+                .execute_with_data(&user_data, None, None, None, None)
+                .await;
             assert!(result.is_ok());
             let execution_result = result.unwrap();
             assert!(!execution_result.has_errors());

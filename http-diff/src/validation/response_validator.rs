@@ -36,7 +36,9 @@ impl ResponseValidatorImpl {
     }
 
     /// Get error response bodies
-    pub fn get_error_responses(responses: &HashMap<String, HttpResponse>) -> HashMap<String, String> {
+    pub fn get_error_responses(
+        responses: &HashMap<String, HttpResponse>,
+    ) -> HashMap<String, String> {
         responses
             .iter()
             .filter(|(_, response)| response.is_error())
@@ -71,7 +73,9 @@ impl ResponseValidatorImpl {
     }
 
     /// Check if all responses have consistent content types
-    pub fn validate_consistent_content_types(responses: &HashMap<String, HttpResponse>) -> Result<()> {
+    pub fn validate_consistent_content_types(
+        responses: &HashMap<String, HttpResponse>,
+    ) -> Result<()> {
         let content_types: Vec<_> = responses
             .values()
             .filter_map(|r| r.headers.get("content-type"))
@@ -81,7 +85,7 @@ impl ResponseValidatorImpl {
             let first_ct = content_types[0];
             if !content_types.iter().all(|ct| *ct == first_ct) {
                 return Err(HttpDiffError::comparison_failed(
-                    "Inconsistent content types across environments".to_string()
+                    "Inconsistent content types across environments".to_string(),
                 ));
             }
         }
@@ -92,12 +96,12 @@ impl ResponseValidatorImpl {
     /// Validate that responses are suitable for comparison
     pub fn validate_for_comparison(responses: &HashMap<String, HttpResponse>) -> Result<()> {
         Self::validate_responses(responses)?;
-        
+
         // Additional validations can be added here:
         // - Check for consistent content types
         // - Validate response sizes
         // - Check for required headers
-        
+
         Ok(())
     }
 }

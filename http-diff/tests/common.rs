@@ -1,5 +1,5 @@
 // Shared test utilities for http-diff crate tests
-use http_diff::{HttpResponse, ComparisonResult};
+use http_diff::{ComparisonResult, HttpResponse};
 use std::collections::HashMap;
 
 /// Helper function to create HttpResponse with specific status and content
@@ -27,7 +27,7 @@ pub fn create_comparison_result(
     for (env, status, body) in env_responses {
         responses.insert(env.to_string(), create_response(status, body, None));
         status_codes.insert(env.to_string(), status);
-        
+
         if !(200..300).contains(&status) {
             has_errors = true;
             error_bodies.insert(env.to_string(), body.to_string());
@@ -42,7 +42,11 @@ pub fn create_comparison_result(
         is_identical,
         status_codes,
         has_errors,
-        error_bodies: if error_bodies.is_empty() { None } else { Some(error_bodies) },
+        error_bodies: if error_bodies.is_empty() {
+            None
+        } else {
+            Some(error_bodies)
+        },
     }
 }
 
@@ -63,10 +67,11 @@ path = "/health"
 name = "api/users"
 method = "GET"
 path = "/api/users"
-"#.to_string()
+"#
+    .to_string()
 }
 
 /// Create test user data CSV content
 pub fn create_test_users_csv() -> String {
     "userId,siteId,userName\n12345,MCO,test_user\n".to_string()
-} 
+}

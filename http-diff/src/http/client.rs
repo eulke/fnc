@@ -1,8 +1,8 @@
 use crate::config::{HttpDiffConfig, Route, UserData};
 use crate::error::{HttpDiffError, Result};
+use crate::http::{RequestBuilderImpl, ResponseConverterImpl};
 use crate::traits::{HttpClient, RequestBuilder, ResponseConverter};
 use crate::types::HttpResponse;
-use crate::http::{RequestBuilderImpl, ResponseConverterImpl};
 use reqwest::Client;
 use std::time::Duration;
 
@@ -51,13 +51,13 @@ impl HttpClientImpl {
     /// Generate a curl command equivalent for the request
     fn generate_curl_command(&self, request: &reqwest::Request, route: &Route) -> String {
         let mut curl_parts = vec!["curl".to_string()];
-        
+
         // Add method
         if request.method() != "GET" {
             curl_parts.push("-X".to_string());
             curl_parts.push(request.method().to_string());
         }
-        
+
         // Add headers
         for (name, value) in request.headers() {
             if let Ok(value_str) = value.to_str() {
@@ -65,16 +65,16 @@ impl HttpClientImpl {
                 curl_parts.push(format!("'{}: {}'", name, value_str));
             }
         }
-        
+
         // Add body if present
         if let Some(body) = &route.body {
             curl_parts.push("-d".to_string());
             curl_parts.push(format!("'{}'", body));
         }
-        
+
         // Add URL
         curl_parts.push(format!("'{}'", request.url()));
-        
+
         curl_parts.join(" ")
     }
 }
@@ -86,18 +86,22 @@ impl HttpClient for HttpClientImpl {
         environment: &str,
         user_data: &UserData,
     ) -> Result<HttpResponse> {
-        let request = self.request_builder.build_request(route, environment, user_data).await?;
+        let request = self
+            .request_builder
+            .build_request(route, environment, user_data)
+            .await?;
         let curl_command = self.generate_curl_command(&request, route);
-        
-        let response = self.client
-            .execute(request)
-            .await
-            .map_err(|e| HttpDiffError::request_failed(
-                route.name.clone(), 
-                environment.to_string(), 
-                format!("Request failed: {}", e)
-            ))?;
 
-        self.response_converter.convert_response(response, curl_command).await
+        let response = self.client.execute(request).await.map_err(|e| {
+            HttpDiffError::request_failed(
+                route.name.clone(),
+                environment.to_string(),
+                format!("Request failed: {}", e),
+            )
+        })?;
+
+        self.response_converter
+            .convert_response(response, curl_command)
+            .await
     }
 }

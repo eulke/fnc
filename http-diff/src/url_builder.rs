@@ -1,7 +1,7 @@
-use crate::config::{Route, UserData, HttpDiffConfig};
+use crate::config::{HttpDiffConfig, Route, UserData};
 use crate::error::Result;
-use url::Url;
 use std::collections::HashMap;
+use url::Url;
 
 /// Resolve all headers with precedence (global < environment < route) and CSV substitution
 pub fn resolve_headers(
@@ -40,7 +40,6 @@ pub fn resolve_headers(
     Ok(headers)
 }
 
-
 /// Builder for constructing HTTP URLs with parameter substitution
 pub struct UrlBuilder<'a> {
     config: &'a HttpDiffConfig,
@@ -70,10 +69,10 @@ impl<'a> UrlBuilder<'a> {
         let base_url = self.get_base_url()?;
         let path = self.substitute_path_parameters()?;
         let full_url = format!("{}{}", base_url.trim_end_matches('/'), path);
-        
+
         let mut url = Url::parse(&full_url)?;
         self.add_query_parameters(&mut url)?;
-        
+
         Ok(url)
     }
 
@@ -84,17 +83,18 @@ impl<'a> UrlBuilder<'a> {
 
     /// Substitute path parameters like {userId} with actual values using URL encoding
     fn substitute_path_parameters(&self) -> Result<String> {
-        self.user_data.substitute_placeholders(&self.route.path, true, true)
+        self.user_data
+            .substitute_placeholders(&self.route.path, true, true)
     }
 
     /// Add query parameters to the URL with CSV parameter substitution
     fn add_query_parameters(&self, url: &mut Url) -> Result<()> {
         let params = self.collect_query_parameters()?;
-        
+
         for (key, value) in params {
             url.query_pairs_mut().append_pair(&key, &value);
         }
-        
+
         Ok(())
     }
 
@@ -103,13 +103,11 @@ impl<'a> UrlBuilder<'a> {
         let mut params = HashMap::new();
 
         // Add global parameters first
-        if let Some(global_params) = self.config
-            .global
-            .as_ref()
-            .and_then(|g| g.params.as_ref())
-        {
+        if let Some(global_params) = self.config.global.as_ref().and_then(|g| g.params.as_ref()) {
             for (key, value) in global_params {
-                let substituted_value = self.user_data.substitute_placeholders(value, false, false)?;
+                let substituted_value = self
+                    .user_data
+                    .substitute_placeholders(value, false, false)?;
                 params.insert(key.clone(), substituted_value);
             }
         }
@@ -117,14 +115,15 @@ impl<'a> UrlBuilder<'a> {
         // Add route-specific parameters (override global ones)
         if let Some(route_params) = &self.route.params {
             for (key, value) in route_params {
-                let substituted_value = self.user_data.substitute_placeholders(value, false, false)?;
+                let substituted_value = self
+                    .user_data
+                    .substitute_placeholders(value, false, false)?;
                 params.insert(key.clone(), substituted_value);
             }
         }
 
         Ok(params)
     }
-
 }
 
 /// Utility functions for URL manipulation
@@ -139,7 +138,7 @@ pub mod utils {
     pub fn extract_parameter_names(path: &str) -> Vec<String> {
         let mut params = Vec::new();
         let mut chars = path.chars().peekable();
-        
+
         while let Some(ch) = chars.next() {
             if ch == '{' {
                 let mut param = String::new();
@@ -154,10 +153,9 @@ pub mod utils {
                 }
             }
         }
-        
+
         params
     }
-
 }
 
 #[cfg(test)]
@@ -211,7 +209,7 @@ mod tests {
         let mut data = HashMap::new();
         data.insert("userId".to_string(), "123".to_string());
         data.insert("siteId".to_string(), "MCO".to_string());
-        
+
         UserData { data }
     }
 
@@ -235,7 +233,7 @@ mod tests {
     fn test_parameter_extraction() {
         let path = "/api/users/{userId}/posts/{postId}";
         let params = utils::extract_parameter_names(path);
-        
+
         assert_eq!(params, vec!["userId", "postId"]);
     }
 
@@ -250,6 +248,9 @@ mod tests {
         let result = builder.build();
 
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), crate::error::HttpDiffError::MissingPathParameter { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            crate::error::HttpDiffError::MissingPathParameter { .. }
+        ));
     }
-} 
+}

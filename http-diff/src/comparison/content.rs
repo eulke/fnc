@@ -33,7 +33,10 @@ impl ContentNormalizer {
     pub fn detect_content_type(&self, text: &str) -> &str {
         let trimmed = text.trim();
 
-        if ((trimmed.starts_with('{') && trimmed.ends_with('}')) || (trimmed.starts_with('[') && trimmed.ends_with(']'))) && serde_json::from_str::<serde_json::Value>(trimmed).is_ok() {
+        if ((trimmed.starts_with('{') && trimmed.ends_with('}'))
+            || (trimmed.starts_with('[') && trimmed.ends_with(']')))
+            && serde_json::from_str::<serde_json::Value>(trimmed).is_ok()
+        {
             return "application/json";
         }
 
@@ -100,7 +103,10 @@ impl HeaderNormalizer {
     }
 
     /// Normalize headers to lowercase for comparison while preserving original case for display
-    pub fn normalize(&self, headers: &HashMap<String, String>) -> HashMap<String, (String, String)> {
+    pub fn normalize(
+        &self,
+        headers: &HashMap<String, String>,
+    ) -> HashMap<String, (String, String)> {
         headers
             .iter()
             .filter(|(key, _)| !self.ignore_headers.contains(&key.to_lowercase()))
@@ -199,7 +205,10 @@ mod tests {
 
         let mut headers = HashMap::new();
         headers.insert("Content-Type".to_string(), "application/json".to_string());
-        headers.insert("Date".to_string(), "Mon, 01 Jan 2024 00:00:00 GMT".to_string());
+        headers.insert(
+            "Date".to_string(),
+            "Mon, 01 Jan 2024 00:00:00 GMT".to_string(),
+        );
         headers.insert("X-Version".to_string(), "1.0".to_string());
         headers.insert("x-request-id".to_string(), "req-123".to_string());
 

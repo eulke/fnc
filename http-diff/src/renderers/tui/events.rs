@@ -1,6 +1,9 @@
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
-use crate::{error::{HttpDiffError, Result}, renderers::tui::app::ViewMode};
 use super::app::TuiApp;
+use crate::{
+    error::{HttpDiffError, Result},
+    renderers::tui::app::ViewMode,
+};
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
 use std::time::Duration;
 
 mod events_dashboard;
