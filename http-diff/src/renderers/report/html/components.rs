@@ -244,8 +244,7 @@ impl HtmlComponents {
             .count();
 
         if failed_count == 0 && different_count == 0 {
-            return format!(
-                r#"
+            return r#"
             <div class="recommendations-section">
                 <h2>🎯 Recommendations</h2>
                 <div class="recommendation success">
@@ -256,8 +255,7 @@ impl HtmlComponents {
                     </div>
                 </div>
             </div>
-            "#
-            );
+            "#.to_string();
         }
 
         let mut recommendations = Vec::new();

@@ -130,12 +130,7 @@ fn handle_dashboard_panel_up(app: &mut TuiApp) {
         PanelFocus::Configuration => {
             if matches!(
                 app.focused_panel,
-                crate::renderers::tui::app::FocusedPanel::Environments
-            ) {
-                app.navigate_up();
-            } else if matches!(
-                app.focused_panel,
-                crate::renderers::tui::app::FocusedPanel::Routes
+                crate::renderers::tui::app::FocusedPanel::Environments | crate::renderers::tui::app::FocusedPanel::Routes
             ) {
                 app.navigate_up();
             }
@@ -158,12 +153,7 @@ fn handle_dashboard_panel_down(app: &mut TuiApp) {
         PanelFocus::Configuration => {
             if matches!(
                 app.focused_panel,
-                crate::renderers::tui::app::FocusedPanel::Environments
-            ) {
-                app.navigate_down();
-            } else if matches!(
-                app.focused_panel,
-                crate::renderers::tui::app::FocusedPanel::Routes
+                crate::renderers::tui::app::FocusedPanel::Environments | crate::renderers::tui::app::FocusedPanel::Routes
             ) {
                 app.navigate_down();
             }

@@ -333,7 +333,7 @@ impl TuiRenderer {
                     }
                     ExecutionMessage::Failed(error) => {
                         app.set_error(format!("Execution failed: {}", error));
-                        app.view_mode = ViewMode::Configuration;
+                        app.panel_focus = crate::renderers::tui::app::PanelFocus::Configuration;
                         app.execution_running = false;
                         app.execution_requested = false;
                         app.execution_cancelled = false;
@@ -348,7 +348,7 @@ impl TuiRenderer {
                 if let Some(handle) = execution_handle.take() {
                     // Note: We can't gracefully cancel std::thread, but we can reset the UI state
                     // The thread will complete but we'll ignore its results
-                    app.view_mode = ViewMode::Configuration;
+                    app.panel_focus = crate::renderers::tui::app::PanelFocus::Configuration;
                     app.execution_running = false;
                     app.execution_requested = false;
                     app.execution_cancelled = false;

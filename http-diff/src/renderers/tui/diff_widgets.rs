@@ -297,7 +297,7 @@ impl DiffWidgetRenderer {
     fn render_body_unified_widget(f: &mut Frame, body: &BodyDiffData, app: &TuiApp, area: Rect) {
         let mut items = Vec::new();
 
-        for (_line_num, row) in body.rows.iter().enumerate() {
+        for row in body.rows.iter() {
             let (content, style, prefix) = match row.operation {
                 DiffOperation::Unchanged => {
                     if let Some(ref content) = row.left_content {

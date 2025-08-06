@@ -71,7 +71,7 @@ impl CliRenderer {
             || error_message.contains("ssl")
             || error_message.contains("tls")
         {
-            502 // Bad Gateway - SSL/TLS issues
+            503 // Service Unavailable - SSL/TLS issues
         } else {
             500 // Internal Server Error - generic execution failure
         }
@@ -314,9 +314,15 @@ mod tests {
 
     #[test]
     fn test_cli_renderer() {
+        use crate::types::ExecutionResult;
+        
         let renderer = CliRenderer::new();
-        let results = vec![create_test_result()];
-        let output = renderer.render(&results);
+        let execution_result = ExecutionResult {
+            comparisons: vec![create_test_result()],
+            progress: crate::execution::progress::ProgressTracker::new(1),
+            errors: Vec::new(),
+        };
+        let output = renderer.render(&execution_result);
 
         assert!(output.contains("✅ Identical:"));
         assert!(output.contains("1/1 (100.0%)"));

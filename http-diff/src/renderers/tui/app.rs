@@ -81,20 +81,10 @@ impl Default for FilterState {
     }
 }
 
-/// Different viewing modes for the TUI (legacy - being phased out)
+/// Dashboard-only viewing mode for the TUI
 #[derive(Debug, Clone, PartialEq)]
 pub enum ViewMode {
-    /// Configuration setup and environment/route selection
-    Configuration,
-    /// Real-time execution progress display
-    Execution,
-    /// Table view showing all results
-    ResultsList,
-    /// Detailed view of a single result
-    ResultDetail,
-    /// Full diff view showing response differences
-    DiffView,
-    /// New dashboard mode with 4 simultaneous panels
+    /// Dashboard mode with 4 simultaneous panels - the only supported view
     Dashboard,
 }
 
@@ -367,30 +357,16 @@ impl TuiApp {
         }
     }
 
-    /// Switch to the next view mode
+    /// Switch to the next view mode (legacy method - now only handles panel navigation)
     pub fn next_view(&mut self) {
-        self.view_mode = match self.view_mode {
-            ViewMode::Configuration => ViewMode::Configuration, // Stay in config
-            ViewMode::Execution => ViewMode::Execution,         // Stay in execution
-            ViewMode::ResultsList => ViewMode::ResultDetail,
-            ViewMode::ResultDetail => ViewMode::DiffView,
-            ViewMode::DiffView => ViewMode::ResultsList,
-            ViewMode::Dashboard => ViewMode::Dashboard, // Stay in dashboard - use panel navigation instead
-        };
-        self.scroll_offset = 0; // Reset scroll when changing views
+        // Only dashboard mode is supported - use panel navigation instead
+        self.next_dashboard_panel();
     }
 
-    /// Switch to the previous view mode
+    /// Switch to the previous view mode (legacy method - now only handles panel navigation)
     pub fn previous_view(&mut self) {
-        self.view_mode = match self.view_mode {
-            ViewMode::Configuration => ViewMode::Configuration, // Stay in config
-            ViewMode::Execution => ViewMode::Execution,         // Stay in execution
-            ViewMode::ResultsList => ViewMode::DiffView,
-            ViewMode::ResultDetail => ViewMode::ResultsList,
-            ViewMode::DiffView => ViewMode::ResultDetail,
-            ViewMode::Dashboard => ViewMode::Dashboard, // Stay in dashboard - use panel navigation instead
-        };
-        self.scroll_offset = 0; // Reset scroll when changing views
+        // Only dashboard mode is supported - use panel navigation instead
+        self.previous_dashboard_panel();
     }
 
     /// Toggle diff view style between unified and side-by-side
@@ -454,35 +430,9 @@ impl TuiApp {
         (total, identical, different)
     }
 
-    /// Get the title for the current view
+    /// Get the title for the current view (always Dashboard mode)
     pub fn get_view_title(&self) -> String {
-        match self.view_mode {
-            ViewMode::Configuration => "Configuration & Setup".to_string(),
-            ViewMode::Execution => "Test Execution".to_string(),
-            ViewMode::ResultsList => "Results Overview".to_string(),
-            ViewMode::ResultDetail => {
-                if let Some(result) = self.current_result() {
-                    format!("Result Detail - {}", result.route_name)
-                } else {
-                    "Result Detail".to_string()
-                }
-            }
-            ViewMode::DiffView => {
-                if let Some(result) = self.current_result() {
-                    format!(
-                        "Diff View - {} ({})",
-                        result.route_name,
-                        match self.diff_style {
-                            DiffViewStyle::Unified => "Unified",
-                            DiffViewStyle::SideBySide => "Side-by-Side",
-                        }
-                    )
-                } else {
-                    "Diff View".to_string()
-                }
-            }
-            ViewMode::Dashboard => "HTTP API Testing Dashboard".to_string(),
-        }
+        "HTTP API Testing Dashboard".to_string()
     }
 
     /// Get the title for a specific dashboard panel
@@ -522,28 +472,9 @@ impl TuiApp {
             .unwrap_or(false)
     }
 
-    /// Get help text for the current view
+    /// Get help text for the current view (always Dashboard mode)
     pub fn get_help_text(&self) -> &'static str {
-        match self.view_mode {
-            ViewMode::Configuration => {
-                "Space: Toggle selection | a: Select all | n: Clear all | Enter: Start tests | i: Initialize config | q: Quit"
-            }
-            ViewMode::Execution => {
-                "Ctrl+C: Cancel execution | q: Quit (after completion)"
-            }
-            ViewMode::ResultsList => {
-                "↑↓: Navigate | Enter/→: Detail | Tab: Cycle views | d: Toggle diff style | h: Toggle headers | e: Toggle errors | q: Quit"
-            }
-            ViewMode::ResultDetail => {
-                "↑↓: Navigate results | ←: Back to list | →: Diff view | Tab: Cycle views | PgUp/PgDn: Scroll | q: Quit"
-            }
-            ViewMode::DiffView => {
-                "↑↓: Navigate results | ←: Back to detail | Tab: Cycle views | d: Toggle diff style | PgUp/PgDn: Scroll | q: Quit"
-            }
-            ViewMode::Dashboard => {
-                "Tab: Switch panels | ↑↓←→: Navigate | R: Run tests | S: Save HTML report | 1-4: Tabs (Details) | D: Toggle diff | x: Expand | q: Quit"
-            }
-        }
+        "Tab: Switch panels | ↑↓←→: Navigate | R: Run tests | S: Save HTML report | 1-4: Tabs (Details) | D: Toggle diff | x: Expand | q: Quit"
     }
 
     // === Dashboard Panel Navigation ===
@@ -572,7 +503,7 @@ impl TuiApp {
 
     /// Check if a panel is currently focused in dashboard mode
     pub fn is_panel_focused(&self, panel: &PanelFocus) -> bool {
-        self.view_mode == ViewMode::Dashboard && self.panel_focus == *panel
+        self.panel_focus == *panel
     }
 
     /// Get the size configuration for a panel
@@ -612,7 +543,7 @@ impl TuiApp {
 
     /// Switch to specific details tab by number (1-4)
     pub fn switch_details_tab(&mut self, tab_number: usize) {
-        if tab_number >= 1 && tab_number <= 4 {
+        if (1..=4).contains(&tab_number) {
             self.details_current_tab = DetailsTab::from_index(tab_number - 1);
         }
     }
@@ -629,55 +560,48 @@ impl TuiApp {
 
     /// Update reactive state between panels when data changes
     pub fn update_panel_reactive_state(&mut self) {
-        // When results change, update related panel states
-        if self.view_mode == ViewMode::Dashboard {
-            // If no results and not executing, ensure configuration panel is accessible
-            if self.results.is_empty()
-                && !self.execution_running
-                && self.panel_focus == PanelFocus::Results
-            {
-                self.panel_focus = PanelFocus::Configuration;
-            }
+        // If no results and not executing, ensure configuration panel is accessible
+        if self.results.is_empty()
+            && !self.execution_running
+            && self.panel_focus == PanelFocus::Results
+        {
+            self.panel_focus = PanelFocus::Configuration;
+        }
 
-            // If results available and focused on progress, switch to results
-            if !self.results.is_empty()
-                && self.panel_focus == PanelFocus::Progress
-                && !self.execution_running
-            {
-                self.panel_focus = PanelFocus::Results;
-            }
+        // If results available and focused on progress, switch to results
+        if !self.results.is_empty()
+            && self.panel_focus == PanelFocus::Progress
+            && !self.execution_running
+        {
+            self.panel_focus = PanelFocus::Results;
         }
     }
 
     /// React to result selection changes by updating dependent panels
     pub fn on_result_selection_changed(&mut self) {
-        if self.view_mode == ViewMode::Dashboard {
-            // When result selection changes, the details panel should update
-            // This is handled automatically by the rendering system,
-            // but we could add specific reactions here if needed
+        // When result selection changes, the details panel should update
+        // This is handled automatically by the rendering system,
+        // but we could add specific reactions here if needed
 
-            // Reset scroll when changing selection
-            self.scroll_offset = 0;
-        }
+        // Reset scroll when changing selection
+        self.scroll_offset = 0;
     }
 
     /// Handle configuration changes and update dependent panels
     pub fn on_configuration_changed(&mut self) {
-        if self.view_mode == ViewMode::Dashboard {
-            // Clear results when configuration changes
-            if self.execution_running {
-                // Don't clear during execution
-                return;
-            }
-
-            // Reset execution state when config changes
-            self.execution_requested = false;
-            self.execution_cancelled = false;
-            self.current_operation = "Ready to execute".to_string();
-
-            // Update reactive state
-            self.update_panel_reactive_state();
+        // Clear results when configuration changes
+        if self.execution_running {
+            // Don't clear during execution
+            return;
         }
+
+        // Reset execution state when config changes
+        self.execution_requested = false;
+        self.execution_cancelled = false;
+        self.current_operation = "Ready to execute".to_string();
+
+        // Update reactive state
+        self.update_panel_reactive_state();
     }
 
     /// Enhanced result navigation that updates inter-panel communication
@@ -788,11 +712,7 @@ impl TuiApp {
     /// Start the actual execution (called by TUI runner when async task starts)
     pub fn start_execution(&mut self) {
         // In dashboard mode, keep the current view but focus on progress panel
-        if self.view_mode == ViewMode::Dashboard {
-            self.panel_focus = PanelFocus::Progress;
-        } else {
-            self.view_mode = ViewMode::Execution;
-        }
+        self.panel_focus = PanelFocus::Progress;
         self.execution_requested = false;
         self.execution_running = true;
         self.execution_cancelled = false;
@@ -816,15 +736,11 @@ impl TuiApp {
     /// Complete execution and move to results
     pub fn complete_execution(&mut self, results: Vec<ComparisonResult>) {
         self.results = results;
-        // In dashboard mode, focus on results panel instead of changing view
-        if self.view_mode == ViewMode::Dashboard {
-            self.panel_focus = PanelFocus::Results;
-            // Auto-select first result if available
-            if !self.results.is_empty() {
-                self.selected_index = 0;
-            }
-        } else {
-            self.view_mode = ViewMode::ResultsList;
+        // Focus on results panel after execution completes
+        self.panel_focus = PanelFocus::Results;
+        // Auto-select first result if available
+        if !self.results.is_empty() {
+            self.selected_index = 0;
         }
         self.selected_index = 0;
         self.execution_start_time = None;

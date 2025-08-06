@@ -600,6 +600,9 @@ path = "/api/test"
             init: false,
             verbose: false,
             output_file: "curl_commands.txt".to_string(),
+            report_file: None,
+            no_tui: false,
+            force_tui: false,
         })
         .await;
 
@@ -663,6 +666,9 @@ path = "/api/test"
             init,
             verbose,
             output_file,
+            report: _,
+            no_tui: _,
+            force_tui: _,
         } = cli.command
         {
             assert_eq!(environments, Some("test,prod".to_string()));

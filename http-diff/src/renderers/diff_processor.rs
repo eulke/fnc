@@ -252,7 +252,7 @@ impl Default for DiffProcessor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
+    use crate::renderers::diff_data::DiffOperation;
 
     #[test]
     fn test_process_header_diffs() {
