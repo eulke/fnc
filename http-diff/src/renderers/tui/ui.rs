@@ -528,21 +528,22 @@ fn draw_status_bar(f: &mut Frame, app: &TuiApp, area: Rect) {
     let key_hints = match app.view_mode {
         ViewMode::Configuration => KeyHints::format_key_hints(&KeyHints::configuration_help()),
         ViewMode::Execution => KeyHints::format_key_hints(&KeyHints::execution_help()),
-        ViewMode::Dashboard => KeyHints::format_key_hints(&KeyHints::dashboard_help()),
+        ViewMode::Dashboard => {
+            // Dynamic help based on currently focused panel
+            let panel_help = match app.panel_focus {
+                PanelFocus::Configuration => KeyHints::configuration_panel_help(),
+                PanelFocus::Progress => KeyHints::progress_panel_help(),
+                PanelFocus::Results => KeyHints::results_panel_help(),
+                PanelFocus::Details => KeyHints::details_panel_help(),
+            };
+            KeyHints::format_key_hints(&panel_help)
+        }
         _ => KeyHints::format_key_hints(&KeyHints::results_help()),
     };
     
     let status_content = format!(
-        "{} Headers: {} | {} Errors: {} | {} Diff: {} | {}",
-        UiSymbols::SETTINGS,
-        if app.show_headers { "ON" } else { "OFF" },
-        UiSymbols::ERROR,
-        if app.show_errors { "ON" } else { "OFF" },
-        UiSymbols::RESULTS,
-        match app.diff_style {
-            DiffViewStyle::Unified => "Unified",
-            DiffViewStyle::SideBySide => "Side-by-Side",
-        },
+        "{} Quick Help | {}",
+        UiSymbols::HELP,
         key_hints
     );
     
@@ -780,11 +781,19 @@ fn draw_help_overlay(f: &mut Frame, app: &TuiApp) {
             )
         }
         ViewMode::Dashboard => {
-            let hints = KeyHints::dashboard_help();
+            // Dynamic help based on currently focused panel
+            let (panel_name, panel_help) = match app.panel_focus {
+                PanelFocus::Configuration => ("Configuration Panel", KeyHints::configuration_panel_help()),
+                PanelFocus::Progress => ("Progress Panel", KeyHints::progress_panel_help()),
+                PanelFocus::Results => ("Results Panel", KeyHints::results_panel_help()),
+                PanelFocus::Details => ("Details Panel", KeyHints::details_panel_help()),
+            };
             format!(
-                "{} Dashboard Help\n\n{}",
+                "{} Dashboard Help - {}\n\n{}\n\n{} Navigation Tips:\n• Use Tab to switch between panels\n• Each panel has specific shortcuts\n• Press F1 to close this help",
                 UiSymbols::HELP,
-                KeyHints::format_key_hints(&hints)
+                panel_name,
+                KeyHints::format_key_hints(&panel_help),
+                UiSymbols::TIP
             )
         }
         _ => {

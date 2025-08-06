@@ -262,7 +262,7 @@ impl KeyHints {
         ]
     }
     
-    /// Get help text for dashboard view
+    /// Get help text for dashboard view (generic fallback)
     pub fn dashboard_help() -> Vec<(&'static str, &'static str)> {
         vec![
             ("Tab", "Switch panels"),
@@ -272,6 +272,59 @@ impl KeyHints {
             ("1-4", "Tabs (Details)"),
             ("D", "Toggle diff"),
             ("x", "Expand"),
+            ("q", "Quit"),
+        ]
+    }
+    
+    /// Get help text for configuration panel
+    pub fn configuration_panel_help() -> Vec<(&'static str, &'static str)> {
+        vec![
+            ("↑↓", "Navigate lists"),
+            ("←→", "Switch env/routes"),
+            ("Space", "Toggle selection"),
+            ("a", "Select all"),
+            ("n", "Clear all"),
+            ("Tab", "Switch panels"),
+            ("R", "Run tests"),
+            ("S", "Save HTML report"),
+            ("q", "Quit"),
+        ]
+    }
+    
+    /// Get help text for progress panel  
+    pub fn progress_panel_help() -> Vec<(&'static str, &'static str)> {
+        vec![
+            ("Tab", "Switch panels"),
+            ("R", "Run tests"),
+            ("S", "Save HTML report"),
+            ("Ctrl+C", "Cancel execution"),
+            ("q", "Quit"),
+        ]
+    }
+    
+    /// Get help text for results panel
+    pub fn results_panel_help() -> Vec<(&'static str, &'static str)> {
+        vec![
+            ("↑↓", "Navigate results"),
+            ("Enter", "View details"),
+            ("1-4", "Filter tabs"),
+            ("f", "Filter panel"),
+            ("c", "Clear filters"),
+            ("Tab", "Switch panels"),
+            ("S", "Save HTML report"),
+            ("q", "Quit"),
+        ]
+    }
+    
+    /// Get help text for details panel
+    pub fn details_panel_help() -> Vec<(&'static str, &'static str)> {
+        vec![
+            ("↑↓", "Scroll content"),
+            ("PgUp/PgDn", "Page scroll"),
+            ("1-4", "Detail tabs"),
+            ("D", "Toggle diff style"),
+            ("Tab", "Switch panels"),
+            ("S", "Save HTML report"),
             ("q", "Quit"),
         ]
     }
