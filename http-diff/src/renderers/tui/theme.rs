@@ -90,7 +90,7 @@ impl TuiTheme {
     /// Create a focused block with enhanced styling
     pub fn focused_block(title: &str) -> Block {
         Block::default()
-            .title(format!(" {} ", title))
+            .title(format!(" {} {} ", UiSymbols::FOCUSED_INDICATOR, title))
             .borders(Borders::ALL)
             .border_style(Style::default().fg(Self::BORDER_FOCUSED).add_modifier(Modifier::BOLD))
             .title_style(Style::default().fg(Self::FOCUS).add_modifier(Modifier::BOLD))
@@ -103,6 +103,47 @@ impl TuiTheme {
             .borders(Borders::ALL)
             .border_style(Style::default().fg(Self::BORDER_NORMAL))
             .title_style(Style::default().fg(Self::TEXT_PRIMARY))
+    }
+
+    /// Create a block for panels with different states
+    pub fn panel_block(title: &str, is_focused: bool, has_content: bool, has_activity: bool) -> Block {
+        let icon = if has_activity {
+            UiSymbols::QUICK_ACTION
+        } else if has_content {
+            UiSymbols::SUCCESS
+        } else {
+            UiSymbols::UNFOCUSED_INDICATOR
+        };
+        
+        let full_title = if is_focused {
+            format!(" {} {} ", UiSymbols::FOCUSED_INDICATOR, title)
+        } else {
+            format!(" {} {} ", icon, title)
+        };
+        
+        let border_style = if is_focused {
+            Style::default().fg(Self::BORDER_FOCUSED).add_modifier(Modifier::BOLD)
+        } else if has_activity {
+            Style::default().fg(Self::WARNING)
+        } else if has_content {
+            Style::default().fg(Self::SUCCESS)
+        } else {
+            Style::default().fg(Self::BORDER_NORMAL)
+        };
+        
+        let title_style = if is_focused {
+            Style::default().fg(Self::FOCUS).add_modifier(Modifier::BOLD)
+        } else if has_activity {
+            Style::default().fg(Self::WARNING)
+        } else {
+            Style::default().fg(Self::TEXT_PRIMARY)
+        };
+        
+        Block::default()
+            .title(full_title)
+            .borders(Borders::ALL)
+            .border_style(border_style)
+            .title_style(title_style)
     }
 
     /// Create an action button style
@@ -212,6 +253,9 @@ impl KeyHints {
             ("↑↓", "Navigate"),
             ("→", "Details"),
             ("Space", "Quick diff"),
+            ("1-4", "Filter tabs"),
+            ("f", "Filter panel"),
+            ("c", "Clear filters"),
             ("d", "Toggle diff style"),
             ("Tab", "Cycle views"),
             ("q", "Quit"),

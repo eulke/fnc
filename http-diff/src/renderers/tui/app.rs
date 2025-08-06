@@ -1,6 +1,20 @@
 use crate::types::{ComparisonResult, DiffViewStyle};
+use ratatui::widgets::ListState;
 
-/// Focus state for better UX navigation
+/// Dashboard panel focus for 4-panel layout
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum PanelFocus {
+    /// Configuration panel (top-left): Environment/route selection
+    Configuration,
+    /// Progress panel (top-right): Live execution status with charts
+    Progress,
+    /// Results panel (bottom-left): Test results table
+    Results,
+    /// Details panel (bottom-right): Selected result details/diffs
+    Details,
+}
+
+/// Legacy focus state for backward compatibility during transition
 #[derive(Debug, Clone, PartialEq)]
 pub enum FocusedPanel {
     /// Environments panel is focused
@@ -29,7 +43,43 @@ pub enum FeedbackType {
     Info,
 }
 
-/// Different viewing modes for the TUI
+/// Filter status for results overview
+#[derive(Debug, Clone, PartialEq)]
+pub enum StatusFilter {
+    All,
+    Identical,
+    Different,
+    ErrorsOnly,
+}
+
+/// Filter state for results view
+#[derive(Debug, Clone)]
+pub struct FilterState {
+    /// Current status filter
+    pub status_filter: StatusFilter,
+    /// Environment filter (None = all environments)
+    pub environment_filter: Option<String>,
+    /// Route name pattern filter
+    pub route_pattern: Option<String>,
+    /// Whether filter panel is open
+    pub show_filter_panel: bool,
+    /// Current tab index for filter navigation
+    pub current_tab: usize,
+}
+
+impl Default for FilterState {
+    fn default() -> Self {
+        Self {
+            status_filter: StatusFilter::All,
+            environment_filter: None,
+            route_pattern: None,
+            show_filter_panel: false,
+            current_tab: 0,
+        }
+    }
+}
+
+/// Different viewing modes for the TUI (legacy - being phased out)
 #[derive(Debug, Clone, PartialEq)]
 pub enum ViewMode {
     /// Configuration setup and environment/route selection
@@ -42,16 +92,77 @@ pub enum ViewMode {
     ResultDetail,
     /// Full diff view showing response differences
     DiffView,
+    /// New dashboard mode with 4 simultaneous panels
+    Dashboard,
 }
 
-/// Main TUI application state
+/// Panel expansion state for responsive sizing
+#[derive(Debug, Clone, PartialEq)]
+pub enum PanelSize {
+    /// Normal size in 2x2 grid
+    Normal,
+    /// Expanded to take more space (future enhancement)
+    Expanded,
+}
+
+/// Details panel tab selection
+#[derive(Debug, Clone, PartialEq)]
+pub enum DetailsTab {
+    /// Overview of the result
+    Overview,
+    /// Detailed differences
+    Diffs,
+    /// Error information
+    Errors,
+    /// Suggestions and recommendations
+    Suggestions,
+}
+
+impl DetailsTab {
+    /// Get the tab index for ratatui Tabs widget
+    pub fn as_index(&self) -> usize {
+        match self {
+            DetailsTab::Overview => 0,
+            DetailsTab::Diffs => 1,
+            DetailsTab::Errors => 2,
+            DetailsTab::Suggestions => 3,
+        }
+    }
+    
+    /// Create from tab index
+    pub fn from_index(index: usize) -> Self {
+        match index {
+            0 => DetailsTab::Overview,
+            1 => DetailsTab::Diffs,
+            2 => DetailsTab::Errors,
+            3 => DetailsTab::Suggestions,
+            _ => DetailsTab::Overview,
+        }
+    }
+    
+    /// Get tab title
+    pub fn title(&self) -> &'static str {
+        match self {
+            DetailsTab::Overview => "Overview",
+            DetailsTab::Diffs => "Diffs",
+            DetailsTab::Errors => "Errors",
+            DetailsTab::Suggestions => "Suggestions",
+        }
+    }
+}
+
+/// Main TUI application state transitioning to dashboard architecture
 pub struct TuiApp {
     /// All comparison results to display
     pub results: Vec<ComparisonResult>,
     /// Currently selected result index
     pub selected_index: usize,
-    /// Current viewing mode
+    /// Current viewing mode (legacy support)
     pub view_mode: ViewMode,
+    /// Dashboard panel focus for 4-panel layout
+    pub panel_focus: PanelFocus,
+    /// Panel size states for responsive layout
+    pub panel_sizes: std::collections::HashMap<PanelFocus, PanelSize>,
     /// Diff view style (unified or side-by-side)
     pub diff_style: DiffViewStyle,
     /// Whether to show headers in comparisons
@@ -62,6 +173,8 @@ pub struct TuiApp {
     pub should_quit: bool,
     /// Scroll position for detailed views
     pub scroll_offset: usize,
+    /// Filter state for results view
+    pub filter_state: FilterState,
     
     // Configuration state
     /// Available environments from config
@@ -106,6 +219,18 @@ pub struct TuiApp {
     pub selected_env_index: usize,
     /// Selected route index for keyboard navigation
     pub selected_route_index: usize,
+    
+    // List state for proper cursor positioning
+    /// ListState for environments list widget
+    pub env_list_state: ListState,
+    /// ListState for routes list widget  
+    pub route_list_state: ListState,
+    
+    // Details panel state
+    /// Current tab in details panel
+    pub details_current_tab: DetailsTab,
+    /// Details panel specific diff style (independent of global)
+    pub details_diff_style: DiffViewStyle,
 }
 
 impl TuiApp {
@@ -116,15 +241,24 @@ impl TuiApp {
         show_headers: bool,
         show_errors: bool,
     ) -> Self {
+        let mut panel_sizes = std::collections::HashMap::new();
+        panel_sizes.insert(PanelFocus::Configuration, PanelSize::Normal);
+        panel_sizes.insert(PanelFocus::Progress, PanelSize::Normal);
+        panel_sizes.insert(PanelFocus::Results, PanelSize::Normal);
+        panel_sizes.insert(PanelFocus::Details, PanelSize::Normal);
+
         Self {
             results,
             selected_index: 0,
-            view_mode: ViewMode::ResultsList,
-            diff_style,
+            view_mode: ViewMode::Dashboard, // Start in dashboard mode
+            panel_focus: PanelFocus::Results, // Focus on results when starting with data
+            panel_sizes,
+            diff_style: diff_style.clone(),
             show_headers,
             show_errors,
             should_quit: false,
             scroll_offset: 0,
+            filter_state: FilterState::default(),
             available_environments: Vec::new(),
             selected_environments: Vec::new(),
             available_routes: Vec::new(),
@@ -144,6 +278,10 @@ impl TuiApp {
             show_help: false,
             selected_env_index: 0,
             selected_route_index: 0,
+            env_list_state: ListState::default(),
+            route_list_state: ListState::default(),
+            details_current_tab: DetailsTab::Overview,
+            details_diff_style: diff_style,
         }
     }
 
@@ -153,15 +291,24 @@ impl TuiApp {
         show_headers: bool,
         show_errors: bool,
     ) -> Self {
+        let mut panel_sizes = std::collections::HashMap::new();
+        panel_sizes.insert(PanelFocus::Configuration, PanelSize::Normal);
+        panel_sizes.insert(PanelFocus::Progress, PanelSize::Normal);
+        panel_sizes.insert(PanelFocus::Results, PanelSize::Normal);
+        panel_sizes.insert(PanelFocus::Details, PanelSize::Normal);
+
         Self {
             results: Vec::new(),
             selected_index: 0,
-            view_mode: ViewMode::Configuration,
-            diff_style,
+            view_mode: ViewMode::Dashboard, // Start in dashboard mode for workflow
+            panel_focus: PanelFocus::Configuration, // Focus on configuration when starting workflow
+            panel_sizes,
+            diff_style: diff_style.clone(),
             show_headers,
             show_errors,
             should_quit: false,
             scroll_offset: 0,
+            filter_state: FilterState::default(),
             available_environments: Vec::new(),
             selected_environments: Vec::new(),
             available_routes: Vec::new(),
@@ -181,6 +328,10 @@ impl TuiApp {
             show_help: false,
             selected_env_index: 0,
             selected_route_index: 0,
+            env_list_state: ListState::default(),
+            route_list_state: ListState::default(),
+            details_current_tab: DetailsTab::Overview,
+            details_diff_style: diff_style,
         }
     }
 
@@ -189,19 +340,28 @@ impl TuiApp {
         self.results.get(self.selected_index)
     }
 
-    /// Move to the next result
+    /// Move to the next result (now with inter-panel communication)
     pub fn next_result(&mut self) {
-        if self.selected_index < self.results.len().saturating_sub(1) {
+        let old_index = self.selected_index;
+        let filtered_results = self.filtered_results();
+        if self.selected_index < filtered_results.len().saturating_sub(1) {
             self.selected_index += 1;
             self.scroll_offset = 0; // Reset scroll when changing results
+            if old_index != self.selected_index {
+                self.on_result_selection_changed();
+            }
         }
     }
 
-    /// Move to the previous result
+    /// Move to the previous result (now with inter-panel communication)
     pub fn previous_result(&mut self) {
+        let old_index = self.selected_index;
         if self.selected_index > 0 {
             self.selected_index -= 1;
             self.scroll_offset = 0; // Reset scroll when changing results
+            if old_index != self.selected_index {
+                self.on_result_selection_changed();
+            }
         }
     }
 
@@ -213,6 +373,7 @@ impl TuiApp {
             ViewMode::ResultsList => ViewMode::ResultDetail,
             ViewMode::ResultDetail => ViewMode::DiffView,
             ViewMode::DiffView => ViewMode::ResultsList,
+            ViewMode::Dashboard => ViewMode::Dashboard, // Stay in dashboard - use panel navigation instead
         };
         self.scroll_offset = 0; // Reset scroll when changing views
     }
@@ -225,6 +386,7 @@ impl TuiApp {
             ViewMode::ResultsList => ViewMode::DiffView,
             ViewMode::ResultDetail => ViewMode::ResultsList,
             ViewMode::DiffView => ViewMode::ResultDetail,
+            ViewMode::Dashboard => ViewMode::Dashboard, // Stay in dashboard - use panel navigation instead
         };
         self.scroll_offset = 0; // Reset scroll when changing views
     }
@@ -314,6 +476,34 @@ impl TuiApp {
                     "Diff View".to_string()
                 }
             }
+            ViewMode::Dashboard => "HTTP API Testing Dashboard".to_string(),
+        }
+    }
+
+    /// Get the title for a specific dashboard panel
+    pub fn get_panel_title(&self, panel: &PanelFocus) -> String {
+        match panel {
+            PanelFocus::Configuration => "Configuration".to_string(),
+            PanelFocus::Progress => {
+                if self.execution_running {
+                    format!("Execution Progress ({}/{})", self.completed_tests, self.total_tests)
+                } else if self.results.is_empty() {
+                    "Execution Ready".to_string()
+                } else {
+                    "Execution Complete".to_string()
+                }
+            }
+            PanelFocus::Results => {
+                let (total, _identical, _different, errors) = self.get_filter_counts();
+                format!("Results ({} total, {} errors)", total, errors)
+            }
+            PanelFocus::Details => {
+                if let Some(result) = self.current_filtered_result() {
+                    format!("Details - {}", result.route_name)
+                } else {
+                    "Details".to_string()
+                }
+            }
         }
     }
 
@@ -342,8 +532,149 @@ impl TuiApp {
             ViewMode::DiffView => {
                 "↑↓: Navigate results | ←: Back to detail | Tab: Cycle views | d: Toggle diff style | PgUp/PgDn: Scroll | q: Quit"
             }
+            ViewMode::Dashboard => {
+                "Tab: Switch panels | ↑↓←→: Navigate | R: Run tests | 1-4: Tabs (Details) | D: Toggle diff | x: Expand | q: Quit"
+            }
         }
     }
+
+    // === Dashboard Panel Navigation ===
+
+    /// Switch to the next panel in dashboard mode
+    pub fn next_dashboard_panel(&mut self) {
+        self.panel_focus = match self.panel_focus {
+            PanelFocus::Configuration => PanelFocus::Progress,
+            PanelFocus::Progress => PanelFocus::Results,
+            PanelFocus::Results => PanelFocus::Details,
+            PanelFocus::Details => PanelFocus::Configuration,
+        };
+        self.scroll_offset = 0; // Reset scroll when changing panels
+    }
+
+    /// Switch to the previous panel in dashboard mode
+    pub fn previous_dashboard_panel(&mut self) {
+        self.panel_focus = match self.panel_focus {
+            PanelFocus::Configuration => PanelFocus::Details,
+            PanelFocus::Progress => PanelFocus::Configuration,
+            PanelFocus::Results => PanelFocus::Progress,
+            PanelFocus::Details => PanelFocus::Results,
+        };
+        self.scroll_offset = 0; // Reset scroll when changing panels
+    }
+
+    /// Check if a panel is currently focused in dashboard mode
+    pub fn is_panel_focused(&self, panel: &PanelFocus) -> bool {
+        self.view_mode == ViewMode::Dashboard && self.panel_focus == *panel
+    }
+
+    /// Get the size configuration for a panel
+    pub fn get_panel_size(&self, panel: &PanelFocus) -> &PanelSize {
+        self.panel_sizes.get(panel).unwrap_or(&PanelSize::Normal)
+    }
+
+    /// Toggle panel expansion (future enhancement)
+    pub fn toggle_panel_expansion(&mut self, panel: PanelFocus) {
+        let current_size = self.panel_sizes.get(&panel).unwrap_or(&PanelSize::Normal);
+        let new_size = match current_size {
+            PanelSize::Normal => PanelSize::Expanded,
+            PanelSize::Expanded => PanelSize::Normal,
+        };
+        self.panel_sizes.insert(panel, new_size);
+    }
+    
+    /// Switch to the next tab in details panel
+    pub fn next_details_tab(&mut self) {
+        self.details_current_tab = match self.details_current_tab {
+            DetailsTab::Overview => DetailsTab::Diffs,
+            DetailsTab::Diffs => DetailsTab::Errors,
+            DetailsTab::Errors => DetailsTab::Suggestions,
+            DetailsTab::Suggestions => DetailsTab::Overview,
+        };
+    }
+    
+    /// Switch to the previous tab in details panel
+    pub fn previous_details_tab(&mut self) {
+        self.details_current_tab = match self.details_current_tab {
+            DetailsTab::Overview => DetailsTab::Suggestions,
+            DetailsTab::Diffs => DetailsTab::Overview,
+            DetailsTab::Errors => DetailsTab::Diffs,
+            DetailsTab::Suggestions => DetailsTab::Errors,
+        };
+    }
+    
+    /// Switch to specific details tab by number (1-4)
+    pub fn switch_details_tab(&mut self, tab_number: usize) {
+        if tab_number >= 1 && tab_number <= 4 {
+            self.details_current_tab = DetailsTab::from_index(tab_number - 1);
+        }
+    }
+    
+    /// Toggle details panel specific diff style
+    pub fn toggle_details_diff_style(&mut self) {
+        self.details_diff_style = match self.details_diff_style {
+            DiffViewStyle::Unified => DiffViewStyle::SideBySide,
+            DiffViewStyle::SideBySide => DiffViewStyle::Unified,
+        };
+    }
+
+    // === Inter-Panel Communication ===
+
+    /// Update reactive state between panels when data changes
+    pub fn update_panel_reactive_state(&mut self) {
+        // When results change, update related panel states
+        if self.view_mode == ViewMode::Dashboard {
+            // If no results and not executing, ensure configuration panel is accessible
+            if self.results.is_empty() && !self.execution_running && self.panel_focus == PanelFocus::Results {
+                self.panel_focus = PanelFocus::Configuration;
+            }
+            
+            // If results available and focused on progress, switch to results
+            if !self.results.is_empty() && self.panel_focus == PanelFocus::Progress && !self.execution_running {
+                self.panel_focus = PanelFocus::Results;
+            }
+        }
+    }
+
+    /// React to result selection changes by updating dependent panels
+    pub fn on_result_selection_changed(&mut self) {
+        if self.view_mode == ViewMode::Dashboard {
+            // When result selection changes, the details panel should update
+            // This is handled automatically by the rendering system, 
+            // but we could add specific reactions here if needed
+            
+            // Reset scroll when changing selection
+            self.scroll_offset = 0;
+        }
+    }
+
+    /// Handle configuration changes and update dependent panels
+    pub fn on_configuration_changed(&mut self) {
+        if self.view_mode == ViewMode::Dashboard {
+            // Clear results when configuration changes
+            if self.execution_running {
+                // Don't clear during execution
+                return;
+            }
+            
+            // Reset execution state when config changes
+            self.execution_requested = false;
+            self.execution_cancelled = false;
+            self.current_operation = "Ready to execute".to_string();
+            
+            // Update reactive state
+            self.update_panel_reactive_state();
+        }
+    }
+
+    /// Enhanced result navigation that updates inter-panel communication
+    pub fn navigate_to_result(&mut self, index: usize) {
+        let filtered_results = self.filtered_results();
+        if index < filtered_results.len() {
+            self.selected_index = index;
+            self.on_result_selection_changed();
+        }
+    }
+
 
     /// Load configuration and populate available environments/routes
     pub fn load_configuration(&mut self) -> Result<(), String> {
@@ -365,6 +696,13 @@ impl TuiApp {
         self.selected_environments = self.available_environments.clone();
         self.selected_routes = self.available_routes.clone();
         
+        // Sync ListState after loading configuration
+        self.sync_env_list_state();
+        self.sync_route_list_state();
+        
+        // Trigger inter-panel communication
+        self.on_configuration_changed();
+        
         Ok(())
     }
 
@@ -376,6 +714,8 @@ impl TuiApp {
             } else {
                 self.selected_environments.push(env_name.clone());
             }
+            // Trigger inter-panel communication
+            self.on_configuration_changed();
         }
     }
 
@@ -387,6 +727,8 @@ impl TuiApp {
             } else {
                 self.selected_routes.push(route_name.clone());
             }
+            // Trigger inter-panel communication
+            self.on_configuration_changed();
         }
     }
 
@@ -427,7 +769,12 @@ impl TuiApp {
 
     /// Start the actual execution (called by TUI runner when async task starts)
     pub fn start_execution(&mut self) {
-        self.view_mode = ViewMode::Execution;
+        // In dashboard mode, keep the current view but focus on progress panel
+        if self.view_mode == ViewMode::Dashboard {
+            self.panel_focus = PanelFocus::Progress;
+        } else {
+            self.view_mode = ViewMode::Execution;
+        }
         self.execution_requested = false;
         self.execution_running = true;
         self.execution_cancelled = false;
@@ -451,13 +798,25 @@ impl TuiApp {
     /// Complete execution and move to results
     pub fn complete_execution(&mut self, results: Vec<ComparisonResult>) {
         self.results = results;
-        self.view_mode = ViewMode::ResultsList;
+        // In dashboard mode, focus on results panel instead of changing view
+        if self.view_mode == ViewMode::Dashboard {
+            self.panel_focus = PanelFocus::Results;
+            // Auto-select first result if available
+            if !self.results.is_empty() {
+                self.selected_index = 0;
+            }
+        } else {
+            self.view_mode = ViewMode::ResultsList;
+        }
         self.selected_index = 0;
         self.execution_start_time = None;
         self.execution_running = false;
         self.execution_requested = false;
         self.execution_cancelled = false;
         self.current_operation = "Execution completed".to_string();
+        
+        // Trigger inter-panel update
+        self.update_panel_reactive_state();
     }
 
     /// Set error message
@@ -479,6 +838,8 @@ impl TuiApp {
         };
         self.selected_env_index = 0;
         self.selected_route_index = 0;
+        self.sync_env_list_state();
+        self.sync_route_list_state();
     }
 
     /// Switch focus to previous panel
@@ -490,6 +851,8 @@ impl TuiApp {
         };
         self.selected_env_index = 0;
         self.selected_route_index = 0;
+        self.sync_env_list_state();
+        self.sync_route_list_state();
     }
 
     /// Navigate up in the current panel
@@ -498,11 +861,13 @@ impl TuiApp {
             FocusedPanel::Environments => {
                 if self.selected_env_index > 0 {
                     self.selected_env_index -= 1;
+                    self.sync_env_list_state();
                 }
             }
             FocusedPanel::Routes => {
                 if self.selected_route_index > 0 {
                     self.selected_route_index -= 1;
+                    self.sync_route_list_state();
                 }
             }
             FocusedPanel::Actions => {
@@ -517,16 +882,36 @@ impl TuiApp {
             FocusedPanel::Environments => {
                 if self.selected_env_index < self.available_environments.len().saturating_sub(1) {
                     self.selected_env_index += 1;
+                    self.sync_env_list_state();
                 }
             }
             FocusedPanel::Routes => {
                 if self.selected_route_index < self.available_routes.len().saturating_sub(1) {
                     self.selected_route_index += 1;
+                    self.sync_route_list_state();
                 }
             }
             FocusedPanel::Actions => {
                 // Actions panel doesn't have navigation
             }
+        }
+    }
+
+    /// Sync environment ListState with current index
+    pub fn sync_env_list_state(&mut self) {
+        if !self.available_environments.is_empty() {
+            self.env_list_state.select(Some(self.selected_env_index));
+        } else {
+            self.env_list_state.select(None);
+        }
+    }
+
+    /// Sync route ListState with current index  
+    pub fn sync_route_list_state(&mut self) {
+        if !self.available_routes.is_empty() {
+            self.route_list_state.select(Some(self.selected_route_index));
+        } else {
+            self.route_list_state.select(None);
         }
     }
 
@@ -619,5 +1004,107 @@ impl TuiApp {
                 // No clear all for actions
             }
         }
+    }
+
+    // === Filter Management ===
+    
+    /// Get filtered results based on current filter state
+    pub fn filtered_results(&self) -> Vec<&ComparisonResult> {
+        self.results.iter().filter(|result| {
+            // Status filter
+            match self.filter_state.status_filter {
+                StatusFilter::All => true,
+                StatusFilter::Identical => result.is_identical && !result.has_errors,
+                StatusFilter::Different => !result.is_identical && !result.has_errors,
+                StatusFilter::ErrorsOnly => result.has_errors,
+            }
+        })
+        .filter(|result| {
+            // Environment filter
+            if let Some(ref env_filter) = self.filter_state.environment_filter {
+                result.responses.contains_key(env_filter)
+            } else {
+                true
+            }
+        })
+        .filter(|result| {
+            // Route pattern filter
+            if let Some(ref pattern) = self.filter_state.route_pattern {
+                result.route_name.to_lowercase().contains(&pattern.to_lowercase())
+            } else {
+                true
+            }
+        })
+        .collect()
+    }
+    
+    /// Get count for each filter tab
+    pub fn get_filter_counts(&self) -> (usize, usize, usize, usize) {
+        let total = self.results.len();
+        let identical = self.results.iter().filter(|r| r.is_identical && !r.has_errors).count();
+        let different = self.results.iter().filter(|r| !r.is_identical && !r.has_errors).count();
+        let errors = self.results.iter().filter(|r| r.has_errors).count();
+        (total, identical, different, errors)
+    }
+    
+    /// Switch to next filter tab
+    pub fn next_filter_tab(&mut self) {
+        self.filter_state.current_tab = (self.filter_state.current_tab + 1) % 4;
+        self.update_filter_from_tab();
+    }
+    
+    /// Switch to previous filter tab
+    pub fn previous_filter_tab(&mut self) {
+        self.filter_state.current_tab = if self.filter_state.current_tab == 0 { 3 } else { self.filter_state.current_tab - 1 };
+        self.update_filter_from_tab();
+    }
+    
+    /// Update filter based on current tab
+    fn update_filter_from_tab(&mut self) {
+        self.filter_state.status_filter = match self.filter_state.current_tab {
+            0 => StatusFilter::All,
+            1 => StatusFilter::Identical,
+            2 => StatusFilter::Different,
+            3 => StatusFilter::ErrorsOnly,
+            _ => StatusFilter::All,
+        };
+        // Reset selection when filter changes
+        self.selected_index = 0;
+    }
+    
+    /// Toggle filter panel visibility
+    pub fn toggle_filter_panel(&mut self) {
+        self.filter_state.show_filter_panel = !self.filter_state.show_filter_panel;
+    }
+    
+    /// Set route pattern filter
+    pub fn set_route_pattern(&mut self, pattern: Option<String>) {
+        self.filter_state.route_pattern = pattern;
+        self.selected_index = 0; // Reset selection when filter changes
+    }
+    
+    /// Set environment filter
+    pub fn set_environment_filter(&mut self, env: Option<String>) {
+        self.filter_state.environment_filter = env;
+        self.selected_index = 0; // Reset selection when filter changes
+    }
+    
+    /// Clear all filters
+    pub fn clear_filters(&mut self) {
+        self.filter_state = FilterState::default();
+        self.selected_index = 0;
+    }
+    
+    /// Get current result accounting for filters
+    pub fn current_filtered_result(&self) -> Option<&ComparisonResult> {
+        let filtered = self.filtered_results();
+        filtered.get(self.selected_index).copied()
+    }
+    
+    /// Get position info for current result
+    pub fn get_filter_position_info(&self) -> (usize, usize) {
+        let filtered = self.filtered_results();
+        let current_pos = if filtered.is_empty() { 0 } else { self.selected_index + 1 };
+        (current_pos, filtered.len())
     }
 }

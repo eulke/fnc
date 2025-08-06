@@ -137,7 +137,7 @@ impl TuiRenderer {
             app.clear_old_feedback();
             
             // Draw the UI
-            terminal.draw(|f| ui::draw(f, &app))
+            terminal.draw(|f| ui::draw(f, &mut app))
                 .map_err(|e| HttpDiffError::general(format!("Failed to draw: {}", e)))?;
 
             // Handle events
@@ -342,7 +342,7 @@ impl TuiRenderer {
             }
             
             // Draw the UI
-            terminal.draw(|f| ui::draw(f, &app))
+            terminal.draw(|f| ui::draw(f, &mut app))
                 .map_err(|e| HttpDiffError::general(format!("Failed to draw: {}", e)))?;
 
             // Handle events

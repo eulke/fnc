@@ -25,6 +25,11 @@ pub struct DiffWidgetRenderer;
 impl DiffWidgetRenderer {
     /// Render complete diff data using proper TUI widgets
     pub fn render_diff_view(f: &mut Frame, diff_data: &DiffData, app: &TuiApp, area: Rect) {
+        Self::render_diff_view_with_style(f, diff_data, app, &app.diff_style, area);
+    }
+
+    /// Render complete diff data using proper TUI widgets with custom diff style
+    pub fn render_diff_view_with_style(f: &mut Frame, diff_data: &DiffData, app: &TuiApp, style: &DiffViewStyle, area: Rect) {
         if diff_data.is_empty() {
             Self::render_no_differences(f, diff_data, area);
             return;
@@ -49,18 +54,18 @@ impl DiffWidgetRenderer {
         let mut chunk_idx = 0;
 
         // Render route information
-        Self::render_route_info(f, diff_data, &app.diff_style, chunks[chunk_idx]);
+        Self::render_route_info(f, diff_data, style, chunks[chunk_idx]);
         chunk_idx += 1;
 
         // Render header differences if present
         if let Some(ref headers) = diff_data.headers {
-            Self::render_header_diff_widget(f, headers, &app.diff_style, chunks[chunk_idx]);
+            Self::render_header_diff_widget(f, headers, style, chunks[chunk_idx]);
             chunk_idx += 1;
         }
 
         // Render body differences if present
         if let Some(ref body) = diff_data.body {
-            Self::render_body_diff_widget(f, body, &app.diff_style, app, chunks[chunk_idx]);
+            Self::render_body_diff_widget(f, body, style, app, chunks[chunk_idx]);
         }
     }
 

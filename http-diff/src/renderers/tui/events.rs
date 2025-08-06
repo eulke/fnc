@@ -3,6 +3,8 @@ use crate::{error::{HttpDiffError, Result}, renderers::tui::app::ViewMode};
 use super::app::TuiApp;
 use std::time::Duration;
 
+mod events_dashboard;
+
 /// Result of handling an application event
 pub enum AppResult {
     /// Continue running the application
@@ -50,18 +52,18 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> Result<AppResult> {
             return Ok(AppResult::Quit);
         }
         KeyCode::Tab => {
-            // In configuration view, Tab switches panels instead of views
-            if matches!(app.view_mode, ViewMode::Configuration) {
-                // Handle in view-specific section
+            // In dashboard and configuration views, Tab switches panels instead of views
+            if matches!(app.view_mode, ViewMode::Configuration | ViewMode::Dashboard) {
+                // Handle in view-specific section (will pass to dashboard handler)
             } else {
                 app.next_view();
                 return Ok(AppResult::Continue);
             }
         }
         KeyCode::BackTab => {
-            // In configuration view, BackTab switches panels instead of views
-            if matches!(app.view_mode, ViewMode::Configuration) {
-                // Handle in view-specific section  
+            // In dashboard and configuration views, BackTab switches panels instead of views
+            if matches!(app.view_mode, ViewMode::Configuration | ViewMode::Dashboard) {
+                // Handle in view-specific section (will pass to dashboard handler)
             } else {
                 app.previous_view();
                 return Ok(AppResult::Continue);
@@ -89,6 +91,7 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> Result<AppResult> {
         ViewMode::ResultsList => handle_results_list_keys(app, key),
         ViewMode::ResultDetail => handle_result_detail_keys(app, key),
         ViewMode::DiffView => handle_diff_view_keys(app, key),
+        ViewMode::Dashboard => events_dashboard::handle_dashboard_keys(app, key),
     }
 }
 
@@ -175,28 +178,64 @@ fn handle_results_list_keys(app: &mut TuiApp, key: KeyEvent) -> Result<AppResult
             app.next_result();
         }
         KeyCode::Enter | KeyCode::Right | KeyCode::Char('l') => {
-            app.view_mode = ViewMode::ResultDetail;
+            // Use filtered result instead of raw result
+            if app.current_filtered_result().is_some() {
+                app.view_mode = ViewMode::ResultDetail;
+            }
         }
         KeyCode::Char(' ') => {
             // Space bar goes directly to diff view if there are differences
-            if app.current_result_has_differences() {
-                app.view_mode = ViewMode::DiffView;
-            } else {
-                app.view_mode = ViewMode::ResultDetail;
+            if let Some(result) = app.current_filtered_result() {
+                if !result.is_identical {
+                    app.view_mode = ViewMode::DiffView;
+                } else {
+                    app.view_mode = ViewMode::ResultDetail;
+                }
             }
         }
         KeyCode::Home => {
             app.selected_index = 0;
         }
         KeyCode::End => {
-            app.selected_index = app.results.len().saturating_sub(1);
+            let filtered_results = app.filtered_results();
+            app.selected_index = filtered_results.len().saturating_sub(1);
         }
         KeyCode::PageUp => {
             app.selected_index = app.selected_index.saturating_sub(10);
         }
         KeyCode::PageDown => {
-            let max_index = app.results.len().saturating_sub(1);
+            let filtered_results = app.filtered_results();
+            let max_index = filtered_results.len().saturating_sub(1);
             app.selected_index = (app.selected_index + 10).min(max_index);
+        }
+        // Filter tab navigation
+        KeyCode::Char('1') => {
+            app.filter_state.current_tab = 0;
+            app.filter_state.status_filter = crate::renderers::tui::app::StatusFilter::All;
+            app.selected_index = 0;
+        }
+        KeyCode::Char('2') => {
+            app.filter_state.current_tab = 1;
+            app.filter_state.status_filter = crate::renderers::tui::app::StatusFilter::Identical;
+            app.selected_index = 0;
+        }
+        KeyCode::Char('3') => {
+            app.filter_state.current_tab = 2;
+            app.filter_state.status_filter = crate::renderers::tui::app::StatusFilter::Different;
+            app.selected_index = 0;
+        }
+        KeyCode::Char('4') => {
+            app.filter_state.current_tab = 3;
+            app.filter_state.status_filter = crate::renderers::tui::app::StatusFilter::ErrorsOnly;
+            app.selected_index = 0;
+        }
+        KeyCode::Char('f') => {
+            // Toggle filter panel for advanced filtering
+            app.toggle_filter_panel();
+        }
+        KeyCode::Char('c') => {
+            // Clear all filters
+            app.clear_filters();
         }
         _ => {}
     }
@@ -225,7 +264,9 @@ fn handle_result_detail_keys(app: &mut TuiApp, key: KeyEvent) -> Result<AppResul
             app.view_mode = ViewMode::ResultsList;
         }
         KeyCode::Right | KeyCode::Enter | KeyCode::Char('l') => {
-            app.view_mode = ViewMode::DiffView;
+            if app.current_filtered_result().is_some() {
+                app.view_mode = ViewMode::DiffView;
+            }
         }
         KeyCode::PageUp => {
             app.page_up();
