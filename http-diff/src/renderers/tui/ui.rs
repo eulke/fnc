@@ -1402,6 +1402,19 @@ fn draw_details_overview_tab(f: &mut Frame, app: &TuiApp, result: &ComparisonRes
         lines.push(format!("  {} {} - HTTP {}", status_icon, env, response.status));
     }
     
+    // Variables section
+    if !result.user_context.is_empty() {
+        lines.push("".to_string());
+        lines.push("Variables".to_string());
+        lines.push("══════════".to_string());
+        let mut vars: Vec<_> = result.user_context.iter().collect();
+        vars.sort_by_key(|(k, _)| *k);
+        for (k, v) in vars {
+            let val = if v.len() > 80 { format!("{}...", &v[..77]) } else { v.clone() };
+            lines.push(format!("  {} = {}", k, val));
+        }
+    }
+
     // Response size info
     if !result.responses.is_empty() {
         lines.push("".to_string());
