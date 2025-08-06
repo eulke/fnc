@@ -261,4 +261,18 @@ impl KeyHints {
             ("q", "Quit"),
         ]
     }
+    
+    /// Get help text for dashboard view
+    pub fn dashboard_help() -> Vec<(&'static str, &'static str)> {
+        vec![
+            ("Tab", "Switch panels"),
+            ("↑↓←→", "Navigate"),
+            ("R", "Run tests"),
+            ("S", "Save HTML report"),
+            ("1-4", "Tabs (Details)"),
+            ("D", "Toggle diff"),
+            ("x", "Expand"),
+            ("q", "Quit"),
+        ]
+    }
 }

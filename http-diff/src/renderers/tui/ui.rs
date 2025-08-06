@@ -528,6 +528,7 @@ fn draw_status_bar(f: &mut Frame, app: &TuiApp, area: Rect) {
     let key_hints = match app.view_mode {
         ViewMode::Configuration => KeyHints::format_key_hints(&KeyHints::configuration_help()),
         ViewMode::Execution => KeyHints::format_key_hints(&KeyHints::execution_help()),
+        ViewMode::Dashboard => KeyHints::format_key_hints(&KeyHints::dashboard_help()),
         _ => KeyHints::format_key_hints(&KeyHints::results_help()),
     };
     
@@ -774,6 +775,14 @@ fn draw_help_overlay(f: &mut Frame, app: &TuiApp) {
             let hints = KeyHints::execution_help();
             format!(
                 "{} Execution Help\n\n{}\n\nPlease wait for tests to complete...",
+                UiSymbols::HELP,
+                KeyHints::format_key_hints(&hints)
+            )
+        }
+        ViewMode::Dashboard => {
+            let hints = KeyHints::dashboard_help();
+            format!(
+                "{} Dashboard Help\n\n{}",
                 UiSymbols::HELP,
                 KeyHints::format_key_hints(&hints)
             )

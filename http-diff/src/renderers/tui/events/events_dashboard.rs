@@ -65,6 +65,17 @@ pub fn handle_dashboard_keys(app: &mut TuiApp, key: KeyEvent) -> Result<AppResul
                 app.request_execution();
             }
         }
+        KeyCode::Char('s') | KeyCode::Char('S') => {
+            // Save HTML report from any panel
+            match app.generate_html_report() {
+                Ok(_) => {
+                    // Success feedback is handled by the method
+                }
+                Err(err) => {
+                    app.show_feedback(&err, crate::renderers::tui::app::FeedbackType::Error);
+                }
+            }
+        }
         // Details panel specific keys
         KeyCode::Char('1') => {
             if app.panel_focus == PanelFocus::Details {

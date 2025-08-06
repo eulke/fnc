@@ -1,5 +1,7 @@
 use crate::types::{ComparisonResult, DiffViewStyle};
+use crate::renderers::report::{ReportRendererFactory, ReportMetadata};
 use ratatui::widgets::ListState;
+use std::fs;
 
 /// Dashboard panel focus for 4-panel layout
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -533,7 +535,7 @@ impl TuiApp {
                 "↑↓: Navigate results | ←: Back to detail | Tab: Cycle views | d: Toggle diff style | PgUp/PgDn: Scroll | q: Quit"
             }
             ViewMode::Dashboard => {
-                "Tab: Switch panels | ↑↓←→: Navigate | R: Run tests | 1-4: Tabs (Details) | D: Toggle diff | x: Expand | q: Quit"
+                "Tab: Switch panels | ↑↓←→: Navigate | R: Run tests | S: Save HTML report | 1-4: Tabs (Details) | D: Toggle diff | x: Expand | q: Quit"
             }
         }
     }
@@ -1106,5 +1108,47 @@ impl TuiApp {
         let filtered = self.filtered_results();
         let current_pos = if filtered.is_empty() { 0 } else { self.selected_index + 1 };
         (current_pos, filtered.len())
+    }
+    
+    /// Generate and save HTML report from current results
+    pub fn generate_html_report(&mut self) -> Result<String, String> {
+        if self.results.is_empty() {
+            return Err("No results available to generate report".to_string());
+        }
+        
+        // Always use HTML format - generate filename with timestamp
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let report_filename = format!("http-diff-report-{}.html", timestamp);
+        
+        // Create report renderer (always HTML)
+        let report_renderer = ReportRendererFactory::create_renderer(&report_filename);
+        
+        // Create metadata
+        let env_names: Vec<String> = self.available_environments.clone();
+        let metadata = ReportMetadata::new(env_names, self.results.len())
+            .with_duration(std::time::Duration::from_secs(0))
+            .with_context("source", "TUI")
+            .with_context("diff_view", match self.diff_style {
+                DiffViewStyle::Unified => "unified",
+                DiffViewStyle::SideBySide => "side-by-side",
+            })
+            .with_context("headers_included", self.show_headers.to_string())
+            .with_context("errors_included", self.show_errors.to_string());
+        
+        // Generate report content
+        let report_content = report_renderer.render_report(&self.results, &metadata);
+        
+        // Write to file
+        fs::write(&report_filename, report_content).map_err(|e| {
+            format!("Failed to write report file: {}", e)
+        })?;
+        
+        // Show success feedback
+        self.show_feedback(&format!("HTML report saved to {}", report_filename), FeedbackType::Success);
+        
+        Ok(report_filename)
     }
 }
