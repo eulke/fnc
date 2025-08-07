@@ -384,7 +384,7 @@ fn draw_routes_list_widget(f: &mut Frame, app: &mut TuiApp, area: Rect, is_panel
     );
 }
 
-/// Draw configuration status line with context-sensitive navigation hints
+/// Draw configuration status line with current state information
 fn draw_config_status_line(f: &mut Frame, app: &TuiApp, area: Rect) {
     // Determine current focused section
     let current_section = match app.focused_panel {
@@ -393,21 +393,12 @@ fn draw_config_status_line(f: &mut Frame, app: &TuiApp, area: Rect) {
         FocusedPanel::Actions => "⚡ Actions",
     };
 
-    // Create context-sensitive instructions with clear navigation separation
-    let navigation_hint =
-        "←→ Switch sections • ↑↓ Navigate • Space Toggle • Tab Switch panels • R Run";
-
+    // Show clean state information without duplicate navigation help
     let text = if app.selected_environments.is_empty() || app.selected_routes.is_empty() {
-        format!(
-            "{} | {} | ⚠ Select items to continue",
-            current_section, navigation_hint
-        )
+        format!("{} | ⚠ Select items to continue", current_section)
     } else {
         let total_tests = app.selected_environments.len() * app.selected_routes.len();
-        format!(
-            "{} | {} | ✅ {} tests ready",
-            current_section, navigation_hint, total_tests
-        )
+        format!("{} | ✅ {} tests ready", current_section, total_tests)
     };
 
     let style = if app.selected_environments.is_empty() || app.selected_routes.is_empty() {
