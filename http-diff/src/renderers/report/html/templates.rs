@@ -56,13 +56,13 @@ impl HtmlTemplate {
                 <div class="report-subtitle">Comprehensive API comparison analysis</div>
                 <nav class="report-nav" role="navigation" aria-label="Report sections">
                     <button class="nav-btn nav-btn--active" data-section="dashboard" aria-pressed="true">
-                        📊 Overview
+                        Overview
                     </button>
                     <button class="nav-btn" data-section="technical" aria-pressed="false">
-                        🔍 Technical Details
+                        Technical Details
                     </button>
                     <button class="nav-btn" data-section="actions" aria-pressed="false">
-                        🎯 Recommended Actions
+                        Recommended Actions
                     </button>
                 </nav>
             </div>
@@ -96,7 +96,7 @@ impl HtmlTemplate {
                     <h3 id="filter-heading">
                         Filter & Search Results
                         <button class="help-icon" aria-label="Show keyboard shortcuts" title="Keyboard shortcuts available">
-                            <span aria-hidden="true">❓</span>
+                            <span aria-hidden="true">?</span>
                         </button>
                     </h3>
                     <div class="filter-row">
@@ -183,658 +183,6 @@ impl HtmlTemplate {
             metadata.timestamp.format("%Y-%m-%d %H:%M %Z"),
             metadata.environments.len(),
             js_content
-        )
-    }
-
-    /// Generate technical appendix with curl commands (if enabled)
-    fn technical_appendix(results: &[ComparisonResult]) -> String {
-        let mut curl_sections = String::new();
-
-        for result in results.iter().filter(|r| r.has_errors || !r.is_identical) {
-            curl_sections.push_str(&format!(
-                r#"
-            <div class="curl-section">
-                <h4>📍 {} <span class="user-context">({})</span></h4>
-                <div class="curl-commands">
-            "#,
-                result.route_name,
-                if result.user_context.is_empty() {
-                    "default".to_string()
-                } else {
-                    result
-                        .user_context
-                        .iter()
-                        .map(|(k, v)| format!("{}={}", k, v))
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                }
-            ));
-
-            for (env_name, response) in &result.responses {
-                let status_class = if response.is_error() {
-                    "error"
-                } else {
-                    "success"
-                };
-                curl_sections.push_str(&format!(
-                    r#"
-                <div class="curl-command">
-                    <div class="env-header">
-                        <span class="env-name">{}</span>
-                        <span class="status-code {}">{}</span>
-                    </div>
-                    <div class="command-box">
-                        <code>{}</code>
-                        <button class="copy-btn" onclick="copyToClipboard(this)">📋</button>
-                    </div>
-                </div>
-                "#,
-                    env_name.to_uppercase(),
-                    status_class,
-                    response.status,
-                    response.curl_command
-                ));
-            }
-
-            curl_sections.push_str("</div></div>");
-        }
-
-        if curl_sections.is_empty() {
-            return String::new();
-        }
-
-        format!(
-            r#"
-        <div class="technical-appendix">
-            <h2>🔧 Technical Reproduction Guide</h2>
-            <div class="appendix-note">
-                Use these curl commands to reproduce and debug issues locally.
-            </div>
-            {}
-        </div>
-        
-        <script>
-        // Modern HTTP Diff Report Controller with Three-Tier Navigation
-        class ModernReportController {{
-            constructor() {{
-                this.currentSection = 'dashboard';
-                this.routes = [];
-                this.routeStats = {{ all: 0, different: 0, failed: 0, identical: 0 }};
-                this.filters = {{
-                    status: 'all',
-                    search: ''
-                }};
-                this.init();
-            }}
-
-            init() {{
-                this.setupNavigation();
-                this.collectRoutes();
-                this.updateRouteCounts();
-                this.setupFilters();
-                this.setupRouteInteractions();
-                this.setupKeyboardShortcuts();
-                this.setupAccessibility();
-                this.loadStateFromUrl();
-                console.log('🚀 Modern Report Controller initialized');
-            }}
-
-            // Navigation Management
-            setupNavigation() {{
-                const navButtons = document.querySelectorAll('.nav-btn');
-                navButtons.forEach(btn => {{
-                    btn.addEventListener('click', (e) => {{
-                        e.preventDefault();
-                        const targetSection = btn.dataset.section;
-                        this.navigateToSection(targetSection);
-                    }});
-                }});
-
-                // Breadcrumb navigation
-                const breadcrumbLinks = document.querySelectorAll('.breadcrumb-link');
-                breadcrumbLinks.forEach(link => {{
-                    link.addEventListener('click', (e) => {{
-                        e.preventDefault();
-                        const targetSection = link.dataset.section;
-                        this.navigateToSection(targetSection);
-                    }});
-                }});
-            }}
-
-            navigateToSection(sectionId) {{
-                console.log(`📍 Navigating to section: ${{sectionId}}`);
-                
-                // Update current section
-                this.currentSection = sectionId;
-                
-                // Hide all sections
-                document.querySelectorAll('.report-section').forEach(section => {{
-                    section.hidden = true;
-                    section.classList.remove('report-section--active');
-                }});
-                
-                // Show target section
-                const targetSection = document.getElementById(sectionId);
-                if (targetSection) {{
-                    targetSection.hidden = false;
-                    targetSection.classList.add('report-section--active');
-                    targetSection.scrollIntoView({{ behavior: 'smooth', block: 'start' }});
-                }}
-                
-                // Update navigation buttons
-                document.querySelectorAll('.nav-btn').forEach(btn => {{
-                    const isActive = btn.dataset.section === sectionId;
-                    btn.classList.toggle('nav-btn--active', isActive);
-                    btn.setAttribute('aria-pressed', isActive);
-                }});
-                
-                // Update URL fragment
-                this.updateUrlFragment();
-                
-                // Trigger section-specific initialization
-                this.initializeSection(sectionId);
-            }}
-
-            initializeSection(sectionId) {{
-                switch(sectionId) {{
-                    case 'technical':
-                        // Ensure filters are ready
-                        this.applyFilters();
-                        break;
-                    case 'dashboard':
-                        // Could trigger dashboard animations
-                        break;
-                    case 'actions':
-                        // Could highlight critical actions
-                        break;
-                }}
-            }}
-
-            // Route Management
-            collectRoutes() {{
-                const routeSections = document.querySelectorAll('.route-diff-section');
-                console.log(`📊 Found ${{routeSections.length}} route sections`);
-                
-                this.routes = Array.from(routeSections).map(section => {{
-                    const routeNameElement = section.querySelector('.route-name');
-                    const routeName = routeNameElement ? 
-                        routeNameElement.textContent.replace(/📍|🔗|⚡/, '').trim() : 'Unknown';
-                    
-                    const status = section.dataset.status || 'unknown';
-                    const hasDiff = section.querySelector('.json-diff-container') !== null;
-                    
-                    return {{
-                        element: section,
-                        name: routeName,
-                        status: status,
-                        hasDiff,
-                        visible: true
-                    }};
-                }});
-                
-                console.log(`✅ Collected ${{this.routes.length}} routes for filtering`);
-            }}
-
-            updateRouteCounts() {{
-                // Reset counts
-                this.routeStats = {{ all: 0, different: 0, failed: 0, identical: 0 }};
-                
-                // Count routes by status
-                this.routes.forEach(route => {{
-                    this.routeStats.all++;
-                    if (this.routeStats[route.status] !== undefined) {{
-                        this.routeStats[route.status]++;
-                    }}
-                }});
-                
-                // Update badge counts in filter buttons
-                Object.keys(this.routeStats).forEach(status => {{
-                    const badge = document.getElementById(`${{status}}-count`);
-                    if (badge) {{
-                        badge.textContent = this.routeStats[status];
-                        badge.setAttribute('aria-label', `${{this.routeStats[status]}} ${{status}} routes`);
-                    }}
-                }});
-                
-                console.log('📈 Route counts updated:', this.routeStats);
-            }}
-
-            // Enhanced Filtering System
-            setupFilters() {{
-                // Status filter buttons with enhanced UX
-                const statusButtons = document.querySelectorAll('.status-filter-btn');
-                statusButtons.forEach(btn => {{
-                    btn.addEventListener('click', (e) => {{
-                        e.preventDefault();
-                        const status = btn.dataset.status;
-                        this.setStatusFilter(status);
-                        
-                        // Visual feedback
-                        btn.style.transform = 'scale(0.95)';
-                        setTimeout(() => btn.style.transform = '', 150);
-                    }});
-                }});
-
-                // Enhanced search with debouncing
-                const searchInput = document.getElementById('route-search');
-                if (searchInput) {{
-                    let searchTimeout;
-                    searchInput.addEventListener('input', (e) => {{
-                        clearTimeout(searchTimeout);
-                        searchTimeout = setTimeout(() => {{
-                            this.setSearchFilter(e.target.value);
-                        }}, 300);
-                    }});
-                    
-                    // Clear search on escape
-                    searchInput.addEventListener('keydown', (e) => {{
-                        if (e.key === 'Escape') {{
-                            e.target.value = '';
-                            this.setSearchFilter('');
-                        }}
-                    }});
-                }}
-
-                // Clear filters with enhanced UX
-                const clearBtn = document.querySelector('.clear-filters');
-                if (clearBtn) {{
-                    clearBtn.addEventListener('click', (e) => {{
-                        e.preventDefault();
-                        this.clearAllFilters();
-                        
-                        // Visual feedback
-                        clearBtn.style.background = '#22c55e';
-                        setTimeout(() => clearBtn.style.background = '', 300);
-                    }});
-                }}
-
-                // Expand/collapse all with smart toggling
-                const expandBtn = document.getElementById('expand-toggle');
-                if (expandBtn) {{
-                    expandBtn.addEventListener('click', (e) => {{
-                        e.preventDefault();
-                        const isExpanded = expandBtn.getAttribute('aria-pressed') === 'true';
-                        this.toggleAllRoutes(!isExpanded);
-                        expandBtn.setAttribute('aria-pressed', !isExpanded);
-                        expandBtn.textContent = !isExpanded ? 'Collapse All' : 'Expand All';
-                    }});
-                }}
-            }}
-
-            setStatusFilter(status) {{
-                this.filters.status = status;
-                this.updateFilterButtons();
-                this.applyFilters();
-                this.updateUrlParams();
-                console.log(`🔍 Status filter set to: ${{status}}`);
-            }}
-
-            setSearchFilter(search) {{
-                this.filters.search = search.toLowerCase().trim();
-                this.applyFilters();
-                this.updateUrlParams();
-                console.log(`🔍 Search filter set to: "${{search}}"`);
-            }}
-
-            clearAllFilters() {{
-                this.filters = {{ status: 'all', search: '' }};
-                
-                // Reset UI elements
-                const searchInput = document.getElementById('route-search');
-                if (searchInput) searchInput.value = '';
-                
-                this.updateFilterButtons();
-                this.applyFilters();
-                this.updateUrlParams();
-                console.log('🔄 All filters cleared');
-            }}
-
-            updateFilterButtons() {{
-                const buttons = document.querySelectorAll('.status-filter-btn');
-                buttons.forEach(btn => {{
-                    const isActive = btn.dataset.status === this.filters.status;
-                    btn.classList.toggle('filter-btn--active', isActive);
-                    btn.setAttribute('aria-pressed', isActive);
-                }});
-            }}
-
-            applyFilters() {{
-                let visibleCount = 0;
-                const hasFilters = this.filters.status !== 'all' || this.filters.search;
-                
-                this.routes.forEach(route => {{
-                    let visible = true;
-
-                    // Status filter
-                    if (this.filters.status !== 'all' && route.status !== this.filters.status) {{
-                        visible = false;
-                    }}
-
-                    // Search filter
-                    if (this.filters.search && !route.name.toLowerCase().includes(this.filters.search)) {{
-                        visible = false;
-                    }}
-
-                    // Apply visibility
-                    route.visible = visible;
-                    if (visible) {{
-                        route.element.style.display = 'block';
-                        route.element.removeAttribute('aria-hidden');
-                        visibleCount++;
-                    }} else {{
-                        route.element.style.display = 'none';
-                        route.element.setAttribute('aria-hidden', 'true');
-                    }}
-                }});
-
-                this.updateFilterStatus(visibleCount, hasFilters);
-                console.log(`🎯 Filters applied: ${{visibleCount}}/${{this.routes.length}} routes visible`);
-            }}
-
-            updateFilterStatus(visibleCount, hasFilters) {{
-                const statusElement = document.querySelector('.filter-stats');
-                if (statusElement) {{
-                    const statusText = hasFilters ? 
-                        `Showing ${{visibleCount}} of ${{this.routes.length}} routes` :
-                        `Showing all ${{this.routes.length}} routes`;
-                    statusElement.textContent = statusText;
-                }}
-            }}
-
-            // Route Interactions
-            setupRouteInteractions() {{
-                // Enhanced route header clicking
-                const routeHeaders = document.querySelectorAll('.route-diff-header');
-                routeHeaders.forEach(header => {{
-                    header.addEventListener('click', (e) => {{
-                        // Skip if clicking on action buttons
-                        if (e.target.closest('.json-action-btn, .copy-btn')) return;
-                        
-                        const section = header.closest('.route-diff-section');
-                        const isCollapsed = section.classList.contains('collapsed');
-                        
-                        // Toggle with animation
-                        section.style.transition = 'all 0.2s ease';
-                        section.classList.toggle('collapsed');
-                        
-                        // Update expand icon
-                        const icon = section.querySelector('.route-expand-icon');
-                        if (icon) {{
-                            icon.textContent = section.classList.contains('collapsed') ? '▶' : '▼';
-                        }}
-                        
-                        // Scroll into view if expanding
-                        if (isCollapsed) {{
-                            setTimeout(() => {{
-                                section.scrollIntoView({{ 
-                                    behavior: 'smooth', 
-                                    block: 'nearest' 
-                                }});
-                            }}, 100);
-                        }}
-                    }});
-                    
-                    // Add hover effect
-                    header.addEventListener('mouseenter', () => {{
-                        header.style.backgroundColor = 'var(--color-gray-100)';
-                    }});
-                    
-                    header.addEventListener('mouseleave', () => {{
-                        header.style.backgroundColor = '';
-                    }});
-                }});
-            }}
-
-            toggleAllRoutes(expand) {{
-                const sections = document.querySelectorAll('.route-diff-section');
-                sections.forEach((section, index) => {{
-                    // Stagger animation for visual appeal
-                    setTimeout(() => {{
-                        if (expand) {{
-                            section.classList.remove('collapsed');
-                        }} else {{
-                            section.classList.add('collapsed');
-                        }}
-                        
-                        const icon = section.querySelector('.route-expand-icon');
-                        if (icon) {{
-                            icon.textContent = expand ? '▼' : '▶';
-                        }}
-                    }}, index * 50); // 50ms stagger
-                }});
-                
-                console.log(`📋 All routes ${{expand ? 'expanded' : 'collapsed'}}`);
-            }}
-
-            // Keyboard Shortcuts
-            setupKeyboardShortcuts() {{
-                document.addEventListener('keydown', (e) => {{
-                    // Skip if in input field
-                    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-
-                    switch(e.key) {{
-                        case '/':
-                            e.preventDefault();
-                            if (this.currentSection === 'technical') {{
-                                const searchInput = document.getElementById('route-search');
-                                if (searchInput) {{
-                                    searchInput.focus();
-                                    searchInput.select();
-                                }}
-                            }}
-                            break;
-                        case '1':
-                            e.preventDefault();
-                            if (this.currentSection === 'technical') this.setStatusFilter('all');
-                            break;
-                        case '2':
-                            e.preventDefault();
-                            if (this.currentSection === 'technical') this.setStatusFilter('different');
-                            break;
-                        case '3':
-                            e.preventDefault();
-                            if (this.currentSection === 'technical') this.setStatusFilter('failed');
-                            break;
-                        case '4':
-                            e.preventDefault();
-                            if (this.currentSection === 'technical') this.setStatusFilter('identical');
-                            break;
-                        case 'e':
-                            e.preventDefault();
-                            if (this.currentSection === 'technical') this.toggleAllRoutes(true);
-                            break;
-                        case 'c':
-                            e.preventDefault();
-                            if (this.currentSection === 'technical') this.toggleAllRoutes(false);
-                            break;
-                        case 'r':
-                            e.preventDefault();
-                            if (this.currentSection === 'technical') this.clearAllFilters();
-                            break;
-                        case 'ArrowLeft':
-                            e.preventDefault();
-                            this.navigateSections(-1);
-                            break;
-                        case 'ArrowRight':
-                            e.preventDefault();
-                            this.navigateSections(1);
-                            break;
-                    }}
-                }});
-            }}
-
-            navigateSections(direction) {{
-                const sections = ['dashboard', 'technical', 'actions'];
-                const currentIndex = sections.indexOf(this.currentSection);
-                const newIndex = Math.max(0, Math.min(sections.length - 1, currentIndex + direction));
-                if (newIndex !== currentIndex) {{
-                    this.navigateToSection(sections[newIndex]);
-                }}
-            }}
-
-            // Accessibility Enhancements
-            setupAccessibility() {{
-                // Help modal for keyboard shortcuts
-                const helpIcon = document.querySelector('.help-icon');
-                if (helpIcon) {{
-                    helpIcon.addEventListener('click', () => {{
-                        this.showKeyboardHelp();
-                    }});
-                }}
-                
-                // Focus management
-                document.addEventListener('focusin', (e) => {{
-                    // Add focus ring for keyboard users
-                    if (e.target.matches('.nav-btn, .filter-btn, .route-diff-header')) {{
-                        e.target.style.outline = '2px solid var(--color-primary)';
-                        e.target.style.outlineOffset = '2px';
-                    }}
-                }});
-                
-                document.addEventListener('focusout', (e) => {{
-                    e.target.style.outline = '';
-                    e.target.style.outlineOffset = '';
-                }});
-            }}
-
-            showKeyboardHelp() {{
-                const helpText = `
-🚀 HTTP Diff Report - Keyboard Shortcuts
-
-Navigation:
-← → Arrow keys - Navigate between sections
-1-4 - Quick filter (All, Different, Failed, Identical)
-
-Technical View:
-/ - Focus search box
-E - Expand all routes  
-C - Collapse all routes
-R - Reset all filters
-
-General:
-Esc - Close dialogs
-Tab - Navigate elements
-Enter/Space - Activate buttons
-
-💡 Pro tip: Use arrow keys to quickly switch between Overview, Technical Details, and Recommended Actions!
-                `.trim();
-                
-                alert(helpText);
-            }}
-
-            // URL State Management
-            loadStateFromUrl() {{
-                const hash = window.location.hash.substring(1);
-                const params = new URLSearchParams(window.location.search);
-                
-                // Load section from hash
-                if (hash && ['dashboard', 'technical', 'actions'].includes(hash)) {{
-                    this.navigateToSection(hash);
-                }}
-                
-                // Load filters from params
-                if (params.has('status')) {{
-                    this.setStatusFilter(params.get('status'));
-                }}
-                
-                if (params.has('search')) {{
-                    const search = params.get('search');
-                    this.filters.search = search;
-                    const searchInput = document.getElementById('route-search');
-                    if (searchInput) searchInput.value = search;
-                }}
-            }}
-
-            updateUrlFragment() {{
-                const newHash = `#${{this.currentSection}}`;
-                if (window.location.hash !== newHash) {{
-                    window.history.replaceState(null, null, newHash);
-                }}
-            }}
-
-            updateUrlParams() {{
-                const params = new URLSearchParams();
-                
-                if (this.filters.status !== 'all') {{
-                    params.set('status', this.filters.status);
-                }}
-                
-                if (this.filters.search) {{
-                    params.set('search', this.filters.search);
-                }}
-
-                const search = params.toString();
-                const newUrl = window.location.pathname + 
-                             (search ? '?' + search : '') + 
-                             window.location.hash;
-                
-                window.history.replaceState(null, null, newUrl);
-            }}
-        }}
-
-        // Utility Functions
-        function copyToClipboard(button) {{
-            const code = button.closest('.command-box').querySelector('code');
-            if (!code) return;
-            
-            navigator.clipboard.writeText(code.textContent).then(() => {{
-                const originalText = button.innerHTML;
-                button.innerHTML = '✅ Copied';
-                button.style.background = 'var(--color-success)';
-                
-                setTimeout(() => {{
-                    button.innerHTML = originalText;
-                    button.style.background = '';
-                }}, 2000);
-            }}).catch(err => {{
-                console.error('Failed to copy:', err);
-                button.innerHTML = '❌ Failed';
-                setTimeout(() => button.innerHTML = '📋 Copy', 2000);
-            }});
-        }}
-
-        function copyDiff(button) {{
-            const diffContainer = button.closest('.route-diff-section').querySelector('.json-diff-container');
-            if (!diffContainer) return;
-
-            const jsonBlocks = diffContainer.querySelectorAll('.json-code-block code');
-            const envLabels = diffContainer.querySelectorAll('.json-env');
-            
-            let diffText = '';
-            jsonBlocks.forEach((block, index) => {{
-                const envLabel = envLabels[index]?.textContent.trim() || `Environment ${{index + 1}}`;
-                diffText += `=== ${{envLabel}} ===\\n${{block.textContent}}\\n\\n`;
-            }});
-
-            navigator.clipboard.writeText(diffText).then(() => {{
-                const originalText = button.innerHTML;
-                button.innerHTML = '✅ Copied';
-                button.style.background = 'var(--color-success)';
-                
-                setTimeout(() => {{
-                    button.innerHTML = originalText;
-                    button.style.background = '';
-                }}, 2000);
-            }}).catch(err => {{
-                console.error('Failed to copy diff:', err);
-            }});
-        }}
-
-        // Initialize when DOM is ready
-        document.addEventListener('DOMContentLoaded', () => {{
-            // Initialize modern report controller
-            window.reportController = new ModernReportController();
-            
-            // Initialize Prism.js for syntax highlighting
-            if (typeof Prism !== 'undefined') {{
-                Prism.highlightAll();
-            }}
-            
-            console.log('🎉 Modern HTTP Diff Report loaded successfully!');
-        }});
-        </script>
-        "#,
-            curl_sections
         )
     }
 
@@ -1675,10 +1023,13 @@ Enter/Space - Activate buttons
             transition: transform var(--transition-fast);
             margin-left: auto;
             padding: var(--space-1);
+            display: inline-block;
+            width: 1.25em;
+            text-align: center;
         }
         
         .route-diff-section.collapsed .route-expand-icon {
-            transform: rotate(-90deg);
+            transform: none;
         }
         
         .route-meta {
@@ -2013,7 +1364,7 @@ Enter/Space - Activate buttons
             color: var(--color-gray-900);
         }
         
-        .filter-btn.active {
+        .filter-btn.active, .filter-btn--active {
             background: var(--color-primary);
             color: white;
             box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
@@ -2719,10 +2070,6 @@ Enter/Space - Activate buttons
                         e.preventDefault();
                         const status = btn.dataset.status;
                         this.setStatusFilter(status);
-                        
-                        // Visual feedback
-                        btn.style.transform = 'scale(0.95)';
-                        setTimeout(() => btn.style.transform = '', 150);
                     });
                 });
 
@@ -2859,12 +2206,7 @@ Enter/Space - Activate buttons
                         
                         const section = header.closest('.route-diff-section');
                         const isCollapsed = section.classList.contains('collapsed');
-                        
-                        // Toggle with animation
-                        section.style.transition = 'all 0.2s ease';
                         section.classList.toggle('collapsed');
-                        
-                        // Update expand icon
                         const icon = section.querySelector('.route-expand-icon');
                         if (icon) {
                             icon.textContent = section.classList.contains('collapsed') ? '▶' : '▼';
@@ -2894,20 +2236,16 @@ Enter/Space - Activate buttons
 
             toggleAllRoutes(expand) {
                 const sections = document.querySelectorAll('.route-diff-section');
-                sections.forEach((section, index) => {
-                    // Stagger animation for visual appeal
-                    setTimeout(() => {
-                        if (expand) {
-                            section.classList.remove('collapsed');
-                        } else {
-                            section.classList.add('collapsed');
-                        }
-                        
-                        const icon = section.querySelector('.route-expand-icon');
-                        if (icon) {
-                            icon.textContent = expand ? '▼' : '▶';
-                        }
-                    }, index * 50); // 50ms stagger
+                sections.forEach((section) => {
+                    if (expand) {
+                        section.classList.remove('collapsed');
+                    } else {
+                        section.classList.add('collapsed');
+                    }
+                    const icon = section.querySelector('.route-expand-icon');
+                    if (icon) {
+                        icon.textContent = expand ? '▼' : '▶';
+                    }
                 });
                 
             }
@@ -3085,7 +2423,7 @@ Enter/Space - Activate buttons
             
             navigator.clipboard.writeText(code.textContent).then(() => {
                 const originalText = button.innerHTML;
-                button.innerHTML = '✅ Copied';
+                button.innerHTML = 'Copied';
                 button.style.background = 'var(--color-success)';
                 
                 setTimeout(() => {
@@ -3094,8 +2432,8 @@ Enter/Space - Activate buttons
                 }, 2000);
             }).catch(err => {
                 console.error('Failed to copy:', err);
-                button.innerHTML = '❌ Failed';
-                setTimeout(() => button.innerHTML = '📋 Copy', 2000);
+                button.innerHTML = 'Failed';
+                setTimeout(() => button.innerHTML = 'Copy', 2000);
             });
         }
 
@@ -3114,7 +2452,7 @@ Enter/Space - Activate buttons
 
             navigator.clipboard.writeText(diffText).then(() => {
                 const originalText = button.innerHTML;
-                button.innerHTML = '✅ Copied';
+                button.innerHTML = 'Copied';
                 button.style.background = 'var(--color-success)';
                 
                 setTimeout(() => {

@@ -90,7 +90,7 @@ impl HtmlDiffRenderer {
             </div>
             <div class="diff-summary">
                 <div class="summary-alert">
-                    <div class="summary-icon">📊</div>
+                    <div class="summary-icon"></div>
                     <div class="summary-content">
                         <h4>Large Response Summary</h4>
                         <p>Response too large for detailed diff. Showing summary instead.</p>

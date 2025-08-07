@@ -249,7 +249,7 @@ impl JsonDiffRenderer {
             </div>
             <div class="json-large-summary">
                 <div class="large-response-alert">
-                    <div class="large-response-icon">📊</div>
+                    <div class="large-response-icon"></div>
                     <div class="large-response-content">
                         <h4>Large Response Summary</h4>
                         <p>Response too large for detailed JSON diff. Showing summary instead.</p>
@@ -315,7 +315,7 @@ impl JsonDiffRenderer {
                 <span class="json-summary-label">changed</span>
             </div>
             <div class="json-summary-actions">
-                <button class="json-action-btn copy-diff" title="Copy diff to clipboard" aria-label="Copy diff to clipboard" onclick="copyDiff(this)">📋</button>
+                <button class="json-action-btn copy-diff" title="Copy diff to clipboard" aria-label="Copy diff to clipboard" onclick="copyDiff(this)">Copy</button>
                 <button class="json-action-btn expand-collapse" title="Toggle expand/collapse" aria-label="Toggle diff section" onclick="toggleDiffSection(this)">🔍</button>
             </div>
         </div>

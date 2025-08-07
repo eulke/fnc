@@ -34,13 +34,13 @@ impl HtmlComponents {
             r#"
         <div class="dashboard">
             <div class="dashboard-header">
-                <h2>🏥 System Health Overview</h2>
+                <h2>System Health Overview</h2>
                 <div class="timestamp">Generated: {}</div>
             </div>
             
             <div class="metrics-grid">
                 <div class="metric-card primary">
-                    <div class="metric-icon">🎯</div>
+                    <div class="metric-icon"></div>
                     <div class="metric-content">
                         <div class="metric-value {}">{}%</div>
                         <div class="metric-label">Health Score</div>
@@ -48,7 +48,7 @@ impl HtmlComponents {
                 </div>
                 
                 <div class="metric-card">
-                    <div class="metric-icon">✅</div>
+                    <div class="metric-icon"></div>
                     <div class="metric-content">
                         <div class="metric-value success">{}</div>
                         <div class="metric-label">Identical</div>
@@ -94,7 +94,7 @@ impl HtmlComponents {
                 format!(
                     r#"
                 <div class="metric-card">
-                    <div class="metric-icon">⚠️</div>
+                    <div class="metric-icon"></div>
                     <div class="metric-content">
                         <div class="metric-value warning">{}</div>
                         <div class="metric-label">Different</div>
@@ -120,7 +120,7 @@ impl HtmlComponents {
                 format!(
                     r#"
                 <div class="metric-card">
-                    <div class="metric-icon">🔥</div>
+                    <div class="metric-icon"></div>
                     <div class="metric-content">
                         <div class="metric-value error">{}</div>
                         <div class="metric-label">Failed</div>
@@ -205,7 +205,7 @@ impl HtmlComponents {
             r#"
         <div class="response-details-section">
             <div class="response-details-header">
-                <h2>📋 Response Details</h2>
+                <h2>Response Details</h2>
                 <div class="response-details-note">{}</div>
             </div>
             <div class="response-details-content">
@@ -282,7 +282,7 @@ impl HtmlComponents {
         <div class="route-diff-section" data-status="{}" data-route-name="{}">
             <div class="route-diff-header">
                 <div class="route-info">
-                    <h3 class="route-name">📍 {}</h3>
+                    <h3 class="route-name">{}</h3>
                     <div class="route-expand-icon">▼</div>
                     <div class="route-meta">
                         <div class="route-status-info">
@@ -322,11 +322,11 @@ impl HtmlComponents {
     /// Get status badge HTML
     fn get_status_badge(result: &ComparisonResult) -> &'static str {
         if result.has_errors {
-            r#"<span class="status-badge error">🔥 Failed</span>"#
+            r#"<span class="status-badge error">Failed</span>"#
         } else if result.is_identical {
-            r#"<span class="status-badge success">✅ Identical</span>"#
+            r#"<span class="status-badge success">Identical</span>"#
         } else {
-            r#"<span class="status-badge warning">⚠️ Different</span>"#
+            r#"<span class="status-badge warning">Different</span>"#
         }
     }
 
@@ -390,7 +390,7 @@ impl HtmlComponents {
                     </div>
                     <div class="command-box">
                         <code>{}</code>
-                        <button class="copy-btn" onclick="copyToClipboard(this)">📋</button>
+                        <button class="copy-btn" onclick="copyToClipboard(this)">Copy</button>
                     </div>
                 </div>
                 "#,
@@ -404,7 +404,7 @@ impl HtmlComponents {
         format!(
             r#"
             <div class="technical-reproduction">
-                <h4>🔧 Technical Reproduction Guide</h4>
+                <h4>Technical Reproduction Guide</h4>
                 <div class="curl-commands">
                     {}
                 </div>
@@ -447,7 +447,7 @@ impl HtmlComponents {
             r#"
             <div class="identical-route-content">
                 <div class="identical-summary">
-                    <div class="identical-icon">✅</div>
+                    <div class="identical-icon"></div>
                     <div class="identical-message">
                         <h4>Responses Are Identical</h4>
                         <p>All environments returned identical responses for this endpoint.</p>
@@ -487,7 +487,7 @@ impl HtmlComponents {
             r#"
             <div class="failed-route-content">
                 <div class="failure-summary">
-                    <div class="failure-icon">🔥</div>
+                    <div class="failure-icon"></div>
                     <div class="failure-message">
                         <h4>Route Failed</h4>
                         <p>One or more environments returned error responses.</p>
@@ -525,7 +525,7 @@ impl HtmlComponents {
             r#"
             <div class="different-route-content">
                 <div class="difference-summary">
-                    <div class="difference-icon">⚠️</div>
+                    <div class="difference-icon"></div>
                     <div class="difference-message">
                         <h4>Response Differences Detected</h4>
                         <p>Environments returned different responses for this endpoint.</p>
@@ -564,9 +564,9 @@ impl HtmlComponents {
         if failed_count == 0 && different_count == 0 {
             return r#"
             <div class="recommendations-section">
-                <h2>🎯 Recommendations</h2>
+                <h2>Recommendations</h2>
                 <div class="recommendation success">
-                    <div class="recommendation-icon">✅</div>
+                    <div class="recommendation-icon"></div>
                     <div class="recommendation-content">
                         <strong>All Systems Operational</strong>
                         <p>All API endpoints are functioning identically across environments. No action required.</p>
@@ -582,7 +582,7 @@ impl HtmlComponents {
             recommendations.push(
                 r#"
             <div class="recommendation error">
-                <div class="recommendation-icon">🔥</div>
+                <div class="recommendation-icon"></div>
                 <div class="recommendation-content">
                     <strong>Address Critical Failures First</strong>
                     <p>Focus on failed endpoints as they indicate service disruptions or errors.</p>
@@ -595,7 +595,7 @@ impl HtmlComponents {
         if different_count > 0 {
             recommendations.push(r#"
             <div class="recommendation warning">
-                <div class="recommendation-icon">⚠️</div>
+                <div class="recommendation-icon"></div>
                 <div class="recommendation-content">
                     <strong>Review Environment Differences</strong>
                     <p>Different responses may indicate configuration inconsistencies between environments.</p>
@@ -607,7 +607,7 @@ impl HtmlComponents {
         recommendations.push(
             r#"
         <div class="recommendation info">
-            <div class="recommendation-icon">🔧</div>
+            <div class="recommendation-icon"></div>
             <div class="recommendation-content">
                 <strong>Use Curl Commands for Debugging</strong>
                 <p>Copy the provided curl commands to reproduce and investigate issues locally.</p>
@@ -619,7 +619,7 @@ impl HtmlComponents {
         format!(
             r#"
         <div class="recommendations-section">
-            <h2>🎯 Recommended Actions</h2>
+            <h2>Recommended Actions</h2>
             {}
         </div>
         "#,
