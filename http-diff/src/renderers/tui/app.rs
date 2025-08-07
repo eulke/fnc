@@ -193,6 +193,8 @@ pub struct TuiApp {
     pub current_operation: String,
     /// Start time of execution
     pub execution_start_time: Option<std::time::Instant>,
+    /// Duration of the last completed execution
+    pub last_execution_duration: Option<std::time::Duration>,
     /// Whether execution has been requested
     pub execution_requested: bool,
     /// Whether execution is currently running
@@ -272,6 +274,7 @@ impl TuiApp {
             completed_tests: 0,
             current_operation: String::new(),
             execution_start_time: None,
+            last_execution_duration: None,
             execution_requested: false,
             execution_running: false,
             execution_cancelled: false,
@@ -326,6 +329,7 @@ impl TuiApp {
             completed_tests: 0,
             current_operation: "Loading configuration...".to_string(),
             execution_start_time: None,
+            last_execution_duration: None,
             execution_requested: false,
             execution_running: false,
             execution_cancelled: false,
@@ -739,6 +743,7 @@ impl TuiApp {
         self.execution_cancelled = false;
         self.current_operation = "Starting HTTP tests...".to_string();
         self.execution_start_time = Some(std::time::Instant::now());
+        self.last_execution_duration = None;
     }
 
     /// Cancel execution
@@ -764,7 +769,10 @@ impl TuiApp {
             self.selected_index = 0;
         }
         self.selected_index = 0;
-        self.execution_start_time = None;
+        // Calculate and store duration if available before clearing start time
+        if let Some(start) = self.execution_start_time.take() {
+            self.last_execution_duration = Some(start.elapsed());
+        }
         self.execution_running = false;
         self.execution_requested = false;
         // Sync table state with new results
@@ -1144,10 +1152,26 @@ impl TuiApp {
         // Create report renderer (always HTML)
         let report_renderer = ReportRendererFactory::create_renderer(&report_filename);
 
-        // Create metadata
-        let env_names: Vec<String> = self.available_environments.clone();
+        // Create metadata using selected or detected environments from results
+        let env_names: Vec<String> = if !self.selected_environments.is_empty() {
+            self.selected_environments.clone()
+        } else {
+            use std::collections::BTreeSet;
+            let mut set: BTreeSet<String> = BTreeSet::new();
+            for result in &self.results {
+                for env in result.responses.keys() {
+                    set.insert(env.clone());
+                }
+            }
+            set.into_iter().collect()
+        };
+
+        let duration = self
+            .last_execution_duration
+            .unwrap_or_else(|| std::time::Duration::from_secs(0));
+
         let metadata = ReportMetadata::new(env_names, self.results.len())
-            .with_duration(std::time::Duration::from_secs(0))
+            .with_duration(duration)
             .with_context("source", "TUI")
             .with_context(
                 "diff_view",

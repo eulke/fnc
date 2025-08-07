@@ -391,10 +391,24 @@ async fn execute_async(args: HttpDiffArgs) -> Result<()> {
         ui::status_message("Generating executive report...");
 
         let report_renderer = ReportRendererFactory::create_renderer(report_file);
-        let env_names: Vec<String> =
-            env_list.unwrap_or_else(|| config.environments.keys().cloned().collect());
+        // Derive only actually-tested environments from results if available
+        let env_names: Vec<String> = if let Some(list) = env_list {
+            list
+        } else {
+            use std::collections::BTreeSet;
+            let mut set: BTreeSet<String> = BTreeSet::new();
+            for result in &execution_result.comparisons {
+                for env in result.responses.keys() {
+                    set.insert(env.clone());
+                }
+            }
+            set.into_iter().collect()
+        };
+        // Use elapsed time from ProgressTracker as execution duration
+        let duration = execution_result.progress.elapsed_time();
+
         let metadata = ReportMetadata::new(env_names, total_tests)
-            .with_duration(std::time::Duration::from_secs(0)) // TODO: Track actual duration
+            .with_duration(duration)
             .with_context("config_file", &args.config_path)
             .with_context(
                 "diff_view",

@@ -330,7 +330,7 @@ mod tests {
         assert!(result.rows.is_empty()); // No detailed rows for large responses
 
         let summary = result.summary.unwrap();
-        assert_eq!(summary.size1, 29);
-        assert_eq!(summary.size2, 39);
+        assert_eq!(summary.size1, 28); // "This is a long response body".len()
+        assert_eq!(summary.size2, 38); // "This is a different long response body".len()
     }
 }
