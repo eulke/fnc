@@ -1,7 +1,7 @@
 use super::AppResult;
 use crate::{
     error::Result,
-    renderers::tui::app::{PanelFocus, TuiApp},
+    renderers::tui::app::{FocusedPanel, PanelFocus, TuiApp},
 };
 use crossterm::event::{KeyCode, KeyEvent};
 
@@ -36,6 +36,12 @@ pub fn handle_dashboard_keys(app: &mut TuiApp, key: KeyEvent) -> Result<AppResul
         }
         KeyCode::PageDown => {
             handle_dashboard_page_down(app);
+        }
+        KeyCode::Home => {
+            handle_dashboard_home(app);
+        }
+        KeyCode::End => {
+            handle_dashboard_end(app);
         }
         // Panel-specific shortcuts
         KeyCode::Char('a') => {
@@ -251,6 +257,7 @@ fn handle_dashboard_page_up(app: &mut TuiApp) {
         }
         PanelFocus::Results => {
             app.selected_index = app.selected_index.saturating_sub(10);
+            app.sync_results_table_state();
         }
         PanelFocus::Details => {
             app.page_up();
@@ -271,9 +278,74 @@ fn handle_dashboard_page_down(app: &mut TuiApp) {
             let filtered_results = app.filtered_results();
             let max_index = filtered_results.len().saturating_sub(1);
             app.selected_index = (app.selected_index + 10).min(max_index);
+            app.sync_results_table_state();
         }
         PanelFocus::Details => {
             app.page_down();
+        }
+    }
+}
+
+/// Handle Home key within the focused dashboard panel
+fn handle_dashboard_home(app: &mut TuiApp) {
+    match app.panel_focus {
+        PanelFocus::Configuration => {
+            match app.focused_panel {
+                FocusedPanel::Environments => {
+                    app.selected_env_index = 0;
+                    app.sync_env_list_state();
+                }
+                FocusedPanel::Routes => {
+                    app.selected_route_index = 0;
+                    app.sync_route_list_state();
+                }
+                FocusedPanel::Actions => {
+                    // No navigation in actions
+                }
+            }
+        }
+        PanelFocus::Progress => {
+            // No navigation in progress
+        }
+        PanelFocus::Results => {
+            app.selected_index = 0;
+            app.sync_results_table_state();
+        }
+        PanelFocus::Details => {
+            app.scroll_to_top();
+        }
+    }
+}
+
+/// Handle End key within the focused dashboard panel
+fn handle_dashboard_end(app: &mut TuiApp) {
+    match app.panel_focus {
+        PanelFocus::Configuration => {
+            match app.focused_panel {
+                FocusedPanel::Environments => {
+                    app.selected_env_index = app.available_environments.len().saturating_sub(1);
+                    app.sync_env_list_state();
+                }
+                FocusedPanel::Routes => {
+                    app.selected_route_index = app.available_routes.len().saturating_sub(1);
+                    app.sync_route_list_state();
+                }
+                FocusedPanel::Actions => {
+                    // No navigation in actions
+                }
+            }
+        }
+        PanelFocus::Progress => {
+            // No navigation in progress
+        }
+        PanelFocus::Results => {
+            let filtered_results = app.filtered_results();
+            app.selected_index = filtered_results.len().saturating_sub(1);
+            app.sync_results_table_state();
+        }
+        PanelFocus::Details => {
+            // Calculate content height for scroll_to_bottom - for now just use a reasonable value
+            app.scroll_to_bottom(100);
         }
     }
 }

@@ -10,7 +10,7 @@ use ratatui::{
     prelude::*,
     style::{Modifier, Style},
     widgets::{
-        BarChart, Block, Borders, Gauge, List, ListItem, Paragraph, Row, Table, Tabs,
+        BarChart, Block, Borders, Gauge, List, ListItem, Paragraph, Row, Scrollbar, ScrollbarOrientation, ScrollbarState, Table, Tabs,
     },
 };
 
@@ -310,6 +310,16 @@ fn draw_environments_list_widget(
 
     // Use stateful rendering for proper cursor positioning
     f.render_stateful_widget(env_list, area, &mut app.env_list_state);
+
+    // Draw scrollbar if content exceeds viewport
+    let viewport_height = area.height.saturating_sub(2) as usize; // Account for borders
+    draw_scrollbar(
+        f,
+        &mut app.env_scrollbar_state,
+        area,
+        app.available_environments.len(),
+        viewport_height,
+    );
 }
 
 /// Draw routes as a proper List widget with enhanced visual feedback
@@ -362,6 +372,16 @@ fn draw_routes_list_widget(f: &mut Frame, app: &mut TuiApp, area: Rect, is_panel
 
     // Use stateful rendering for proper cursor positioning
     f.render_stateful_widget(route_list, area, &mut app.route_list_state);
+
+    // Draw scrollbar if content exceeds viewport
+    let viewport_height = area.height.saturating_sub(2) as usize; // Account for borders
+    draw_scrollbar(
+        f,
+        &mut app.route_scrollbar_state,
+        area,
+        app.available_routes.len(),
+        viewport_height,
+    );
 }
 
 /// Draw configuration status line with context-sensitive navigation hints
@@ -559,7 +579,7 @@ fn draw_progress_ready_state(f: &mut Frame, area: Rect) {
 }
 
 /// Draw the results panel in dashboard mode
-fn draw_dashboard_results_panel(f: &mut Frame, app: &TuiApp, area: Rect) {
+fn draw_dashboard_results_panel(f: &mut Frame, app: &mut TuiApp, area: Rect) {
     let is_focused = app.is_panel_focused(&PanelFocus::Results);
     let title = app.get_panel_title(&PanelFocus::Results);
     let has_content = !app.results.is_empty();
@@ -979,11 +999,40 @@ fn smart_truncate(text: &str, table_limit: usize, context_limit: Option<usize>) 
     }
 }
 
+/// Draw a scrollbar for a scrollable component
+fn draw_scrollbar(
+    f: &mut Frame,
+    scrollbar_state: &mut ScrollbarState,
+    area: Rect,
+    content_length: usize,
+    viewport_height: usize,
+) {
+    // Only show scrollbar if content exceeds viewport
+    if content_length > viewport_height && area.width > 0 {
+        let scrollbar_area = Rect {
+            x: area.right().saturating_sub(1),
+            y: area.y,
+            width: 1,
+            height: area.height,
+        };
+
+        let scrollbar = Scrollbar::default()
+            .orientation(ScrollbarOrientation::VerticalRight)
+            .begin_symbol(Some("↑"))
+            .end_symbol(Some("↓"))
+            .track_symbol(Some("│"))
+            .thumb_symbol("█")
+            .style(TuiTheme::secondary_text_style());
+
+        f.render_stateful_widget(scrollbar, scrollbar_area, scrollbar_state);
+    }
+}
+
 
 
 
 /// Draw compact results table for dashboard results panel
-fn draw_compact_results_table(f: &mut Frame, app: &TuiApp, area: Rect, _is_panel_focused: bool) {
+fn draw_compact_results_table(f: &mut Frame, app: &mut TuiApp, area: Rect, _is_panel_focused: bool) {
     if area.height < 3 {
         return;
     } // Too small to render
@@ -992,16 +1041,17 @@ fn draw_compact_results_table(f: &mut Frame, app: &TuiApp, area: Rect, _is_panel
     if filtered_results.is_empty() {
         return;
     }
+    let results_count = filtered_results.len();
 
     // Create a simple table with just route name and status
     let header = Row::new(vec!["Route", "Status"])
         .style(TuiTheme::primary_text_style())
         .height(1);
 
+    // Create all rows without limiting by viewport - scrolling will handle visibility
     let rows: Vec<Row> = filtered_results
         .iter()
         .enumerate()
-        .take(area.height.saturating_sub(2) as usize) // Reserve space for header and border
         .map(|(i, result)| {
             let is_selected = i == app.selected_index;
             let status = if result.has_errors {
@@ -1026,7 +1076,24 @@ fn draw_compact_results_table(f: &mut Frame, app: &TuiApp, area: Rect, _is_panel
         rows,
         [Constraint::Percentage(70), Constraint::Percentage(30)],
     )
-    .header(header);
+    .header(header)
+    .row_highlight_style(
+        Style::default()
+            .bg(TuiTheme::BACKGROUND_SELECTED)
+            .fg(TuiTheme::FOCUS)
+            .add_modifier(Modifier::BOLD),
+    );
 
-    f.render_widget(table, area);
+    // Use stateful rendering for proper scrolling and selection
+    f.render_stateful_widget(table, area, &mut app.results_table_state);
+
+    // Draw scrollbar if content exceeds viewport
+    let viewport_height = area.height.saturating_sub(3) as usize; // Account for header and borders
+    draw_scrollbar(
+        f,
+        &mut app.results_scrollbar_state,
+        area,
+        results_count,
+        viewport_height,
+    );
 }

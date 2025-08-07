@@ -1,6 +1,6 @@
 use crate::renderers::report::{ReportMetadata, ReportRendererFactory};
 use crate::types::{ComparisonResult, DiffViewStyle};
-use ratatui::widgets::ListState;
+use ratatui::widgets::{ListState, ScrollbarState, TableState};
 use std::fs;
 
 /// Dashboard panel focus for 4-panel layout
@@ -217,6 +217,16 @@ pub struct TuiApp {
     pub env_list_state: ListState,
     /// ListState for routes list widget  
     pub route_list_state: ListState,
+    /// TableState for results table widget
+    pub results_table_state: TableState,
+    
+    // Scrollbar states for visual scroll indicators
+    /// ScrollbarState for environments list scrollbar
+    pub env_scrollbar_state: ScrollbarState,
+    /// ScrollbarState for routes list scrollbar
+    pub route_scrollbar_state: ScrollbarState,
+    /// ScrollbarState for results table scrollbar
+    pub results_scrollbar_state: ScrollbarState,
 
     // Details panel state
     /// Current tab in details panel
@@ -272,6 +282,10 @@ impl TuiApp {
             selected_route_index: 0,
             env_list_state: ListState::default(),
             route_list_state: ListState::default(),
+            results_table_state: TableState::default(),
+            env_scrollbar_state: ScrollbarState::default(),
+            route_scrollbar_state: ScrollbarState::default(),
+            results_scrollbar_state: ScrollbarState::default(),
             details_current_tab: DetailsTab::Overview,
             details_diff_style: diff_style,
         }
@@ -322,6 +336,10 @@ impl TuiApp {
             selected_route_index: 0,
             env_list_state: ListState::default(),
             route_list_state: ListState::default(),
+            results_table_state: TableState::default(),
+            env_scrollbar_state: ScrollbarState::default(),
+            route_scrollbar_state: ScrollbarState::default(),
+            results_scrollbar_state: ScrollbarState::default(),
             details_current_tab: DetailsTab::Overview,
             details_diff_style: diff_style,
         }
@@ -585,6 +603,9 @@ impl TuiApp {
 
         // Reset scroll when changing selection
         self.scroll_offset = 0;
+        
+        // Sync table state with new selection
+        self.sync_results_table_state();
     }
 
     /// Handle configuration changes and update dependent panels
@@ -746,6 +767,8 @@ impl TuiApp {
         self.execution_start_time = None;
         self.execution_running = false;
         self.execution_requested = false;
+        // Sync table state with new results
+        self.sync_results_table_state();
         self.execution_cancelled = false;
         self.current_operation = "Execution completed".to_string();
 
@@ -838,6 +861,10 @@ impl TuiApp {
         } else {
             self.env_list_state.select(None);
         }
+        // Update scrollbar to reflect current state
+        self.env_scrollbar_state = self.env_scrollbar_state
+            .content_length(self.available_environments.len())
+            .position(self.selected_env_index);
     }
 
     /// Sync route ListState with current index  
@@ -848,6 +875,43 @@ impl TuiApp {
         } else {
             self.route_list_state.select(None);
         }
+        // Update scrollbar to reflect current state
+        self.route_scrollbar_state = self.route_scrollbar_state
+            .content_length(self.available_routes.len())
+            .position(self.selected_route_index);
+    }
+
+    /// Sync results TableState with current index
+    pub fn sync_results_table_state(&mut self) {
+        let filtered_count = self.filtered_results().len();
+        if filtered_count > 0 && self.selected_index < filtered_count {
+            self.results_table_state.select(Some(self.selected_index));
+        } else {
+            self.results_table_state.select(None);
+        }
+        // Update scrollbar to reflect current state
+        self.results_scrollbar_state = self.results_scrollbar_state
+            .content_length(filtered_count)
+            .position(self.selected_index);
+    }
+
+    /// Update scrollbar states based on current content and selection
+    pub fn update_scrollbar_states(&mut self) {
+        // Update environment scrollbar state
+        self.env_scrollbar_state = self.env_scrollbar_state
+            .content_length(self.available_environments.len())
+            .position(self.selected_env_index);
+
+        // Update routes scrollbar state  
+        self.route_scrollbar_state = self.route_scrollbar_state
+            .content_length(self.available_routes.len())
+            .position(self.selected_route_index);
+
+        // Update results scrollbar state
+        let filtered_results = self.filtered_results();
+        self.results_scrollbar_state = self.results_scrollbar_state
+            .content_length(filtered_results.len())
+            .position(self.selected_index);
     }
 
     /// Toggle selection of currently focused item
