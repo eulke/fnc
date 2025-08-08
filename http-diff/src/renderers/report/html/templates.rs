@@ -42,11 +42,6 @@ impl HtmlTemplate {
     <title>HTTP API Diff Report - {}</title>
     <meta name="description" content="Comprehensive API comparison analysis between environments">
     <style>{}</style>
-    <!-- Prism.js for syntax highlighting -->
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" rel="stylesheet" />
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -1096,6 +1091,103 @@ impl HtmlTemplate {
             padding: 0;
         }
         
+        /* JSON body side-by-side diff */
+        .json-diff-container {
+            background: var(--bg-primary);
+            border-top: 1px solid var(--color-gray-200);
+        }
+
+        .json-diff-header {
+            display: grid;
+            grid-template-columns: 1fr 1fr auto;
+            gap: var(--space-3);
+            align-items: center;
+            padding: var(--space-4) var(--space-6);
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--color-gray-200);
+        }
+
+        .json-env {
+            font-size: var(--text-sm);
+            font-weight: var(--font-weight-semibold);
+            color: var(--color-gray-700);
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+
+        .json-env-right {
+            text-align: right;
+        }
+
+        .json-actions {
+            display: flex;
+            gap: var(--space-2);
+        }
+
+        .json-action-btn {
+            background: var(--color-primary);
+            color: #fff;
+            border: none;
+            padding: var(--space-2) var(--space-3);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: var(--text-sm);
+            transition: background var(--transition-fast);
+        }
+
+        .json-action-btn:hover { background: var(--color-primary-hover); }
+
+        .json-diff-content {
+            overflow-x: auto;
+        }
+
+        .json-diff-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+            line-height: 0.8;
+        }
+
+        .json-line-number {
+            width: 3.5rem;
+            padding: var(--space-2) var(--space-3);
+            text-align: right;
+            color: var(--color-gray-500);
+            font-family: var(--font-family-mono);
+            font-size: var(--text-sm);
+            background: var(--bg-secondary);
+            vertical-align: top;
+            user-select: none;
+        }
+
+        .json-code-block {
+            width: 50%;
+            padding: var(--space-2) var(--space-3);
+            font-family: var(--font-family-mono);
+            font-size: var(--text-sm);
+            vertical-align: top;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .json-code-block pre { margin: 0; }
+        .json-code-block code { color: var(--color-gray-900); }
+
+        /* Diff state colors */
+        .json-row-unchanged .json-code-block { background: var(--bg-primary); }
+        .json-row-added .json-code-block.json-right { background: var(--color-success-light); }
+        .json-row-removed .json-code-block.json-left { background: var(--color-error-light); }
+        .json-row-changed .json-code-block.json-left { background: var(--color-warning-light); }
+        .json-row-changed .json-code-block.json-right { background: var(--color-warning-light); }
+
+        @media (max-width: 768px) {
+            .json-diff-header {
+                grid-template-columns: 1fr;
+                gap: var(--space-2);
+            }
+            .json-env-right { text-align: left; }
+        }
+
         .difference-summary {
             display: flex;
             align-items: center;
@@ -1121,6 +1213,58 @@ impl HtmlTemplate {
             color: var(--color-gray-700);
         }
         
+        /* Compact diff stats (added/removed/changed) */
+        .diff-summary-badge {
+            display: flex;
+            align-items: center;
+            gap: var(--space-4);
+            padding: var(--space-4) var(--space-6);
+            background: var(--bg-primary);
+            border-bottom: 1px solid var(--color-gray-200);
+        }
+
+        .diff-summary-badge .summary-item {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-2);
+            border: 0;
+            padding: 0;
+        }
+
+        .diff-summary-badge .summary-count {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 2.25rem;
+            height: 1.75rem;
+            padding: 0 var(--space-2);
+            border-radius: 9999px;
+            font-size: var(--text-sm);
+            font-weight: var(--font-weight-semibold);
+            border: 1px solid transparent;
+        }
+
+        .diff-summary-badge .summary-label {
+            font-size: var(--text-sm);
+            color: var(--color-gray-600);
+        }
+
+        .diff-summary-badge .summary-count.added {
+            background: var(--color-success-light);
+            color: var(--color-success);
+            border-color: var(--color-success-border);
+        }
+        .diff-summary-badge .summary-count.removed {
+            background: var(--color-error-light);
+            color: var(--color-error);
+            border-color: var(--color-error-border);
+        }
+        .diff-summary-badge .summary-count.changed {
+            background: var(--color-warning-light);
+            color: var(--color-warning);
+            border-color: var(--color-warning-border);
+        }
+
         .failed-route-content {
             padding: var(--space-6);
         }
@@ -1488,254 +1632,12 @@ impl HtmlTemplate {
             }
         }
         
-        /* Modern JSON diff system */
-        .json-diff-container {
-            background: var(--bg-primary);
-            border: 1px solid var(--color-gray-200);
-            border-radius: var(--radius-lg);
-            margin-bottom: var(--space-6);
-            overflow: hidden;
-            box-shadow: var(--shadow-sm);
-        }
         
-        .json-diff-header {
-            background: var(--bg-secondary);
-            padding: var(--space-4) var(--space-6);
-            border-bottom: 1px solid var(--color-gray-200);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: var(--space-4);
-        }
-        
-        .json-diff-environments {
-            display: flex;
-            align-items: center;
-            gap: var(--space-4);
-        }
-        
-        .json-env {
-            padding: var(--space-2) var(--space-3);
-            border-radius: var(--radius-md);
-            font-weight: var(--font-weight-medium);
-            font-size: var(--text-sm);
-            background: var(--color-gray-100);
-            color: var(--color-gray-700);
-            border: 1px solid var(--color-gray-200);
-        }
-        
-        .json-env-vs {
-            font-weight: var(--font-weight-medium);
-            color: var(--color-gray-500);
-            font-size: var(--text-sm);
-        }
-        
-        .json-diff-stats {
-            display: flex;
-            gap: var(--space-4);
-            color: var(--color-gray-600);
-            font-size: var(--text-sm);
-        }
-        
-        .json-stat {
-            display: flex;
-            align-items: center;
-            gap: var(--space-1);
-        }
-        
-        /* JSON diff viewer - mobile first */
-        .json-diff-viewer {
-            display: flex;
-            flex-direction: column;
-        }
-        
-        @media (min-width: 1024px) {
-            .json-diff-viewer {
-                flex-direction: row;
-            }
-        }
-        
-        .json-diff-side {
-            flex: 1;
-            position: relative;
-            min-width: 0;
-        }
-        
-        .json-diff-left {
-            border-bottom: 1px solid var(--color-gray-200);
-        }
-        
-        @media (min-width: 1024px) {
-            .json-diff-left {
-                border-bottom: none;
-                border-right: 1px solid var(--color-gray-200);
-            }
-        }
-        
-        .json-code-block {
-            margin: 0;
-            padding: 0;
-            background: var(--bg-secondary);
-            font-family: var(--font-family-mono);
-            font-size: var(--text-sm);
-            line-height: 1.6;
-            overflow-x: auto;
-            max-height: 500px;
-            overflow-y: auto;
-        }
-        
-        .json-code-block code {
-            display: block;
-            padding: var(--space-4);
-            background: none;
-            color: var(--color-gray-900);
-            white-space: pre;
-            tab-size: 2;
-        }
-        
-        /* JSON line highlighting */
-        .json-line {
-            display: block;
-            padding: 1px 0;
-            position: relative;
-            margin: 0;
-            min-height: 1.6em;
-        }
-        
-        .json-line-unchanged {
-            background: transparent;
-            color: var(--color-gray-900);
-        }
-        
-        .json-line-added {
-            background: var(--color-success-light);
-            color: var(--color-success);
-            position: relative;
-        }
-        
-        .json-line-added::before {
-            content: '+';
-            position: absolute;
-            left: -20px;
-            color: var(--color-success);
-            font-weight: var(--font-weight-bold);
-        }
-        
-        .json-line-removed {
-            background: var(--color-error-light);
-            color: var(--color-error);
-            position: relative;
-        }
-        
-        .json-line-removed::before {
-            content: '-';
-            position: absolute;
-            left: -20px;
-            color: var(--color-error);
-            font-weight: var(--font-weight-bold);
-        }
-        
-        .json-line-changed {
-            background: var(--color-warning-light);
-            color: var(--color-warning);
-            position: relative;
-        }
-        
-        .json-line-changed::before {
-            content: '~';
-            position: absolute;
-            left: -20px;
-            color: var(--color-warning);
-            font-weight: var(--font-weight-bold);
-        }
-        
-        .json-line-empty {
-            background: var(--bg-secondary);
-            color: var(--color-gray-500);
-            opacity: 0.6;
-        }
-        
-        .json-highlight {
-            animation: highlight-flash 2s ease-out;
-        }
         
         @keyframes highlight-flash {
             0% { box-shadow: 0 0 10px var(--color-primary-light); }
             50% { box-shadow: 0 0 20px var(--color-primary-light); }
             100% { box-shadow: none; }
-        }
-        
-        /* JSON diff summary badges */
-        .json-diff-summary-badge {
-            display: flex;
-            align-items: center;
-            gap: var(--space-6);
-            background: var(--bg-primary);
-            padding: var(--space-4);
-            border-radius: var(--radius-lg);
-            box-shadow: var(--shadow-sm);
-            margin-bottom: var(--space-4);
-            border: 1px solid var(--color-gray-200);
-        }
-        
-        .json-summary-item {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: var(--space-2) var(--space-4);
-            border-radius: var(--radius-md);
-            min-width: 70px;
-        }
-        
-        .json-summary-count {
-            font-size: var(--text-xl);
-            font-weight: var(--font-weight-bold);
-            line-height: 1;
-        }
-        
-        .json-summary-count.added { color: var(--color-success); }
-        .json-summary-count.removed { color: var(--color-error); }
-        .json-summary-count.changed { color: var(--color-warning); }
-        
-        .json-summary-label {
-            font-size: var(--text-xs);
-            color: var(--color-gray-600);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            font-weight: var(--font-weight-semibold);
-            margin-top: var(--space-1);
-        }
-        
-        .json-summary-actions {
-            display: flex;
-            gap: var(--space-2);
-            margin-left: auto;
-        }
-        
-        .json-action-btn {
-            padding: var(--space-2) var(--space-3);
-            background: var(--bg-secondary);
-            border: 1px solid var(--color-gray-300);
-            border-radius: var(--radius-md);
-            cursor: pointer;
-            transition: all var(--transition-fast);
-            font-size: var(--text-sm);
-            display: flex;
-            align-items: center;
-            gap: var(--space-1);
-        }
-        
-        .json-action-btn:hover {
-            background: var(--color-gray-100);
-            transform: translateY(-1px);
-            box-shadow: var(--shadow-sm);
-        }
-        
-        /* Large response summary */
-        .json-large-summary {
-            padding: var(--space-8);
-            background: var(--bg-secondary);
         }
         
         .large-response-alert {
@@ -1907,11 +1809,6 @@ impl HtmlTemplate {
             .route-diff-section {
                 break-inside: avoid;
                 margin-bottom: var(--space-4);
-            }
-            
-            .json-code-block {
-                max-height: none;
-                overflow: visible;
             }
         }
 
@@ -2437,42 +2334,10 @@ Enter/Space - Activate buttons
             });
         }
 
-        function copyDiff(button) {
-            const diffContainer = button.closest('.route-diff-section').querySelector('.json-diff-container');
-            if (!diffContainer) return;
-
-            const jsonBlocks = diffContainer.querySelectorAll('.json-code-block code');
-            const envLabels = diffContainer.querySelectorAll('.json-env');
-            
-            let diffText = '';
-            jsonBlocks.forEach((block, index) => {
-                const envLabel = envLabels[index]?.textContent.trim() || `Environment ${index + 1}`;
-                diffText += `=== ${envLabel} ===\\n${block.textContent}\\n\\n`;
-            });
-
-            navigator.clipboard.writeText(diffText).then(() => {
-                const originalText = button.innerHTML;
-                button.innerHTML = 'Copied';
-                button.style.background = 'var(--color-success)';
-                
-                setTimeout(() => {
-                    button.innerHTML = originalText;
-                    button.style.background = '';
-                }, 2000);
-            }).catch(err => {
-                console.error('Failed to copy diff:', err);
-            });
-        }
-
         // Initialize when DOM is ready
         document.addEventListener('DOMContentLoaded', () => {
             // Initialize modern report controller
             window.reportController = new ModernReportController();
-            
-            // Initialize Prism.js for syntax highlighting
-            if (typeof Prism !== 'undefined') {
-                Prism.highlightAll();
-            }
             
         });
         </script>
