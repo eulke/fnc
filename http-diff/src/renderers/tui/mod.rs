@@ -12,15 +12,11 @@ pub mod update;
 #[cfg(feature = "tui")]
 pub mod exec;
 #[cfg(feature = "tui")]
-pub mod diff_renderer;
-#[cfg(feature = "tui")]
 pub mod diff_widgets;
 #[cfg(feature = "tui")]
 pub mod events;
 #[cfg(feature = "tui")]
 pub mod theme;
-#[cfg(feature = "tui")]
-pub mod ui;
 #[cfg(feature = "tui")]
 pub mod view;
 
