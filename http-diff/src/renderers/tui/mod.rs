@@ -6,6 +6,12 @@
 #[cfg(feature = "tui")]
 pub mod app;
 #[cfg(feature = "tui")]
+pub mod msg;
+#[cfg(feature = "tui")]
+pub mod update;
+#[cfg(feature = "tui")]
+pub mod exec;
+#[cfg(feature = "tui")]
 pub mod diff_renderer;
 #[cfg(feature = "tui")]
 pub mod diff_widgets;
@@ -15,6 +21,8 @@ pub mod events;
 pub mod theme;
 #[cfg(feature = "tui")]
 pub mod ui;
+#[cfg(feature = "tui")]
+pub mod view;
 
 #[cfg(feature = "tui")]
 pub use app::{TuiApp, ViewMode};
@@ -38,24 +46,10 @@ use crossterm::{
 #[cfg(feature = "tui")]
 use std::io::{self, Stdout};
 
-/// Messages sent from async execution task to TUI
 #[cfg(feature = "tui")]
-#[derive(Debug, Clone)]
-pub enum ExecutionMessage {
-    /// Progress update with complete progress information
-    Progress {
-        completed: usize,
-        total: usize,
-        successful: usize,
-        failed: usize,
-        percentage: f64,
-        operation: String,
-    },
-    /// Execution completed successfully
-    Completed(Vec<ComparisonResult>),
-    /// Execution failed with error
-    Failed(String),
-}
+use msg::ExecMsg;
+
+// Use shared ExecMsg from msg.rs
 
 /// Interactive renderer trait for renderers that support user interaction
 pub trait InteractiveRenderer: OutputRenderer {
@@ -144,14 +138,18 @@ impl TuiRenderer {
 
             // Draw the UI
             terminal
-                .draw(|f| ui::draw(f, &mut app))
+                .draw(|f| view::draw(f, &mut app))
                 .map_err(|e| HttpDiffError::general(format!("Failed to draw: {}", e)))?;
 
-            // Handle events
-            if let Some(result) = events::handle_events(&mut app)? {
-                match result {
-                    events::AppResult::Quit => break,
-                    events::AppResult::Continue => continue,
+            // Map input to Msg and update via reducer
+            if let Some(msg) = events::next_msg(&app)? {
+                let effect = update::update(&mut app, msg);
+                match effect {
+                    update::Effect::Quit => break,
+                    update::Effect::SaveReport => {
+                        let _ = app.generate_html_report();
+                    }
+                    update::Effect::StartExec { .. } | update::Effect::None => {}
                 }
             }
         }
@@ -247,100 +245,17 @@ impl TuiRenderer {
         mut app: TuiApp,
     ) -> Result<()> {
         // Create a channel for receiving execution messages from async tasks
-        let (tx, rx) = std::sync::mpsc::channel::<ExecutionMessage>();
+        let (tx, rx) = std::sync::mpsc::channel::<ExecMsg>();
         let mut execution_handle: Option<std::thread::JoinHandle<()>> = None;
 
         loop {
             // Clear old feedback messages
             app.clear_old_feedback();
 
-            // Check if execution has been requested
-            if app.execution_requested && execution_handle.is_none() {
-                // Start async HTTP execution
-                app.start_execution();
-                let tx_clone = tx.clone();
-                let config_path = app.config_path.clone();
-                let users_file = app.users_file.clone();
-                let selected_environments = app.selected_environments.clone();
-                let selected_routes = app.selected_routes.clone();
-                let include_headers = self.show_headers;
-                let include_errors = self.show_errors;
-
-                execution_handle = Some(std::thread::spawn(move || {
-                    // Create a runtime in this thread for HTTP execution
-                    let rt = match tokio::runtime::Runtime::new() {
-                        Ok(rt) => rt,
-                        Err(e) => {
-                            let _ = tx_clone.send(ExecutionMessage::Failed(format!(
-                                "Failed to create runtime: {}",
-                                e
-                            )));
-                            return;
-                        }
-                    };
-
-                    rt.block_on(async {
-                        // Set a timeout for the entire execution
-                        let timeout_duration = std::time::Duration::from_secs(300); // 5 minutes timeout
-
-                        match tokio::time::timeout(
-                            timeout_duration,
-                            Self::execute_http_tests_async(
-                                tx_clone.clone(),
-                                config_path,
-                                users_file,
-                                selected_environments,
-                                selected_routes,
-                                include_headers,
-                                include_errors,
-                            ),
-                        )
-                        .await
-                        {
-                            Ok(_) => {
-                                // Execution completed normally (success or failure already handled)
-                            }
-                            Err(_) => {
-                                // Timeout occurred
-                                let _ = tx_clone.send(ExecutionMessage::Failed(
-                                    "Execution timed out after 5 minutes".to_string(),
-                                ));
-                            }
-                        }
-                    });
-                }));
-            }
-
             // Check for execution messages
             while let Ok(message) = rx.try_recv() {
-                match message {
-                    ExecutionMessage::Progress {
-                        completed,
-                        total,
-                        successful: _,
-                        failed: _,
-                        percentage: _,
-                        operation,
-                    } => {
-                        // Update with accurate progress data from ProgressTracker
-                        app.total_tests = total;
-                        app.update_execution_progress(completed, operation);
-                        // TODO: Store successful/failed counts in app state if needed for display
-                    }
-                    ExecutionMessage::Completed(results) => {
-                        app.complete_execution(results);
-                        execution_handle = None;
-                    }
-                    ExecutionMessage::Failed(error) => {
-                        app.set_error(format!("Execution failed: {}", error));
-                        app.panel_focus = crate::renderers::tui::app::PanelFocus::Configuration;
-                        app.execution_running = false;
-                        app.execution_requested = false;
-                        app.execution_cancelled = false;
-                        app.current_operation = "Execution failed".to_string();
-                        execution_handle = None;
-                    }
-                }
+                let _ = update::update(&mut app, msg::Msg::Exec(message));
+                if !app.execution_running { execution_handle = None; }
             }
 
             // Handle execution cancellation
@@ -367,154 +282,31 @@ impl TuiRenderer {
 
             // Draw the UI
             terminal
-                .draw(|f| ui::draw(f, &mut app))
+                .draw(|f| view::draw(f, &mut app))
                 .map_err(|e| HttpDiffError::general(format!("Failed to draw: {}", e)))?;
 
-            // Handle events
-            if let Some(result) = events::handle_events(&mut app)? {
-                match result {
-                    events::AppResult::Quit => {
-                        // Cleanup any running execution
+            // Map input to Msg and update
+            if let Some(msg) = events::next_msg(&app)? {
+                let effect = update::update(&mut app, msg);
+                match effect {
+                    update::Effect::Quit => {
                         if let Some(handle) = execution_handle.take() {
-                            // Let the thread finish in the background
-                            std::thread::spawn(move || {
-                                let _ = handle.join();
-                            });
+                            std::thread::spawn(move || { let _ = handle.join(); });
                         }
                         break;
                     }
-                    events::AppResult::Continue => continue,
+                    update::Effect::SaveReport => { let _ = app.generate_html_report(); }
+                    update::Effect::StartExec { config_path, users, envs, routes, include_headers, include_errors } => {
+                        if execution_handle.is_none() {
+                            let tx_clone = tx.clone();
+                            execution_handle = Some(exec::spawn(tx_clone, config_path, users, envs, routes, include_headers, include_errors));
+                        }
+                    }
+                    update::Effect::None => {}
                 }
             }
         }
         Ok(())
-    }
-
-    /// Execute HTTP tests asynchronously and send progress updates
-    async fn execute_http_tests_async(
-        tx: std::sync::mpsc::Sender<ExecutionMessage>,
-        config_path: String,
-        users_file: String,
-        selected_environments: Vec<String>,
-        selected_routes: Vec<String>,
-        _include_headers: bool,
-        _include_errors: bool,
-    ) {
-        use crate::{
-            config::{load_user_data, HttpDiffConfig},
-            create_default_test_runner, ProgressCallback, TestRunner,
-        };
-
-        // Send initial progress
-        let _ = tx.send(ExecutionMessage::Progress {
-            completed: 0,
-            total: 0, // Will be updated when HTTP runner calculates actual total
-            successful: 0,
-            failed: 0,
-            percentage: 0.0,
-            operation: "Loading configuration...".to_string(),
-        });
-
-        // Load configuration
-        let config_path = std::path::Path::new(&config_path);
-        let config = match HttpDiffConfig::load_from_file(config_path) {
-            Ok(config) => config,
-            Err(e) => {
-                let _ = tx.send(ExecutionMessage::Failed(format!(
-                    "Failed to load configuration: {}",
-                    e
-                )));
-                return;
-            }
-        };
-
-        // Load user data
-        let users_path = std::path::Path::new(&users_file);
-        let user_data = match load_user_data(users_path) {
-            Ok(data) => data,
-            Err(e) => {
-                let _ = tx.send(ExecutionMessage::Failed(format!(
-                    "Failed to load user data: {}",
-                    e
-                )));
-                return;
-            }
-        };
-
-        // Send progress update
-        let _ = tx.send(ExecutionMessage::Progress {
-            completed: 0,
-            total: 0, // Will be updated when HTTP runner calculates actual total
-            successful: 0,
-            failed: 0,
-            percentage: 0.0,
-            operation: "Creating test runner...".to_string(),
-        });
-
-        // Create test runner
-        let runner = match create_default_test_runner(config) {
-            Ok(runner) => runner,
-            Err(e) => {
-                let _ = tx.send(ExecutionMessage::Failed(format!(
-                    "Failed to create test runner: {}",
-                    e
-                )));
-                return;
-            }
-        };
-
-        // Set up progress callback using ProgressTracker as single source of truth
-        let tx_clone = tx.clone();
-
-        let progress_callback: ProgressCallback = Box::new(move |progress_tracker| {
-            let operation = format!(
-                "Completed {}/{} requests ({} successful, {} failed)",
-                progress_tracker.completed_requests,
-                progress_tracker.total_requests,
-                progress_tracker.successful_requests,
-                progress_tracker.failed_requests
-            );
-
-            let _ = tx_clone.send(ExecutionMessage::Progress {
-                completed: progress_tracker.completed_requests,
-                total: progress_tracker.total_requests,
-                successful: progress_tracker.successful_requests,
-                failed: progress_tracker.failed_requests,
-                percentage: progress_tracker.progress_percentage(),
-                operation,
-            });
-        });
-
-        // Execute tests
-        let _ = tx.send(ExecutionMessage::Progress {
-            completed: 0,
-            total: 0, // Will be updated when HTTP runner calculates actual total
-            successful: 0,
-            failed: 0,
-            percentage: 0.0,
-            operation: "Starting HTTP tests...".to_string(),
-        });
-
-        match runner
-            .execute_with_data(
-                &user_data,
-                Some(selected_environments),
-                Some(selected_routes),
-                None, // No error collector for now
-                Some(progress_callback),
-            )
-            .await
-        {
-            Ok(execution_result) => {
-                let _ = tx.send(ExecutionMessage::Completed(execution_result.comparisons));
-            }
-            Err(e) => {
-                let _ = tx.send(ExecutionMessage::Failed(format!(
-                    "Test execution failed: {}",
-                    e
-                )));
-            }
-        }
     }
 }
 

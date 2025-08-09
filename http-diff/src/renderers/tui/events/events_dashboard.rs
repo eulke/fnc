@@ -1,383 +1,163 @@
-use super::AppResult;
-use crate::{
-    error::Result,
-    renderers::tui::app::{FocusedPanel, PanelFocus, TuiApp},
-};
+use crate::renderers::tui::app::{PanelFocus, TuiApp};
+use crate::renderers::tui::msg::{DetailsMsg, Msg, ResultsMsg};
 use crossterm::event::{KeyCode, KeyEvent};
 
-/// Handle keys for dashboard view with panel-focused navigation
-pub fn handle_dashboard_keys(app: &mut TuiApp, key: KeyEvent) -> Result<AppResult> {
+/// Map keys for dashboard to top-level Msg
+pub fn map_dashboard_keys_to_msg(app: &TuiApp, key: KeyEvent) -> Option<Msg> {
     match key.code {
         // Tab navigation between panels
-        KeyCode::Tab => {
-            app.next_dashboard_panel();
-        }
-        KeyCode::BackTab => {
-            app.previous_dashboard_panel();
-        }
+        KeyCode::Tab => return Some(Msg::FocusNextPane),
+        KeyCode::BackTab => return Some(Msg::FocusPrevPane),
         // Panel-specific navigation and actions
         KeyCode::Up | KeyCode::Char('k') => {
-            handle_dashboard_panel_up(app);
+            return Some(match app.panel_focus {
+                PanelFocus::Configuration => Msg::Config(crate::renderers::tui::msg::ConfigMsg::MoveUp),
+                PanelFocus::Progress => return None,
+                PanelFocus::Results => Msg::Results(ResultsMsg::MoveUp),
+                PanelFocus::Details => Msg::Details(DetailsMsg::ScrollUp),
+            });
         }
         KeyCode::Down | KeyCode::Char('j') => {
-            handle_dashboard_panel_down(app);
+            return Some(match app.panel_focus {
+                PanelFocus::Configuration => Msg::Config(crate::renderers::tui::msg::ConfigMsg::MoveDown),
+                PanelFocus::Progress => return None,
+                PanelFocus::Results => Msg::Results(ResultsMsg::MoveDown),
+                PanelFocus::Details => Msg::Details(DetailsMsg::ScrollDown),
+            });
         }
         KeyCode::Left | KeyCode::Char('h') => {
-            handle_dashboard_panel_left(app);
+            return Some(match app.panel_focus {
+                PanelFocus::Configuration => Msg::Config(crate::renderers::tui::msg::ConfigMsg::FocusPrev),
+                _ => return None,
+            });
         }
         KeyCode::Right | KeyCode::Char('l') => {
-            handle_dashboard_panel_right(app);
+            return Some(match app.panel_focus {
+                PanelFocus::Configuration => Msg::Config(crate::renderers::tui::msg::ConfigMsg::FocusNext),
+                _ => return None,
+            });
         }
         KeyCode::Enter | KeyCode::Char(' ') => {
-            handle_dashboard_panel_activate(app)?;
+            return Some(match app.panel_focus {
+                PanelFocus::Configuration => {
+                    // If config not loaded, load it; otherwise toggle currently focused item
+                    if app.available_environments.is_empty() {
+                        Msg::Config(crate::renderers::tui::msg::ConfigMsg::Load)
+                    } else {
+                        match app.focused_panel {
+                            crate::renderers::tui::app::FocusedPanel::Environments =>
+                                Msg::Config(crate::renderers::tui::msg::ConfigMsg::ToggleEnv(app.selected_env_index)),
+                            crate::renderers::tui::app::FocusedPanel::Routes =>
+                                Msg::Config(crate::renderers::tui::msg::ConfigMsg::ToggleRoute(app.selected_route_index)),
+                            crate::renderers::tui::app::FocusedPanel::Actions => {
+                                // No activation on actions; keep behavior simple
+                                return None;
+                            }
+                        }
+                    }
+                }
+                PanelFocus::Results => Msg::Details(DetailsMsg::ScrollTop),
+                _ => return None,
+            });
         }
         KeyCode::PageUp => {
-            handle_dashboard_page_up(app);
+            return Some(match app.panel_focus {
+                PanelFocus::Details => Msg::Details(DetailsMsg::PageUp),
+                PanelFocus::Results => Msg::Results(ResultsMsg::PageUp),
+                _ => return None,
+            });
         }
         KeyCode::PageDown => {
-            handle_dashboard_page_down(app);
+            return Some(match app.panel_focus {
+                PanelFocus::Details => Msg::Details(DetailsMsg::PageDown),
+                PanelFocus::Results => Msg::Results(ResultsMsg::PageDown),
+                _ => return None,
+            });
         }
         KeyCode::Home => {
-            handle_dashboard_home(app);
+            return Some(match app.panel_focus {
+                PanelFocus::Details => Msg::Details(DetailsMsg::ScrollTop),
+                PanelFocus::Results => Msg::Results(ResultsMsg::Home),
+                _ => return None,
+            });
         }
         KeyCode::End => {
-            handle_dashboard_end(app);
+            return Some(match app.panel_focus {
+                PanelFocus::Details => Msg::Details(DetailsMsg::ScrollBottom),
+                PanelFocus::Results => Msg::Results(ResultsMsg::End),
+                _ => return None,
+            });
         }
         // Panel-specific shortcuts
         KeyCode::Char('a') => {
             if app.panel_focus == PanelFocus::Configuration {
-                app.select_all_focused();
+                return Some(Msg::Config(crate::renderers::tui::msg::ConfigMsg::SelectAll));
             }
         }
         KeyCode::Char('n') => {
             if app.panel_focus == PanelFocus::Configuration {
-                app.clear_all_focused();
+                return Some(Msg::Config(crate::renderers::tui::msg::ConfigMsg::ClearAll));
             }
         }
         KeyCode::Char('f') => {
             if app.panel_focus == PanelFocus::Results {
-                app.toggle_filter_panel();
+                return Some(Msg::Results(ResultsMsg::ToggleFilterPanel));
             }
         }
         KeyCode::Char('c') => {
             if app.panel_focus == PanelFocus::Results {
-                app.clear_filters();
+                return Some(Msg::Results(ResultsMsg::ClearFilters));
             }
-        }
-        KeyCode::Char('x') | KeyCode::Char('X') => {
-            // Toggle panel expansion
-            app.toggle_panel_expansion(app.panel_focus.clone());
         }
         KeyCode::Char('r') | KeyCode::Char('R') => {
             // Execute tests from any panel (main execution trigger)
             if !app.selected_environments.is_empty() && !app.selected_routes.is_empty() {
-                app.request_execution();
+                return Some(Msg::StartExecution);
             }
         }
         KeyCode::Char('s') | KeyCode::Char('S') => {
-            // Save HTML report from any panel
-            match app.generate_html_report() {
-                Ok(_) => {
-                    // Success feedback is handled by the method
-                }
-                Err(err) => {
-                    app.show_feedback(&err, crate::renderers::tui::app::FeedbackType::Error);
-                }
-            }
+            return Some(Msg::SaveReport);
         }
         // Details panel specific keys
         KeyCode::Char('1') => {
             if app.panel_focus == PanelFocus::Details {
-                app.switch_details_tab(1);
+                return Some(Msg::Details(DetailsMsg::SetTab(1)));
             } else if app.panel_focus == PanelFocus::Results {
-                // Filter shortcuts for results panel
-                handle_results_filter_shortcut(app, key);
+                return Some(Msg::Results(ResultsMsg::SetFilterTab(1)));
             }
         }
         KeyCode::Char('2') => {
             if app.panel_focus == PanelFocus::Details {
-                app.switch_details_tab(2);
+                return Some(Msg::Details(DetailsMsg::SetTab(2)));
             } else if app.panel_focus == PanelFocus::Results {
-                handle_results_filter_shortcut(app, key);
+                return Some(Msg::Results(ResultsMsg::SetFilterTab(2)));
             }
         }
         KeyCode::Char('3') => {
             if app.panel_focus == PanelFocus::Details {
-                app.switch_details_tab(3);
+                return Some(Msg::Details(DetailsMsg::SetTab(3)));
             } else if app.panel_focus == PanelFocus::Results {
-                handle_results_filter_shortcut(app, key);
+                return Some(Msg::Results(ResultsMsg::SetFilterTab(3)));
             }
         }
         KeyCode::Char('4') => {
             if app.panel_focus == PanelFocus::Details {
-                app.switch_details_tab(4);
+                return Some(Msg::Details(DetailsMsg::SetTab(4)));
             } else if app.panel_focus == PanelFocus::Results {
-                handle_results_filter_shortcut(app, key);
+                return Some(Msg::Results(ResultsMsg::SetFilterTab(4)));
             }
         }
         KeyCode::Char('d') | KeyCode::Char('D') => {
             if app.panel_focus == PanelFocus::Details {
                 // Toggle diff style in details panel
-                app.toggle_details_diff_style();
+                return Some(Msg::Details(DetailsMsg::ToggleDiffStyle));
             } else {
                 // Global diff style toggle (existing behavior)
-                app.toggle_diff_style();
+                return Some(Msg::ToggleDiffStyle);
             }
         }
         _ => {}
     }
-
-    Ok(AppResult::Continue)
+    None
 }
-
-/// Handle up navigation within the focused dashboard panel
-fn handle_dashboard_panel_up(app: &mut TuiApp) {
-    match app.panel_focus {
-        PanelFocus::Configuration => {
-            if matches!(
-                app.focused_panel,
-                crate::renderers::tui::app::FocusedPanel::Environments | crate::renderers::tui::app::FocusedPanel::Routes
-            ) {
-                app.navigate_up();
-            }
-        }
-        PanelFocus::Progress => {
-            // No up/down navigation in progress panel
-        }
-        PanelFocus::Results => {
-            app.previous_result();
-        }
-        PanelFocus::Details => {
-            app.scroll_up();
-        }
-    }
-}
-
-/// Handle down navigation within the focused dashboard panel
-fn handle_dashboard_panel_down(app: &mut TuiApp) {
-    match app.panel_focus {
-        PanelFocus::Configuration => {
-            if matches!(
-                app.focused_panel,
-                crate::renderers::tui::app::FocusedPanel::Environments | crate::renderers::tui::app::FocusedPanel::Routes
-            ) {
-                app.navigate_down();
-            }
-        }
-        PanelFocus::Progress => {
-            // No up/down navigation in progress panel
-        }
-        PanelFocus::Results => {
-            app.next_result();
-        }
-        PanelFocus::Details => {
-            app.scroll_down();
-        }
-    }
-}
-
-/// Handle left navigation within dashboard panels (intra-panel only)
-fn handle_dashboard_panel_left(app: &mut TuiApp) {
-    match app.panel_focus {
-        PanelFocus::Configuration => {
-            // Switch between environments/routes within configuration panel
-            app.previous_panel();
-        }
-        PanelFocus::Progress => {
-            // No left navigation within progress panel
-        }
-        PanelFocus::Results => {
-            // No left navigation within results panel
-        }
-        PanelFocus::Details => {
-            // No left navigation within details panel
-        }
-    }
-}
-
-/// Handle right navigation within dashboard panels (intra-panel only)
-fn handle_dashboard_panel_right(app: &mut TuiApp) {
-    match app.panel_focus {
-        PanelFocus::Configuration => {
-            // Switch between environments/routes within configuration panel
-            app.next_panel();
-        }
-        PanelFocus::Progress => {
-            // No right navigation within progress panel
-        }
-        PanelFocus::Results => {
-            // No right navigation within results panel
-        }
-        PanelFocus::Details => {
-            // No right navigation within details panel
-        }
-    }
-}
-
-/// Handle activation (Enter/Space) within the focused dashboard panel
-fn handle_dashboard_panel_activate(app: &mut TuiApp) -> Result<()> {
-    match app.panel_focus {
-        PanelFocus::Configuration => {
-            // Handle configuration actions
-            if app.available_environments.is_empty() {
-                // Load configuration
-                match app.load_configuration() {
-                    Ok(()) => app.clear_error(),
-                    Err(e) => app.set_error(e),
-                }
-            } else {
-                // Toggle focused item (removed execution trigger - now use R key)
-                app.toggle_focused_item();
-            }
-        }
-        PanelFocus::Progress => {
-            // No activation actions in progress panel
-        }
-        PanelFocus::Results => {
-            // Select current result for details view
-            if app.current_filtered_result().is_some() {
-                app.panel_focus = PanelFocus::Details;
-            }
-        }
-        PanelFocus::Details => {
-            // No activation actions in details panel currently
-        }
-    }
-    Ok(())
-}
-
-/// Handle page up within the focused dashboard panel
-fn handle_dashboard_page_up(app: &mut TuiApp) {
-    match app.panel_focus {
-        PanelFocus::Configuration => {
-            // No page navigation in configuration
-        }
-        PanelFocus::Progress => {
-            // No page navigation in progress
-        }
-        PanelFocus::Results => {
-            app.selected_index = app.selected_index.saturating_sub(10);
-            app.sync_results_table_state();
-        }
-        PanelFocus::Details => {
-            app.page_up();
-        }
-    }
-}
-
-/// Handle page down within the focused dashboard panel
-fn handle_dashboard_page_down(app: &mut TuiApp) {
-    match app.panel_focus {
-        PanelFocus::Configuration => {
-            // No page navigation in configuration
-        }
-        PanelFocus::Progress => {
-            // No page navigation in progress
-        }
-        PanelFocus::Results => {
-            let filtered_results = app.filtered_results();
-            let max_index = filtered_results.len().saturating_sub(1);
-            app.selected_index = (app.selected_index + 10).min(max_index);
-            app.sync_results_table_state();
-        }
-        PanelFocus::Details => {
-            app.page_down();
-        }
-    }
-}
-
-/// Handle Home key within the focused dashboard panel
-fn handle_dashboard_home(app: &mut TuiApp) {
-    match app.panel_focus {
-        PanelFocus::Configuration => {
-            match app.focused_panel {
-                FocusedPanel::Environments => {
-                    app.selected_env_index = 0;
-                    app.sync_env_list_state();
-                }
-                FocusedPanel::Routes => {
-                    app.selected_route_index = 0;
-                    app.sync_route_list_state();
-                }
-                FocusedPanel::Actions => {
-                    // No navigation in actions
-                }
-            }
-        }
-        PanelFocus::Progress => {
-            // No navigation in progress
-        }
-        PanelFocus::Results => {
-            app.selected_index = 0;
-            app.sync_results_table_state();
-        }
-        PanelFocus::Details => {
-            app.scroll_to_top();
-        }
-    }
-}
-
-/// Handle End key within the focused dashboard panel
-fn handle_dashboard_end(app: &mut TuiApp) {
-    match app.panel_focus {
-        PanelFocus::Configuration => {
-            match app.focused_panel {
-                FocusedPanel::Environments => {
-                    app.selected_env_index = app.available_environments.len().saturating_sub(1);
-                    app.sync_env_list_state();
-                }
-                FocusedPanel::Routes => {
-                    app.selected_route_index = app.available_routes.len().saturating_sub(1);
-                    app.sync_route_list_state();
-                }
-                FocusedPanel::Actions => {
-                    // No navigation in actions
-                }
-            }
-        }
-        PanelFocus::Progress => {
-            // No navigation in progress
-        }
-        PanelFocus::Results => {
-            let filtered_results = app.filtered_results();
-            app.selected_index = filtered_results.len().saturating_sub(1);
-            app.sync_results_table_state();
-        }
-        PanelFocus::Details => {
-            // Calculate content height for scroll_to_bottom - for now just use a reasonable value
-            app.scroll_to_bottom(100);
-        }
-    }
-}
-
-/// Handle filter shortcuts for results panel
-fn handle_results_filter_shortcut(app: &mut TuiApp, key: KeyEvent) {
-    if let KeyCode::Char(c) = key.code {
-        match c {
-            '1' => {
-                app.filter_state.current_tab = 0;
-                app.filter_state.status_filter = crate::renderers::tui::app::StatusFilter::All;
-                app.selected_index = 0;
-            }
-            '2' => {
-                app.filter_state.current_tab = 1;
-                app.filter_state.status_filter =
-                    crate::renderers::tui::app::StatusFilter::Identical;
-                app.selected_index = 0;
-            }
-            '3' => {
-                app.filter_state.current_tab = 2;
-                app.filter_state.status_filter =
-                    crate::renderers::tui::app::StatusFilter::Different;
-                app.selected_index = 0;
-            }
-            '4' => {
-                app.filter_state.current_tab = 3;
-                app.filter_state.status_filter =
-                    crate::renderers::tui::app::StatusFilter::ErrorsOnly;
-                app.selected_index = 0;
-            }
-            _ => {}
-        }
-    }
-}
+// Implementation intentionally moved to message mapping above; mutations happen in reducer

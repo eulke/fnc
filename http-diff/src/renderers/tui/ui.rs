@@ -163,13 +163,7 @@ fn draw_feedback_popup(f: &mut Frame, feedback: &crate::renderers::tui::app::Act
 /// Draw the dashboard view with 4 simultaneous panels
 fn draw_dashboard_view(f: &mut Frame, app: &mut TuiApp, area: Rect) {
     // Check if any panel is expanded
-    let expanded_panel = app
-        .panel_sizes
-        .iter()
-        .find(|(_, size)| **size == crate::renderers::tui::app::PanelSize::Expanded)
-        .map(|(panel, _)| panel);
-
-    if let Some(expanded_panel) = expanded_panel {
+    if let Some(expanded_panel) = app.expanded_panel.as_ref() {
         // Show only the expanded panel
         match expanded_panel {
             PanelFocus::Configuration => draw_dashboard_configuration_panel(f, app, area),

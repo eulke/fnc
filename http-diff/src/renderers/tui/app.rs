@@ -88,14 +88,7 @@ pub enum ViewMode {
     Dashboard,
 }
 
-/// Panel expansion state for responsive sizing
-#[derive(Debug, Clone, PartialEq)]
-pub enum PanelSize {
-    /// Normal size in 2x2 grid
-    Normal,
-    /// Expanded to take more space (future enhancement)
-    Expanded,
-}
+// Removed PanelSize in favor of a single expanded panel option for simplicity
 
 /// Details panel tab selection
 #[derive(Debug, Clone, PartialEq)]
@@ -153,8 +146,8 @@ pub struct TuiApp {
     pub view_mode: ViewMode,
     /// Dashboard panel focus for 4-panel layout
     pub panel_focus: PanelFocus,
-    /// Panel size states for responsive layout
-    pub panel_sizes: std::collections::HashMap<PanelFocus, PanelSize>,
+    /// Expanded panel, if any
+    pub expanded_panel: Option<PanelFocus>,
     /// Diff view style (unified or side-by-side)
     pub diff_style: DiffViewStyle,
     /// Whether to show headers in comparisons
@@ -245,18 +238,12 @@ impl TuiApp {
         show_headers: bool,
         show_errors: bool,
     ) -> Self {
-        let mut panel_sizes = std::collections::HashMap::new();
-        panel_sizes.insert(PanelFocus::Configuration, PanelSize::Normal);
-        panel_sizes.insert(PanelFocus::Progress, PanelSize::Normal);
-        panel_sizes.insert(PanelFocus::Results, PanelSize::Normal);
-        panel_sizes.insert(PanelFocus::Details, PanelSize::Normal);
-
         Self {
             results,
             selected_index: 0,
             view_mode: ViewMode::Dashboard, // Start in dashboard mode
             panel_focus: PanelFocus::Results, // Focus on results when starting with data
-            panel_sizes,
+            expanded_panel: None,
             diff_style: diff_style.clone(),
             show_headers,
             show_errors,
@@ -300,18 +287,12 @@ impl TuiApp {
         show_headers: bool,
         show_errors: bool,
     ) -> Self {
-        let mut panel_sizes = std::collections::HashMap::new();
-        panel_sizes.insert(PanelFocus::Configuration, PanelSize::Normal);
-        panel_sizes.insert(PanelFocus::Progress, PanelSize::Normal);
-        panel_sizes.insert(PanelFocus::Results, PanelSize::Normal);
-        panel_sizes.insert(PanelFocus::Details, PanelSize::Normal);
-
         Self {
             results: Vec::new(),
             selected_index: 0,
             view_mode: ViewMode::Dashboard, // Start in dashboard mode for workflow
             panel_focus: PanelFocus::Configuration, // Focus on configuration when starting workflow
-            panel_sizes,
+            expanded_panel: None,
             diff_style: diff_style.clone(),
             show_headers,
             show_errors,
@@ -528,19 +509,12 @@ impl TuiApp {
         self.panel_focus == *panel
     }
 
-    /// Get the size configuration for a panel
-    pub fn get_panel_size(&self, panel: &PanelFocus) -> &PanelSize {
-        self.panel_sizes.get(panel).unwrap_or(&PanelSize::Normal)
-    }
-
-    /// Toggle panel expansion (future enhancement)
+    /// Toggle panel expansion (only one panel can be expanded)
     pub fn toggle_panel_expansion(&mut self, panel: PanelFocus) {
-        let current_size = self.panel_sizes.get(&panel).unwrap_or(&PanelSize::Normal);
-        let new_size = match current_size {
-            PanelSize::Normal => PanelSize::Expanded,
-            PanelSize::Expanded => PanelSize::Normal,
+        self.expanded_panel = match self.expanded_panel {
+            Some(ref p) if *p == panel => None,
+            _ => Some(panel),
         };
-        self.panel_sizes.insert(panel, new_size);
     }
 
     /// Switch to the next tab in details panel
