@@ -26,13 +26,14 @@ impl HtmlTemplate {
         let response_details_section = match diff_detail_level {
             DiffDetailLevel::Executive => String::new(),
             DiffDetailLevel::Basic | DiffDetailLevel::Detailed => {
-                let show_unchanged = *diff_detail_level == DiffDetailLevel::Detailed && show_unchanged_lines;
+                let show_unchanged =
+                    *diff_detail_level == DiffDetailLevel::Detailed && show_unchanged_lines;
                 HtmlComponents::response_details_section(results, show_unchanged, max_diff_routes)
             }
         };
 
         let js_content = Self::embedded_javascript();
-        
+
         format!(
             r#"<!DOCTYPE html>
 <html lang="en">

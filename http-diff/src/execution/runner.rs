@@ -1,12 +1,16 @@
 use crate::config::HttpDiffConfig;
 use crate::error::{HttpDiffError, Result};
 use crate::execution::progress::{ProgressCallback, ProgressTracker};
-use crate::traits::{ErrorCollector, HttpClient, ResponseComparator, TestRunner};
+use crate::traits::{HttpClient, ResponseComparator, TestRunner};
 use crate::types::{ExecutionError, ExecutionResult};
 use futures::stream::{FuturesUnordered, StreamExt};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
+
+/// Type alias for the most common concrete TestRunner implementation
+pub type DefaultTestRunner =
+    TestRunnerImpl<crate::http::HttpClientImpl, crate::comparison::ResponseComparator>;
 
 /// Test runner implementation
 pub struct TestRunnerImpl<C, R>
@@ -41,13 +45,12 @@ where
         self
     }
 
-    /// Execute tests concurrently with controlled parallelism and error collection
-    async fn execute_concurrent_with_error_collection(
+    /// Execute tests concurrently with controlled parallelism
+    async fn execute_concurrent(
         &self,
         user_data: &[crate::config::UserData],
         environments: &[String],
         routes: &[&crate::config::Route],
-        error_collector: Option<Box<dyn ErrorCollector>>,
         progress_callback: Option<Box<ProgressCallback>>,
     ) -> Result<ExecutionResult> {
         // Calculate total requests and set up progress tracking
@@ -124,16 +127,7 @@ where
                         callback(&progress);
                     }
 
-                    // Collect request errors
-                    for error in &errors {
-                        if let Some(ref collector) = error_collector {
-                            collector.record_request_error(
-                                &error.route,
-                                error.environment.as_ref().unwrap_or(&"unknown".to_string()),
-                                error.message.clone(),
-                            );
-                        }
-                    }
+                    // Errors are already collected in the all_errors vector
                     all_errors.append(&mut errors);
 
                     // Only create comparison result if we have at least 2 responses
@@ -165,7 +159,8 @@ where
                                         pair_map,
                                     ) {
                                         Ok(mut comparison_result) => {
-                                            comparison_result.base_environment = Some(base_env.clone());
+                                            comparison_result.base_environment =
+                                                Some(base_env.clone());
                                             results.push(comparison_result);
                                         }
                                         Err(e) => {
@@ -173,12 +168,6 @@ where
                                                 route.name.clone(),
                                                 e.to_string(),
                                             );
-                                            if let Some(ref collector) = error_collector {
-                                                collector.record_comparison_error(
-                                                    &error.route,
-                                                    error.message.clone(),
-                                                );
-                                            }
                                             all_errors.push(error);
                                         }
                                     }
@@ -199,12 +188,6 @@ where
                                             route.name.clone(),
                                             e.to_string(),
                                         );
-                                        if let Some(ref collector) = error_collector {
-                                            collector.record_comparison_error(
-                                                &error.route,
-                                                error.message.clone(),
-                                            );
-                                        }
                                         all_errors.push(error);
                                     }
                                 }
@@ -224,12 +207,6 @@ where
                                         route.name.clone(),
                                         e.to_string(),
                                     );
-                                    if let Some(ref collector) = error_collector {
-                                        collector.record_comparison_error(
-                                            &error.route,
-                                            error.message.clone(),
-                                        );
-                                    }
                                     all_errors.push(error);
                                 }
                             }
@@ -238,9 +215,6 @@ where
                 }
                 Err(e) => {
                     let error = ExecutionError::general_execution_error(e.to_string());
-                    if let Some(ref collector) = error_collector {
-                        collector.record_execution_error(error.message.clone());
-                    }
                     all_errors.push(error);
 
                     // Still need to update progress for failed requests
@@ -319,20 +293,13 @@ where
         user_data: &[crate::config::UserData],
         environments: Option<Vec<String>>,
         routes: Option<Vec<String>>,
-        error_collector: Option<Box<dyn ErrorCollector>>,
         progress_callback: Option<Box<ProgressCallback>>,
     ) -> Result<ExecutionResult> {
         let environments = self.resolve_environments(environments)?;
         let routes = self.resolve_routes(routes)?;
 
-        self.execute_concurrent_with_error_collection(
-            user_data,
-            &environments,
-            &routes,
-            error_collector,
-            progress_callback,
-        )
-        .await
+        self.execute_concurrent(user_data, &environments, &routes, progress_callback)
+            .await
     }
 }
 
@@ -391,7 +358,7 @@ mod tests {
 
         let user_data = vec![create_mock_user_data(vec![])];
         let result = runner
-            .execute_with_data(&user_data, None, None, None, None)
+            .execute_with_data(&user_data, None, None, None)
             .await
             .unwrap();
 

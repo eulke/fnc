@@ -9,43 +9,9 @@ pub struct ConfigValidatorImpl;
 impl ConfigValidator for ConfigValidatorImpl {
     type Config = HttpDiffConfig;
 
-    /// Validate configuration
+    /// Validate configuration (uses enhanced validation with default context)
     fn validate(&self, config: &HttpDiffConfig) -> Result<()> {
-        // Basic validation
-        if config.environments.is_empty() {
-            return Err(HttpDiffError::NoEnvironments);
-        }
-
-        if config.routes.is_empty() {
-            return Err(HttpDiffError::invalid_config("No routes configured"));
-        }
-
-        // Ensure no more than one base environment is selected
-        let base_count = config
-            .environments
-            .values()
-            .filter(|e| e.is_base)
-            .count();
-        if base_count > 1 {
-            return Err(HttpDiffError::invalid_config(
-                "Multiple environments are marked as base; only one is allowed",
-            ));
-        }
-
-        // Validate that route base_url overrides reference valid environments
-        for route in &config.routes {
-            if let Some(base_urls) = &route.base_urls {
-                for env_name in base_urls.keys() {
-                    if !config.environments.contains_key(env_name) {
-                        return Err(HttpDiffError::InvalidEnvironment {
-                            environment: env_name.clone(),
-                        });
-                    }
-                }
-            }
-        }
-
-        Ok(())
+        self.validate_with_context(config, "configuration")
     }
 }
 
@@ -61,21 +27,32 @@ impl ConfigValidatorImpl {
         config: &HttpDiffConfig,
         config_path: P,
     ) -> Result<()> {
+        let config_path_str = config_path.as_ref().to_string_lossy();
+
         if config.environments.is_empty() {
             return Err(HttpDiffError::invalid_config(format!(
                 "No environments configured in {}. Add at least one environment to [environments] section.",
-                config_path.as_ref().display()
+                config_path_str
             )));
         }
 
         if config.routes.is_empty() {
             return Err(HttpDiffError::invalid_config(format!(
                 "No routes configured in {}. Add at least one [[routes]] entry.",
-                config_path.as_ref().display()
+                config_path_str
             )));
         }
 
-        // Validate HTTP methods
+        // Ensure no more than one base environment is selected
+        let base_count = config.environments.values().filter(|e| e.is_base).count();
+        if base_count > 1 {
+            return Err(HttpDiffError::invalid_config(format!(
+                "Multiple environments are marked as base in {}; only one is allowed",
+                config_path_str
+            )));
+        }
+
+        // Validate HTTP methods and environment references
         for route in &config.routes {
             let valid_methods = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"];
             if !valid_methods.contains(&route.method.as_str()) {
@@ -100,15 +77,15 @@ impl ConfigValidatorImpl {
                     }
                 }
             }
+        }
 
-            // Validate URLs in environments and route overrides
-            for (env_name, env) in &config.environments {
-                if url::Url::parse(&env.base_url).is_err() {
-                    return Err(HttpDiffError::invalid_config(format!(
-                        "Invalid base_url '{}' in environment '{}'. Must be a valid URL.",
-                        env.base_url, env_name
-                    )));
-                }
+        // Validate URLs in environments
+        for (env_name, env) in &config.environments {
+            if url::Url::parse(&env.base_url).is_err() {
+                return Err(HttpDiffError::invalid_config(format!(
+                    "Invalid base_url '{}' in environment '{}'. Must be a valid URL.",
+                    env.base_url, env_name
+                )));
             }
         }
 

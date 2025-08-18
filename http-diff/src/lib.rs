@@ -14,13 +14,11 @@ pub mod types;
 // New structured modules
 pub mod execution;
 pub mod http;
-pub mod validation;
 
 // Business logic modules
 pub mod analysis;
 pub mod comparison;
 pub mod curl;
-pub mod documentation;
 
 // Presentation modules
 pub mod renderers;
@@ -34,11 +32,7 @@ pub mod utils;
 pub mod testing;
 
 // Re-export core traits
-pub use traits::{
-    ConfigValidator, ErrorCollector, HttpClient, ProgressCallback, ProgressReporter,
-    RequestBuilder, ResponseComparator, ResponseConverter, TestRunner,
-    UrlBuilder as UrlBuilderTrait, UserDataProvider,
-};
+pub use traits::{ConfigValidator, HttpClient, ProgressCallback, ResponseComparator, TestRunner};
 
 // Re-export analysis types
 pub use analysis::{ErrorAnalysis, ErrorAnalyzer, ErrorClassifierImpl, ErrorGroup, RouteError};
@@ -51,10 +45,9 @@ pub use types::{
 };
 
 // Re-export implementations (clean API without "Impl" suffix)
-pub use comparison::ResponseComparator as DefaultResponseComparator;
-pub use execution::{ProgressTracker, TestRunnerImpl as DefaultTestRunner};
-pub use http::{HttpClientImpl as DefaultHttpClient, RequestBuilderImpl, ResponseConverterImpl};
-pub use validation::ResponseValidatorImpl;
+pub use comparison::{ResponseComparator as DefaultResponseComparator, ResponseValidatorImpl};
+pub use execution::{DefaultTestRunner, ProgressTracker, TestRunnerImpl};
+pub use http::HttpClientImpl as DefaultHttpClient;
 
 // Re-export renderers
 pub use renderers::cli::{ComparisonFormatter, ErrorRenderer, TableBuilder, TableStyle};
@@ -67,32 +60,23 @@ pub use error::{HttpDiffError, Result};
 pub use url_builder::UrlBuilder;
 
 /// Create a test runner with default implementations
-pub fn create_default_test_runner(
-    config: HttpDiffConfig,
-) -> Result<DefaultTestRunner<DefaultHttpClient, DefaultResponseComparator>> {
+pub fn create_default_test_runner(config: HttpDiffConfig) -> Result<DefaultTestRunner> {
     let client = DefaultHttpClient::new(config.clone())?;
     let comparator = DefaultResponseComparator::new();
     DefaultTestRunner::new(config, client, comparator)
 }
 
-/// Execute HTTP diff testing with clean architecture - requires explicit user data and error handling
+/// Execute HTTP diff testing with clean architecture - requires explicit user data
 pub async fn run_http_diff_with_data(
     config: HttpDiffConfig,
     user_data: &[UserData],
     environments: Option<Vec<String>>,
     routes: Option<Vec<String>>,
-    error_collector: Option<Box<dyn ErrorCollector>>,
     progress_callback: Option<ProgressCallback>,
 ) -> Result<ExecutionResult> {
     let runner = create_default_test_runner(config)?;
     runner
-        .execute_with_data(
-            user_data,
-            environments,
-            routes,
-            error_collector,
-            progress_callback,
-        )
+        .execute_with_data(user_data, environments, routes, progress_callback)
         .await
 }
 
@@ -144,10 +128,8 @@ mod tests {
     /// Test that shared utilities work
     #[test]
     fn test_shared_utilities() {
-        // Test text utilities
-        use crate::utils::text;
-
-        assert_eq!(text::line_count("line1\nline2"), 2);
+        // Test basic string line counting (now done directly)
+        assert_eq!("line1\nline2".lines().count(), 2);
 
         // Test table builder
         let mut builder = TableBuilder::new();
@@ -241,9 +223,7 @@ mod tests {
         async fn test_mock_test_runner() {
             let runner = MockTestRunner::new();
             let user_data = vec![create_mock_user_data(vec![("userId", "123")])];
-            let result = runner
-                .execute_with_data(&user_data, None, None, None, None)
-                .await;
+            let result = runner.execute_with_data(&user_data, None, None, None).await;
             assert!(result.is_ok());
             let execution_result = result.unwrap();
             assert!(!execution_result.has_errors());

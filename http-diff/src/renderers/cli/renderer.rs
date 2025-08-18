@@ -325,7 +325,7 @@ mod tests {
     #[test]
     fn test_cli_renderer() {
         use crate::types::ExecutionResult;
-        
+
         let renderer = CliRenderer::new();
         let execution_result = ExecutionResult {
             comparisons: vec![create_test_result()],

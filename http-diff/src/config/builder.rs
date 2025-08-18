@@ -22,10 +22,10 @@ impl HttpDiffConfigBuilder {
     /// Add an environment with optional headers
     #[must_use]
     pub fn environment<S: Into<String>>(
-        mut self, 
-        name: S, 
-        base_url: S, 
-        headers: Option<HashMap<String, String>>
+        mut self,
+        name: S,
+        base_url: S,
+        headers: Option<HashMap<String, String>>,
     ) -> Self {
         self.environments.insert(
             name.into(),
@@ -45,16 +45,18 @@ impl HttpDiffConfigBuilder {
     }
 
     /// Configure global settings using fluent builder
-    pub fn configure_global<F>(mut self, configure_fn: F) -> Self 
+    pub fn configure_global<F>(mut self, configure_fn: F) -> Self
     where
-        F: FnOnce(crate::config::global_builder::GlobalConfigBuilder) -> crate::config::global_builder::GlobalConfigBuilder,
+        F: FnOnce(
+            crate::config::global_builder::GlobalConfigBuilder,
+        ) -> crate::config::global_builder::GlobalConfigBuilder,
     {
         let builder = if let Some(existing) = self.global.take() {
             crate::config::global_builder::GlobalConfigBuilder::from_config(existing)
         } else {
             crate::config::global_builder::GlobalConfigBuilder::new()
         };
-        
+
         let global_config = configure_fn(builder).build();
         self.global = Some(global_config);
         self
@@ -88,16 +90,10 @@ impl HttpDiffConfigBuilder {
 
     /// Add a route with specified HTTP method and optional body
     #[must_use]
-    pub fn add_route<N, M, P, B>(
-        mut self, 
-        name: N, 
-        method: M, 
-        path: P, 
-        body: Option<B>
-    ) -> Self 
+    pub fn add_route<N, M, P, B>(mut self, name: N, method: M, path: P, body: Option<B>) -> Self
     where
         N: Into<String>,
-        M: Into<String>, 
+        M: Into<String>,
         P: Into<String>,
         B: Into<String>,
     {

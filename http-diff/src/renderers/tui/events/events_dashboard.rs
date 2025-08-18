@@ -11,7 +11,9 @@ pub fn map_dashboard_keys_to_msg(app: &TuiApp, key: KeyEvent) -> Option<Msg> {
         // Panel-specific navigation and actions
         KeyCode::Up | KeyCode::Char('k') => {
             return Some(match app.panel_focus {
-                PanelFocus::Configuration => Msg::Config(crate::renderers::tui::msg::ConfigMsg::MoveUp),
+                PanelFocus::Configuration => {
+                    Msg::Config(crate::renderers::tui::msg::ConfigMsg::MoveUp)
+                }
                 PanelFocus::Progress => return None,
                 PanelFocus::Results => Msg::Results(ResultsMsg::MoveUp),
                 PanelFocus::Details => Msg::Details(DetailsMsg::ScrollUp),
@@ -19,7 +21,9 @@ pub fn map_dashboard_keys_to_msg(app: &TuiApp, key: KeyEvent) -> Option<Msg> {
         }
         KeyCode::Down | KeyCode::Char('j') => {
             return Some(match app.panel_focus {
-                PanelFocus::Configuration => Msg::Config(crate::renderers::tui::msg::ConfigMsg::MoveDown),
+                PanelFocus::Configuration => {
+                    Msg::Config(crate::renderers::tui::msg::ConfigMsg::MoveDown)
+                }
                 PanelFocus::Progress => return None,
                 PanelFocus::Results => Msg::Results(ResultsMsg::MoveDown),
                 PanelFocus::Details => Msg::Details(DetailsMsg::ScrollDown),
@@ -27,13 +31,17 @@ pub fn map_dashboard_keys_to_msg(app: &TuiApp, key: KeyEvent) -> Option<Msg> {
         }
         KeyCode::Left | KeyCode::Char('h') => {
             return Some(match app.panel_focus {
-                PanelFocus::Configuration => Msg::Config(crate::renderers::tui::msg::ConfigMsg::FocusPrev),
+                PanelFocus::Configuration => {
+                    Msg::Config(crate::renderers::tui::msg::ConfigMsg::FocusPrev)
+                }
                 _ => return None,
             });
         }
         KeyCode::Right | KeyCode::Char('l') => {
             return Some(match app.panel_focus {
-                PanelFocus::Configuration => Msg::Config(crate::renderers::tui::msg::ConfigMsg::FocusNext),
+                PanelFocus::Configuration => {
+                    Msg::Config(crate::renderers::tui::msg::ConfigMsg::FocusNext)
+                }
                 _ => return None,
             });
         }
@@ -45,10 +53,16 @@ pub fn map_dashboard_keys_to_msg(app: &TuiApp, key: KeyEvent) -> Option<Msg> {
                         Msg::Config(crate::renderers::tui::msg::ConfigMsg::Load)
                     } else {
                         match app.focused_panel {
-                            crate::renderers::tui::app::FocusedPanel::Environments =>
-                                Msg::Config(crate::renderers::tui::msg::ConfigMsg::ToggleEnv(app.selected_env_index)),
-                            crate::renderers::tui::app::FocusedPanel::Routes =>
-                                Msg::Config(crate::renderers::tui::msg::ConfigMsg::ToggleRoute(app.selected_route_index)),
+                            crate::renderers::tui::app::FocusedPanel::Environments => {
+                                Msg::Config(crate::renderers::tui::msg::ConfigMsg::ToggleEnv(
+                                    app.selected_env_index,
+                                ))
+                            }
+                            crate::renderers::tui::app::FocusedPanel::Routes => {
+                                Msg::Config(crate::renderers::tui::msg::ConfigMsg::ToggleRoute(
+                                    app.selected_route_index,
+                                ))
+                            }
                             crate::renderers::tui::app::FocusedPanel::Actions => {
                                 // No activation on actions; keep behavior simple
                                 return None;
@@ -91,7 +105,9 @@ pub fn map_dashboard_keys_to_msg(app: &TuiApp, key: KeyEvent) -> Option<Msg> {
         // Panel-specific shortcuts
         KeyCode::Char('a') => {
             if app.panel_focus == PanelFocus::Configuration {
-                return Some(Msg::Config(crate::renderers::tui::msg::ConfigMsg::SelectAll));
+                return Some(Msg::Config(
+                    crate::renderers::tui::msg::ConfigMsg::SelectAll,
+                ));
             }
         }
         KeyCode::Char('n') => {

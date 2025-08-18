@@ -22,7 +22,7 @@ impl HtmlDiffRenderer {
         }
 
         let diff_rows = self.render_diff_rows(&body_diff.rows, show_unchanged);
-        
+
         format!(
             r#"
         <div class="diff-container">
@@ -195,7 +195,7 @@ impl HtmlDiffRenderer {
         }
 
         let stats = self.calculate_diff_stats(&body_diff.rows);
-        
+
         format!(
             r#"
         <div class="diff-summary-badge">
@@ -213,9 +213,7 @@ impl HtmlDiffRenderer {
             </div>
         </div>
         "#,
-            stats.added,
-            stats.removed,
-            stats.changed
+            stats.added, stats.removed, stats.changed
         )
     }
 
@@ -269,7 +267,7 @@ mod tests {
     fn test_render_empty_diff() {
         let renderer = HtmlDiffRenderer::new();
         let diff = BodyDiffData::new("env1".to_string(), "env2".to_string());
-        
+
         let html = renderer.render_body_diff(&diff, true);
         assert!(html.is_empty());
     }
@@ -284,7 +282,7 @@ mod tests {
         diff.set_total_size(100);
 
         let html = renderer.render_body_diff(&diff, true);
-        
+
         assert!(html.contains("diff-container"));
         assert!(html.contains("test"));
         assert!(html.contains("prod"));
@@ -304,16 +302,12 @@ mod tests {
             lines2: 60,
             sample_differences: vec!["Line 1: content differs".to_string()],
         };
-        
-        let diff = BodyDiffData::new_large_response(
-            "test".to_string(),
-            "prod".to_string(),
-            2200,
-            summary,
-        );
+
+        let diff =
+            BodyDiffData::new_large_response("test".to_string(), "prod".to_string(), 2200, summary);
 
         let html = renderer.render_body_diff(&diff, true);
-        
+
         assert!(html.contains("large-response"));
         assert!(html.contains("Large Response Summary"));
         assert!(html.contains("1000 bytes"));
@@ -325,8 +319,11 @@ mod tests {
     fn test_html_escaping() {
         let text = "<script>alert('xss')</script>";
         let escaped = HtmlDiffRenderer::escape_html(text);
-        
-        assert_eq!(escaped, "&lt;script&gt;alert(&#x27;xss&#x27;)&lt;/script&gt;");
+
+        assert_eq!(
+            escaped,
+            "&lt;script&gt;alert(&#x27;xss&#x27;)&lt;/script&gt;"
+        );
         assert!(!escaped.contains("<script>"));
     }
 }

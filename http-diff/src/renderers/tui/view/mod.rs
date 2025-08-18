@@ -1,8 +1,6 @@
-use crate::{
-    renderers::tui::{
-        app::{ActionFeedback, FeedbackType, PanelFocus, TuiApp},
-        theme::{KeyHints, TuiTheme, UiSymbols},
-    },
+use crate::renderers::tui::{
+    app::{ActionFeedback, FeedbackType, PanelFocus, TuiApp},
+    theme::{KeyHints, TuiTheme, UiSymbols},
 };
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout},
@@ -12,9 +10,9 @@ use ratatui::{
 };
 
 pub mod config;
+pub mod details;
 pub mod progress;
 pub mod results;
-pub mod details;
 
 /// Main UI drawing function
 pub fn draw(f: &mut Frame, app: &mut TuiApp) {
@@ -246,5 +244,3 @@ pub(super) fn draw_scrollbar(
         f.render_stateful_widget(scrollbar, scrollbar_area, scrollbar_state);
     }
 }
-
-

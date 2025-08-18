@@ -4,7 +4,7 @@ use crate::progress::ProgressTracker as CliProgressTracker;
 use crate::ui;
 use dialoguer::{Confirm, theme::ColorfulTheme};
 use http_diff::{
-    CliRenderer, DefaultHttpClient, DefaultResponseComparator, DefaultTestRunner, ErrorCollector,
+    CliRenderer, DefaultHttpClient, DefaultResponseComparator, DefaultTestRunner,
     OutputRenderer, ProgressTracker as HttpProgressTracker, TestRunner,
     config::{HttpDiffConfig, ensure_config_files_exist, load_user_data},
     curl::CurlGenerator,
@@ -33,30 +33,6 @@ pub struct HttpDiffArgs {
     pub force_tui: bool,
 }
 
-/// Silent CLI error collector that doesn't print during progress bar execution
-pub struct CliErrorCollector {
-    _verbose: bool,
-}
-
-impl CliErrorCollector {
-    pub fn new(verbose: bool) -> Self {
-        Self { _verbose: verbose }
-    }
-}
-
-impl ErrorCollector for CliErrorCollector {
-    fn record_request_error(&self, _route: &str, _environment: &str, _error: String) {
-        // Do nothing - errors will be collected by the framework and shown after progress completes
-    }
-
-    fn record_comparison_error(&self, _route: &str, _error: String) {
-        // Do nothing - errors will be collected by the framework and shown after progress completes
-    }
-
-    fn record_execution_error(&self, _error: String) {
-        // Do nothing - errors will be collected by the framework and shown after progress completes
-    }
-}
 
 pub fn execute(args: HttpDiffArgs) -> Result<()> {
     // Determine whether to use TUI or CLI based on arguments and environment
@@ -302,17 +278,13 @@ async fn execute_async(args: HttpDiffArgs) -> Result<()> {
     pb.set_style(style);
     pb.set_message("Executing HTTP requests...");
 
-    // Create error collector for structured error handling
-    let error_collector = CliErrorCollector::new(args.verbose);
-
-    // Execute with progress callback and error collection
+    // Execute with progress callback
     let pb_clone = Arc::clone(&pb);
     let execution_result = runner
         .execute_with_data(
             &user_data,
             env_list.clone(),
             route_list,
-            Some(Box::new(error_collector)),
             Some(Box::new(move |p: &HttpProgressTracker| {
                 pb_clone.set_position(p.completed_requests as u64);
             })),

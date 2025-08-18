@@ -214,7 +214,7 @@ pub struct TuiApp {
     pub route_list_state: ListState,
     /// TableState for results table widget
     pub results_table_state: TableState,
-    
+
     // Scrollbar states for visual scroll indicators
     /// ScrollbarState for environments list scrollbar
     pub env_scrollbar_state: ScrollbarState,
@@ -581,7 +581,7 @@ impl TuiApp {
 
         // Reset scroll when changing selection
         self.scroll_offset = 0;
-        
+
         // Sync table state with new selection
         self.sync_results_table_state();
     }
@@ -844,7 +844,8 @@ impl TuiApp {
             self.env_list_state.select(None);
         }
         // Update scrollbar to reflect current state
-        self.env_scrollbar_state = self.env_scrollbar_state
+        self.env_scrollbar_state = self
+            .env_scrollbar_state
             .content_length(self.available_environments.len())
             .position(self.selected_env_index);
     }
@@ -858,7 +859,8 @@ impl TuiApp {
             self.route_list_state.select(None);
         }
         // Update scrollbar to reflect current state
-        self.route_scrollbar_state = self.route_scrollbar_state
+        self.route_scrollbar_state = self
+            .route_scrollbar_state
             .content_length(self.available_routes.len())
             .position(self.selected_route_index);
     }
@@ -872,7 +874,8 @@ impl TuiApp {
             self.results_table_state.select(None);
         }
         // Update scrollbar to reflect current state
-        self.results_scrollbar_state = self.results_scrollbar_state
+        self.results_scrollbar_state = self
+            .results_scrollbar_state
             .content_length(filtered_count)
             .position(self.selected_index);
     }
@@ -880,18 +883,21 @@ impl TuiApp {
     /// Update scrollbar states based on current content and selection
     pub fn update_scrollbar_states(&mut self) {
         // Update environment scrollbar state
-        self.env_scrollbar_state = self.env_scrollbar_state
+        self.env_scrollbar_state = self
+            .env_scrollbar_state
             .content_length(self.available_environments.len())
             .position(self.selected_env_index);
 
-        // Update routes scrollbar state  
-        self.route_scrollbar_state = self.route_scrollbar_state
+        // Update routes scrollbar state
+        self.route_scrollbar_state = self
+            .route_scrollbar_state
             .content_length(self.available_routes.len())
             .position(self.selected_route_index);
 
         // Update results scrollbar state
         let filtered_results = self.filtered_results();
-        self.results_scrollbar_state = self.results_scrollbar_state
+        self.results_scrollbar_state = self
+            .results_scrollbar_state
             .content_length(filtered_results.len())
             .position(self.selected_index);
     }

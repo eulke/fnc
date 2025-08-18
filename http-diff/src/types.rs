@@ -43,7 +43,7 @@ impl HttpResponse {
 
     /// Get the number of lines in the response body
     pub fn line_count(&self) -> usize {
-        crate::utils::text::line_count(&self.body)
+        self.body.lines().count()
     }
 }
 

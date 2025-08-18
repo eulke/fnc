@@ -1,5 +1,8 @@
-use crate::renderers::tui::{app::PanelFocus, theme::{TuiTheme, UiSymbols}};
 use crate::renderers::tui::app::TuiApp;
+use crate::renderers::tui::{
+    app::PanelFocus,
+    theme::{TuiTheme, UiSymbols},
+};
 use ratatui::{
     layout::Constraint,
     prelude::*,
@@ -22,7 +25,8 @@ pub fn draw_dashboard_results_panel(f: &mut Frame, app: &mut TuiApp, area: Rect)
     f.render_widget(block, area);
 
     if app.results.is_empty() {
-        let empty_text = "No results yet\n\nRun tests from the\nConfiguration panel\nto see results here";
+        let empty_text =
+            "No results yet\n\nRun tests from the\nConfiguration panel\nto see results here";
         let empty_para = Paragraph::new(empty_text)
             .style(TuiTheme::secondary_text_style())
             .alignment(ratatui::layout::Alignment::Center);
@@ -30,10 +34,14 @@ pub fn draw_dashboard_results_panel(f: &mut Frame, app: &mut TuiApp, area: Rect)
         return;
     }
 
-    if inner_area.height < 3 { return; }
+    if inner_area.height < 3 {
+        return;
+    }
 
     let filtered_results = app.filtered_results();
-    if filtered_results.is_empty() { return; }
+    if filtered_results.is_empty() {
+        return;
+    }
     let results_count = filtered_results.len();
 
     let header = Row::new(vec!["Route", "Status"]) // compact
@@ -63,15 +71,18 @@ pub fn draw_dashboard_results_panel(f: &mut Frame, app: &mut TuiApp, area: Rect)
         })
         .collect();
 
-    let table = Table::new(rows, [Constraint::Percentage(70), Constraint::Percentage(30)])
-        .header(header)
-        .row_highlight_style(
-            Style::default()
-                .bg(TuiTheme::BACKGROUND_SELECTED)
-                .fg(TuiTheme::FOCUS)
-                .add_modifier(Modifier::BOLD),
-        )
-        .block(Block::default().borders(Borders::NONE));
+    let table = Table::new(
+        rows,
+        [Constraint::Percentage(70), Constraint::Percentage(30)],
+    )
+    .header(header)
+    .row_highlight_style(
+        Style::default()
+            .bg(TuiTheme::BACKGROUND_SELECTED)
+            .fg(TuiTheme::FOCUS)
+            .add_modifier(Modifier::BOLD),
+    )
+    .block(Block::default().borders(Borders::NONE));
 
     f.render_stateful_widget(table, inner_area, &mut app.results_table_state);
 
@@ -86,12 +97,12 @@ pub fn draw_dashboard_results_panel(f: &mut Frame, app: &mut TuiApp, area: Rect)
 }
 
 fn smart_truncate(text: &str, limit: usize) -> String {
-    if text.len() <= limit { return text.to_string(); }
+    if text.len() <= limit {
+        return text.to_string();
+    }
     if let Some(pos) = text[..limit.saturating_sub(3)].rfind(' ') {
         format!("{}...", &text[..pos])
     } else {
         format!("{}...", &text[..limit.saturating_sub(3)])
     }
 }
-
-

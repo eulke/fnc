@@ -70,27 +70,17 @@ impl LargeResponseSummaryBuilder {
     }
 
     /// Generate a summary for two response texts
-    pub fn build_summary(
-        &self,
-        text1: &str,
-        text2: &str,
-        label1: &str,
-        label2: &str,
-    ) -> String {
+    pub fn build_summary(&self, text1: &str, text2: &str, label1: &str, label2: &str) -> String {
         let stats1 = ResponseStats::from_text(text1);
         let stats2 = ResponseStats::from_text(text2);
         self.build_summary_from_stats(&stats1, &stats2, label1, label2)
     }
 
     /// Generate structured diff summary data  
-    pub fn build_structured_summary(
-        &self,
-        text1: &str,
-        text2: &str,
-    ) -> ResponseDiffSummary {
+    pub fn build_structured_summary(&self, text1: &str, text2: &str) -> ResponseDiffSummary {
         let stats1 = ResponseStats::from_text(text1);
         let stats2 = ResponseStats::from_text(text2);
-        
+
         let mut sample_differences = Vec::new();
 
         // Try to detect sample differences from the beginning of responses
@@ -135,10 +125,20 @@ impl LargeResponseSummaryBuilder {
 
         // Add header
         let title_icon = if self.use_emojis { "🔍 " } else { "" };
-        let warning_icon = if self.use_emojis { "⚠️  " } else { "WARNING: " };
-        
-        output.push_str(&format!("{}Large Response Comparison Summary\n", title_icon));
-        output.push_str(&format!("{}Responses are too large for detailed diff - showing summary only\n\n", warning_icon));
+        let warning_icon = if self.use_emojis {
+            "⚠️  "
+        } else {
+            "WARNING: "
+        };
+
+        output.push_str(&format!(
+            "{}Large Response Comparison Summary\n",
+            title_icon
+        ));
+        output.push_str(&format!(
+            "{}Responses are too large for detailed diff - showing summary only\n\n",
+            warning_icon
+        ));
 
         // Build comparison table
         let table = self.build_comparison_table(stats1, stats2, label1, label2);
@@ -167,13 +167,13 @@ impl LargeResponseSummaryBuilder {
     ) -> String {
         let mut table = TableBuilder::new();
         table.headers(vec!["Environment", "Size (bytes)", "Line Count"]);
-        
+
         table.row(vec![
             label1,
             &stats1.size_bytes.to_string(),
             &stats1.line_count.to_string(),
         ]);
-        
+
         table.row(vec![
             label2,
             &stats2.size_bytes.to_string(),
@@ -186,7 +186,7 @@ impl LargeResponseSummaryBuilder {
     /// Build the difference analysis section
     fn build_difference_analysis(&self, stats1: &ResponseStats, stats2: &ResponseStats) -> String {
         let mut output = String::new();
-        
+
         let diff_icon = if self.use_emojis { "📈 " } else { "" };
         output.push_str(&format!("{}Differences:\n", diff_icon));
 
@@ -207,7 +207,10 @@ impl LargeResponseSummaryBuilder {
     /// Build the usage tips section
     fn build_usage_tips(&self) -> String {
         let tip_icon = if self.use_emojis { "💡 " } else { "TIP: " };
-        format!("{}Use curl commands or reduce response size for detailed comparison\n", tip_icon)
+        format!(
+            "{}Use curl commands or reduce response size for detailed comparison\n",
+            tip_icon
+        )
     }
 }
 
@@ -225,7 +228,7 @@ mod tests {
     fn test_response_stats_from_text() {
         let text = "line1\nline2\nline3";
         let stats = ResponseStats::from_text(text);
-        
+
         assert_eq!(stats.size_bytes, 17); // "line1\nline2\nline3".len()
         assert_eq!(stats.line_count, 3);
         assert_eq!(stats.text, text);
@@ -236,9 +239,9 @@ mod tests {
         let builder = LargeResponseSummaryBuilder::new();
         let text1 = "line1\nline2\nline3\nline4";
         let text2 = "line1\nline2\nDIFF\nline4\nline5";
-        
+
         let summary = builder.build_summary(text1, text2, "env1", "env2");
-        
+
         assert!(summary.contains("Large Response Comparison Summary"));
         assert!(summary.contains("env1"));
         assert!(summary.contains("env2"));
@@ -253,9 +256,9 @@ mod tests {
         let builder = LargeResponseSummaryBuilder::new().with_emojis(false);
         let text1 = "short";
         let text2 = "longer text";
-        
+
         let summary = builder.build_summary(text1, text2, "test1", "test2");
-        
+
         assert!(!summary.contains("🔍"));
         assert!(!summary.contains("💡"));
         assert!(summary.contains("WARNING:"));
@@ -268,12 +271,12 @@ mod tests {
             .with_emojis(false)
             .with_differences(false)
             .with_tips(false);
-        
+
         let text1 = "test1";
         let text2 = "test2";
-        
+
         let summary = builder.build_summary(text1, text2, "env1", "env2");
-        
+
         assert!(summary.contains("Large Response Comparison Summary"));
         assert!(summary.contains("env1"));
         assert!(summary.contains("env2"));
@@ -286,9 +289,9 @@ mod tests {
     fn test_identical_responses() {
         let builder = LargeResponseSummaryBuilder::new();
         let text = "identical\ntext\nfor\nboth";
-        
+
         let summary = builder.build_summary(text, text, "env1", "env2");
-        
+
         assert!(summary.contains("Size difference: 0 bytes"));
         assert!(!summary.contains("Line count difference")); // Should not show when identical
     }

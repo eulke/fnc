@@ -189,19 +189,7 @@ impl DiffProcessor {
     /// Create a summary for large response body diffs using shared utility
     fn create_body_summary(&self, body_diff: &BodyDiff) -> BodyDiffSummary {
         let builder = crate::utils::response_summary::LargeResponseSummaryBuilder::new();
-        let summary = builder.build_structured_summary(
-            &body_diff.normalized_body1,
-            &body_diff.normalized_body2,
-        );
-        
-        // Convert from shared utility format to local BodyDiffSummary format
-        BodyDiffSummary {
-            size1: summary.size1,
-            size2: summary.size2,
-            lines1: summary.lines1,
-            lines2: summary.lines2,
-            sample_differences: summary.sample_differences,
-        }
+        builder.build_structured_summary(&body_diff.normalized_body1, &body_diff.normalized_body2)
     }
 
     /// Extract environment names from comparison result
@@ -217,9 +205,11 @@ impl DiffProcessor {
         // If a base environment is present in the result, ensure it's first
         if let Some(base) = &result.base_environment {
             if envs.contains(base) {
-                let other = envs.iter().find(|e| *e != base).cloned().ok_or_else(|| {
-                    "Need at least 2 environments for comparison".to_string()
-                })?;
+                let other = envs
+                    .iter()
+                    .find(|e| *e != base)
+                    .cloned()
+                    .ok_or_else(|| "Need at least 2 environments for comparison".to_string())?;
                 return Ok((base.clone(), other));
             }
         }

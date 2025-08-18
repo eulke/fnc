@@ -1,13 +1,16 @@
 pub mod analyzer;
 /// Response comparison module with pure business logic
 pub mod content;
+pub mod response_validator;
 
 use crate::error::Result;
 use crate::traits::ResponseComparator as ResponseComparatorTrait;
 use crate::types::{ComparisonResult, DiffViewStyle, HttpResponse};
-use crate::validation::ResponseValidatorImpl;
 use analyzer::DifferenceAnalyzer;
 use std::collections::HashMap;
+
+// Re-export for easier access
+pub use response_validator::ResponseValidatorImpl;
 
 /// Response comparator with configurable comparison strategies - pure business logic only
 pub struct ResponseComparator {
@@ -28,7 +31,11 @@ impl ResponseComparator {
         ];
 
         Self {
-            analyzer: DifferenceAnalyzer::new(ignore_headers, true, crate::types::DEFAULT_LARGE_RESPONSE_THRESHOLD),
+            analyzer: DifferenceAnalyzer::new(
+                ignore_headers,
+                true,
+                crate::types::DEFAULT_LARGE_RESPONSE_THRESHOLD,
+            ),
             compare_headers: false,
             diff_view_style: DiffViewStyle::Unified,
         }
@@ -37,7 +44,11 @@ impl ResponseComparator {
     /// Create a comparator with custom settings
     pub fn with_settings(ignore_headers: Vec<String>, ignore_whitespace: bool) -> Self {
         Self {
-            analyzer: DifferenceAnalyzer::new(ignore_headers, ignore_whitespace, crate::types::DEFAULT_LARGE_RESPONSE_THRESHOLD),
+            analyzer: DifferenceAnalyzer::new(
+                ignore_headers,
+                ignore_whitespace,
+                crate::types::DEFAULT_LARGE_RESPONSE_THRESHOLD,
+            ),
             compare_headers: false,
             diff_view_style: DiffViewStyle::Unified,
         }
@@ -87,7 +98,7 @@ impl ResponseComparator {
         responses: HashMap<String, HttpResponse>,
     ) -> Result<ComparisonResult> {
         // Validate responses
-        ResponseValidatorImpl::validate_responses(&responses)?;
+        response_validator::ResponseValidatorImpl::validate_responses(&responses)?;
 
         let mut differences = Vec::new();
         let environments: Vec<String> = responses.keys().cloned().collect();
@@ -116,10 +127,11 @@ impl ResponseComparator {
         let is_identical = differences.is_empty();
 
         // Extract status codes and error information
-        let status_codes = ResponseValidatorImpl::extract_status_codes(&responses);
-        let has_errors = ResponseValidatorImpl::has_error_responses(&responses);
+        let status_codes =
+            response_validator::ResponseValidatorImpl::extract_status_codes(&responses);
+        let has_errors = response_validator::ResponseValidatorImpl::has_error_responses(&responses);
         let error_bodies = if has_errors {
-            Some(ResponseValidatorImpl::get_error_responses(&responses))
+            Some(response_validator::ResponseValidatorImpl::get_error_responses(&responses))
         } else {
             None
         };

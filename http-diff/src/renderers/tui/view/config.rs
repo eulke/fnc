@@ -66,7 +66,9 @@ fn draw_environments_list_widget(
             let checkbox = if selected { "☑" } else { "☐" };
             let text = format!("{} {}", checkbox, env);
             let style = if selected {
-                Style::default().fg(TuiTheme::SUCCESS).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(TuiTheme::SUCCESS)
+                    .add_modifier(Modifier::BOLD)
             } else {
                 TuiTheme::primary_text_style()
             };
@@ -77,7 +79,8 @@ fn draw_environments_list_widget(
     let selected_count = app.selected_environments.len();
     let total_count = app.available_environments.len();
 
-    let is_env_focused = is_panel_focused && matches!(app.focused_panel, FocusedPanel::Environments);
+    let is_env_focused =
+        is_panel_focused && matches!(app.focused_panel, FocusedPanel::Environments);
     let title_text = format!("Environments ({}/{})", selected_count, total_count);
     let block = if is_env_focused {
         TuiTheme::focused_block(&title_text)
@@ -114,7 +117,9 @@ fn draw_routes_list_widget(f: &mut Frame, app: &mut TuiApp, area: Rect, is_panel
             let checkbox = if selected { "☑" } else { "☐" };
             let text = format!("{} {}", checkbox, route);
             let style = if selected {
-                Style::default().fg(TuiTheme::SUCCESS).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(TuiTheme::SUCCESS)
+                    .add_modifier(Modifier::BOLD)
             } else {
                 TuiTheme::primary_text_style()
             };
@@ -172,8 +177,8 @@ fn draw_config_status_line(f: &mut Frame, app: &TuiApp, area: Rect) {
         TuiTheme::success_style()
     };
 
-    let instruction = Paragraph::new(text).style(style).alignment(Alignment::Center);
+    let instruction = Paragraph::new(text)
+        .style(style)
+        .alignment(Alignment::Center);
     f.render_widget(instruction, area);
 }
-
-

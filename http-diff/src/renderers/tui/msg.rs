@@ -68,9 +68,11 @@ pub enum DetailsMsg {
 /// Execution messages coming from async runner
 #[derive(Debug, Clone)]
 pub enum ExecMsg {
-    Progress { completed: usize, total: usize, op: String },
+    Progress {
+        completed: usize,
+        total: usize,
+        op: String,
+    },
     Completed(Vec<ComparisonResult>),
     Failed(String),
 }
-
-

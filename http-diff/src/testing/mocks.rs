@@ -1,9 +1,7 @@
 use crate::config::{Route, UserData};
 use crate::error::Result;
 use crate::execution::progress::ProgressTracker;
-use crate::traits::{
-    HttpClient, RequestBuilder, ResponseComparator, ResponseConverter, TestRunner,
-};
+use crate::traits::{HttpClient, ResponseComparator, TestRunner};
 use crate::types::{ComparisonResult, DiffViewStyle, Difference, DifferenceCategory, HttpResponse};
 use std::collections::HashMap;
 
@@ -185,7 +183,6 @@ impl TestRunner for MockTestRunner {
         _user_data: &[crate::config::UserData],
         _environments: Option<Vec<String>>,
         _routes: Option<Vec<String>>,
-        _error_collector: Option<Box<dyn crate::traits::ErrorCollector>>,
         _progress_callback: Option<Box<dyn Fn(&ProgressTracker) + Send + Sync>>,
     ) -> Result<crate::types::ExecutionResult> {
         if self.should_fail {
@@ -197,112 +194,6 @@ impl TestRunner for MockTestRunner {
             progress,
             Vec::new(), // No errors in mock
         ))
-    }
-}
-
-/// Mock request builder for testing
-pub struct MockRequestBuilder {
-    pub should_fail: bool,
-    pub failure_message: String,
-}
-
-impl MockRequestBuilder {
-    pub fn new() -> Self {
-        Self {
-            should_fail: false,
-            failure_message: "Mock request builder failure".to_string(),
-        }
-    }
-
-    pub fn with_failure(mut self, message: String) -> Self {
-        self.should_fail = true;
-        self.failure_message = message;
-        self
-    }
-}
-
-impl Default for MockRequestBuilder {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl RequestBuilder for MockRequestBuilder {
-    async fn build_request(
-        &self,
-        _route: &Route,
-        _environment: &str,
-        _user_data: &UserData,
-    ) -> Result<reqwest::Request> {
-        if self.should_fail {
-            return Err(crate::error::HttpDiffError::general(&self.failure_message));
-        }
-
-        // Create a basic mock request
-        let url = url::Url::parse("https://example.com/test").unwrap();
-        let request = reqwest::Request::new(reqwest::Method::GET, url);
-        Ok(request)
-    }
-}
-
-/// Mock response converter for testing
-pub struct MockResponseConverter {
-    pub mock_response: Option<HttpResponse>,
-    pub should_fail: bool,
-    pub failure_message: String,
-}
-
-impl MockResponseConverter {
-    pub fn new() -> Self {
-        Self {
-            mock_response: None,
-            should_fail: false,
-            failure_message: "Mock response converter failure".to_string(),
-        }
-    }
-
-    pub fn with_response(mut self, response: HttpResponse) -> Self {
-        self.mock_response = Some(response);
-        self
-    }
-
-    pub fn with_failure(mut self, message: String) -> Self {
-        self.should_fail = true;
-        self.failure_message = message;
-        self
-    }
-}
-
-impl Default for MockResponseConverter {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl ResponseConverter for MockResponseConverter {
-    async fn convert_response(
-        &self,
-        _response: reqwest::Response,
-        curl_command: String,
-    ) -> Result<HttpResponse> {
-        if self.should_fail {
-            return Err(crate::error::HttpDiffError::general(&self.failure_message));
-        }
-
-        if let Some(ref mock_response) = self.mock_response {
-            let mut response = mock_response.clone();
-            response.curl_command = curl_command;
-            Ok(response)
-        } else {
-            // Return a default mock response
-            Ok(HttpResponse {
-                status: 200,
-                headers: HashMap::new(),
-                body: "Mock response body".to_string(),
-                url: "https://example.com/test".to_string(),
-                curl_command,
-            })
-        }
     }
 }
 

@@ -1,5 +1,5 @@
-use crate::renderers::tui::{app::PanelFocus, theme::TuiTheme};
 use crate::renderers::tui::app::TuiApp;
+use crate::renderers::tui::{app::PanelFocus, theme::TuiTheme};
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout},
     prelude::*,
@@ -106,7 +106,11 @@ fn draw_progress_results_summary(f: &mut Frame, app: &TuiApp, area: Rect) {
 
     let (total, identical, different, errors) = app.get_filter_counts();
 
-    let chart_data = [("✅ OK", identical as u64), ("⚠ Diff", different as u64), ("❌ Err", errors as u64)];
+    let chart_data = [
+        ("✅ OK", identical as u64),
+        ("⚠ Diff", different as u64),
+        ("❌ Err", errors as u64),
+    ];
 
     let results_chart = BarChart::default()
         .block(Block::default().title("Test Results").borders(Borders::ALL))
@@ -114,7 +118,11 @@ fn draw_progress_results_summary(f: &mut Frame, app: &TuiApp, area: Rect) {
         .bar_width(5)
         .bar_gap(2)
         .bar_style(Style::default().fg(TuiTheme::SUCCESS))
-        .value_style(Style::default().fg(TuiTheme::TEXT_PRIMARY).add_modifier(Modifier::BOLD));
+        .value_style(
+            Style::default()
+                .fg(TuiTheme::TEXT_PRIMARY)
+                .add_modifier(Modifier::BOLD),
+        );
 
     f.render_widget(results_chart, chunks[1]);
 
@@ -134,11 +142,10 @@ fn draw_progress_results_summary(f: &mut Frame, app: &TuiApp, area: Rect) {
 }
 
 fn draw_progress_ready_state(f: &mut Frame, area: Rect) {
-    let ready_text = "🚀 Ready to Execute\n\n1. Select environments\n2. Select routes\n3. Press 'R' to start";
+    let ready_text =
+        "🚀 Ready to Execute\n\n1. Select environments\n2. Select routes\n3. Press 'R' to start";
     let ready_para = Paragraph::new(ready_text)
         .style(TuiTheme::secondary_text_style())
         .alignment(Alignment::Center);
     f.render_widget(ready_para, area);
 }
-
-

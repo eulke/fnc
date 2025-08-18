@@ -135,20 +135,8 @@ pub struct BodyDiffData {
     pub summary: Option<BodyDiffSummary>,
 }
 
-/// Summary information for large response body diffs
-#[derive(Debug, Clone)]
-pub struct BodyDiffSummary {
-    /// Size of first response in bytes
-    pub size1: usize,
-    /// Size of second response in bytes
-    pub size2: usize,
-    /// Number of lines in first response
-    pub lines1: usize,
-    /// Number of lines in second response
-    pub lines2: usize,
-    /// Sample differences from the beginning of responses
-    pub sample_differences: Vec<String>,
-}
+// BodyDiffSummary moved to utils::response_summary::ResponseDiffSummary to avoid duplication
+pub use crate::utils::response_summary::ResponseDiffSummary as BodyDiffSummary;
 
 impl BodyDiffData {
     /// Create new body diff data

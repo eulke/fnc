@@ -6,17 +6,17 @@
 #[cfg(feature = "tui")]
 pub mod app;
 #[cfg(feature = "tui")]
-pub mod msg;
-#[cfg(feature = "tui")]
-pub mod update;
-#[cfg(feature = "tui")]
-pub mod exec;
-#[cfg(feature = "tui")]
 pub mod diff_widgets;
 #[cfg(feature = "tui")]
 pub mod events;
 #[cfg(feature = "tui")]
+pub mod exec;
+#[cfg(feature = "tui")]
+pub mod msg;
+#[cfg(feature = "tui")]
 pub mod theme;
+#[cfg(feature = "tui")]
+pub mod update;
 #[cfg(feature = "tui")]
 pub mod view;
 
@@ -251,7 +251,9 @@ impl TuiRenderer {
             // Check for execution messages
             while let Ok(message) = rx.try_recv() {
                 let _ = update::update(&mut app, msg::Msg::Exec(message));
-                if !app.execution_running { execution_handle = None; }
+                if !app.execution_running {
+                    execution_handle = None;
+                }
             }
 
             // Handle execution cancellation
@@ -287,15 +289,34 @@ impl TuiRenderer {
                 match effect {
                     update::Effect::Quit => {
                         if let Some(handle) = execution_handle.take() {
-                            std::thread::spawn(move || { let _ = handle.join(); });
+                            std::thread::spawn(move || {
+                                let _ = handle.join();
+                            });
                         }
                         break;
                     }
-                    update::Effect::SaveReport => { let _ = app.generate_html_report(); }
-                    update::Effect::StartExec { config_path, users, envs, routes, include_headers, include_errors } => {
+                    update::Effect::SaveReport => {
+                        let _ = app.generate_html_report();
+                    }
+                    update::Effect::StartExec {
+                        config_path,
+                        users,
+                        envs,
+                        routes,
+                        include_headers,
+                        include_errors,
+                    } => {
                         if execution_handle.is_none() {
                             let tx_clone = tx.clone();
-                            execution_handle = Some(exec::spawn(tx_clone, config_path, users, envs, routes, include_headers, include_errors));
+                            execution_handle = Some(exec::spawn(
+                                tx_clone,
+                                config_path,
+                                users,
+                                envs,
+                                routes,
+                                include_headers,
+                                include_errors,
+                            ));
                         }
                     }
                     update::Effect::None => {}

@@ -77,30 +77,37 @@ impl UserData {
         url_encode: bool,
         strict: bool,
     ) -> Result<String> {
-        let mut result = text.to_string();
-        let mut position = 0;
+        // Use single-pass algorithm to avoid multiple reallocations
+        let mut result = String::with_capacity(text.len() + 50); // Pre-allocate with some extra space
+        let mut chars = text.char_indices().peekable();
 
-        // Find and replace all valid {parameter} placeholders
-        while let Some(start) = result[position..].find('{') {
-            let start = position + start;
+        while let Some((_pos, ch)) = chars.next() {
+            if ch == '{' {
+                // Found potential parameter start, collect parameter name
+                let mut param_name = String::new();
+                let mut found_end = false;
 
-            if let Some(relative_end) = result[start..].find('}') {
-                let end = start + relative_end;
-                let param_name = &result[start + 1..end];
+                while let Some((_, next_ch)) = chars.peek() {
+                    if *next_ch == '}' {
+                        chars.next(); // consume the '}'
+                        found_end = true;
+                        break;
+                    } else if *next_ch == '{' {
+                        // Nested braces, not a valid parameter
+                        break;
+                    } else {
+                        param_name.push(chars.next().unwrap().1);
+                    }
+                }
 
-                // Check if this looks like a valid parameter placeholder
-                if is_valid_param_name(param_name) {
-                    if let Some(value) = self.data.get(param_name) {
-                        // We have the parameter value, substitute it
-                        let final_value = if url_encode {
-                            urlencoding::encode(value).to_string()
+                if found_end && is_valid_param_name(&param_name) {
+                    if let Some(value) = self.data.get(&param_name) {
+                        // Substitute the parameter
+                        if url_encode {
+                            result.push_str(&urlencoding::encode(value));
                         } else {
-                            value.clone()
-                        };
-
-                        result.replace_range(start..=end, &final_value);
-                        // Continue from after the replacement
-                        position = start + final_value.len();
+                            result.push_str(value);
+                        }
                     } else if strict {
                         // Strict mode: error if parameter is missing
                         let available = self
@@ -110,7 +117,7 @@ impl UserData {
                             .collect::<Vec<_>>()
                             .join(", ");
                         return Err(HttpDiffError::MissingPathParameter {
-                            param: param_name.to_string(),
+                            param: param_name,
                             available_params: if available.is_empty() {
                                 "none".to_string()
                             } else {
@@ -118,16 +125,21 @@ impl UserData {
                             },
                         });
                     } else {
-                        // Non-strict mode: skip this placeholder and continue searching after it
-                        position = end + 1;
+                        // Non-strict mode: preserve the original placeholder
+                        result.push('{');
+                        result.push_str(&param_name);
+                        result.push('}');
                     }
                 } else {
-                    // Not a valid parameter name, skip this placeholder
-                    position = end + 1;
+                    // Invalid parameter format, preserve the original text
+                    result.push(ch);
+                    result.push_str(&param_name);
+                    if found_end {
+                        result.push('}');
+                    }
                 }
             } else {
-                // No closing brace found, stop searching
-                break;
+                result.push(ch);
             }
         }
 

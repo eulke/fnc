@@ -165,7 +165,7 @@ impl HtmlComponents {
 
         // Categorize routes for better organization
         let (identical_routes, different_routes, failed_routes) = Self::categorize_routes(results);
-        
+
         // Process all route types in order: failed first (highest priority), then different, then identical
         let all_routes_ordered = [failed_routes, different_routes, identical_routes].concat();
 
@@ -176,12 +176,8 @@ impl HtmlComponents {
                 }
             }
 
-            let route_card = Self::render_route_card(
-                result,
-                &diff_processor,
-                &json_renderer,
-                show_unchanged,
-            );
+            let route_card =
+                Self::render_route_card(result, &diff_processor, &json_renderer, show_unchanged);
 
             route_cards.push_str(&route_card);
             processed_count += 1;
@@ -213,13 +209,18 @@ impl HtmlComponents {
             </div>
         </div>
         "#,
-            header_note,
-            route_cards
+            header_note, route_cards
         )
     }
 
     /// Categorize routes into identical, different, and failed groups
-    fn categorize_routes(results: &[ComparisonResult]) -> (Vec<&ComparisonResult>, Vec<&ComparisonResult>, Vec<&ComparisonResult>) {
+    fn categorize_routes(
+        results: &[ComparisonResult],
+    ) -> (
+        Vec<&ComparisonResult>,
+        Vec<&ComparisonResult>,
+        Vec<&ComparisonResult>,
+    ) {
         let mut identical_routes = Vec::new();
         let mut different_routes = Vec::new();
         let mut failed_routes = Vec::new();
@@ -249,7 +250,7 @@ impl HtmlComponents {
         let user_context = Self::format_user_context(result);
         let status_codes = Self::format_status_codes(result);
         let curl_commands = Self::render_curl_commands(result);
-        
+
         // Generate content based on route type
         let expandable_content = if result.has_errors {
             Self::render_failed_route_content(result, &curl_commands)
@@ -262,8 +263,14 @@ impl HtmlComponents {
                     if let Some(body_diff) = &diff_data.body {
                         if body_diff.has_differences {
                             let diff_summary = json_renderer.render_diff_summary(body_diff);
-                            let diff_content = json_renderer.render_body_diff(body_diff, show_unchanged);
-                            Self::render_different_route_content(result, &diff_summary, &diff_content, &curl_commands)
+                            let diff_content =
+                                json_renderer.render_body_diff(body_diff, show_unchanged);
+                            Self::render_different_route_content(
+                                result,
+                                &diff_summary,
+                                &diff_content,
+                                &curl_commands,
+                            )
                         } else {
                             Self::render_identical_route_content(result, &curl_commands)
                         }
@@ -271,9 +278,7 @@ impl HtmlComponents {
                         Self::render_identical_route_content(result, &curl_commands)
                     }
                 }
-                Err(_) => {
-                    Self::render_failed_route_content(result, &curl_commands)
-                }
+                Err(_) => Self::render_failed_route_content(result, &curl_commands),
             }
         };
 
@@ -371,12 +376,12 @@ impl HtmlComponents {
     /// Render curl commands for a route
     fn render_curl_commands(result: &ComparisonResult) -> String {
         let mut curl_commands = String::new();
-        
+
         for (env, response) in &result.responses {
             let status_class = if response.status >= 200 && response.status < 300 {
                 "success"
             } else if response.status >= 400 {
-                "error" 
+                "error"
             } else {
                 "warning"
             };
@@ -436,7 +441,10 @@ impl HtmlComponents {
                 </div>
                 "#,
                 response.body.len(),
-                response.headers.get("content-type").unwrap_or(&"unknown".to_string()),
+                response
+                    .headers
+                    .get("content-type")
+                    .unwrap_or(&"unknown".to_string()),
                 response.body.lines().count()
             )
         } else {
@@ -457,8 +465,7 @@ impl HtmlComponents {
                 {}
             </div>
             "#,
-            response_summary,
-            curl_commands
+            response_summary, curl_commands
         )
     }
 
@@ -509,8 +516,7 @@ impl HtmlComponents {
                 {}
             </div>
             "#,
-            error_details,
-            curl_commands
+            error_details, curl_commands
         )
     }
 
@@ -538,9 +544,7 @@ impl HtmlComponents {
                 {}
             </div>
             "#,
-            diff_summary,
-            diff_content,
-            curl_commands
+            diff_summary, diff_content, curl_commands
         )
     }
 
@@ -658,5 +662,4 @@ impl HtmlComponents {
             _ => "error",
         }
     }
-
 }

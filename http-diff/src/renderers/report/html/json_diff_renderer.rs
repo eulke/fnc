@@ -50,7 +50,11 @@ impl JsonDiffRenderer {
         }
 
         if body_diff.is_large_response {
-            return self.render_large_response_summary(&body_diff.env1, &body_diff.env2, &body_diff.summary);
+            return self.render_large_response_summary(
+                &body_diff.env1,
+                &body_diff.env2,
+                &body_diff.summary,
+            );
         }
 
         let rows_html = self.render_rows(&body_diff.rows, show_unchanged);
@@ -81,7 +85,9 @@ impl JsonDiffRenderer {
         env2: &str,
         summary: &Option<BodyDiffSummary>,
     ) -> String {
-        let Some(summary) = summary else { return String::new(); };
+        let Some(summary) = summary else {
+            return String::new();
+        };
         format!(
             r#"
         <div class="json-diff-container large-response">
@@ -234,5 +240,3 @@ mod tests {
         assert!(html.contains("json-row-changed"));
     }
 }
-
-

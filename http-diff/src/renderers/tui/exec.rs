@@ -16,10 +16,7 @@ pub fn spawn(
         let rt = match tokio::runtime::Runtime::new() {
             Ok(rt) => rt,
             Err(e) => {
-                let _ = tx.send(ExecMsg::Failed(format!(
-                    "Failed to create runtime: {}",
-                    e
-                )));
+                let _ = tx.send(ExecMsg::Failed(format!("Failed to create runtime: {}", e)));
                 return;
             }
         };
@@ -91,10 +88,7 @@ pub async fn execute_http_tests_async(
     let user_data = match load_user_data(users_path) {
         Ok(data) => data,
         Err(e) => {
-            let _ = tx.send(ExecMsg::Failed(format!(
-                "Failed to load user data: {}",
-                e
-            )));
+            let _ = tx.send(ExecMsg::Failed(format!("Failed to load user data: {}", e)));
             return;
         }
     };
@@ -148,7 +142,6 @@ pub async fn execute_http_tests_async(
             &user_data,
             Some(selected_environments),
             Some(selected_routes),
-            None, // No error collector for now
             Some(progress_callback),
         )
         .await
@@ -157,12 +150,7 @@ pub async fn execute_http_tests_async(
             let _ = tx.send(ExecMsg::Completed(execution_result.comparisons));
         }
         Err(e) => {
-            let _ = tx.send(ExecMsg::Failed(format!(
-                "Test execution failed: {}",
-                e
-            )));
+            let _ = tx.send(ExecMsg::Failed(format!("Test execution failed: {}", e)));
         }
     }
 }
-
-

@@ -77,9 +77,12 @@ mod tests {
 
         assert_eq!(config.timeout_seconds, Some(30));
         assert_eq!(config.follow_redirects, Some(true));
-        
+
         let headers = config.headers.unwrap();
-        assert_eq!(headers.get("Authorization"), Some(&"Bearer token".to_string()));
+        assert_eq!(
+            headers.get("Authorization"),
+            Some(&"Bearer token".to_string())
+        );
         assert_eq!(headers.get("Accept"), Some(&"application/json".to_string()));
     }
 
@@ -99,7 +102,7 @@ mod tests {
 
         assert_eq!(config.timeout_seconds, Some(30));
         assert_eq!(config.follow_redirects, Some(false));
-        
+
         let headers = config.headers.unwrap();
         assert_eq!(headers.get("X-Custom"), Some(&"value".to_string()));
     }

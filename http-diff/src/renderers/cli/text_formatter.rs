@@ -25,7 +25,6 @@ impl Default for FormatterConfig {
     }
 }
 
-
 /// Text formatter with various utility functions
 pub struct TextFormatter {
     config: FormatterConfig,
@@ -85,32 +84,9 @@ impl TextFormatter {
         label1: &str,
         label2: &str,
     ) -> String {
-        // Use shared utility for basic summary with disabled tips (we add our own)
-        let builder = crate::utils::response_summary::LargeResponseSummaryBuilder::new()
-            .with_tips(false);
-        let mut output = builder.build_summary(text1, text2, &label1.to_uppercase(), &label2.to_uppercase());
-
-        // Add sample differences detection (unique to this formatter)
-        let first_lines1: Vec<_> = text1.lines().take(10).collect();
-        let first_lines2: Vec<_> = text2.lines().take(10).collect();
-
-        if first_lines1 != first_lines2 {
-            use std::fmt::Write;
-            writeln!(output, "🔍 Sample Differences (first 10 lines):").unwrap();
-            for (i, (line1, line2)) in first_lines1.iter().zip(first_lines2.iter()).enumerate() {
-                if line1 != line2 {
-                    writeln!(output, "   Line {}: content differs", i + 1).unwrap();
-                    if output.lines().count() > 20 {
-                        // Limit output
-                        writeln!(output, "   ... (truncated)").unwrap();
-                        break;
-                    }
-                }
-            }
-            writeln!(output).unwrap();
-        }
-
-        output
+        // Use shared utility for complete summary including differences
+        let builder = crate::utils::response_summary::LargeResponseSummaryBuilder::new();
+        builder.build_summary(text1, text2, &label1.to_uppercase(), &label2.to_uppercase())
     }
 
     /// Format a side-by-side diff using proper table rendering with diff styling
