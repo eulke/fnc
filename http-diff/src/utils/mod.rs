@@ -4,4 +4,5 @@
 //! parts of the application.
 
 pub mod diff;
+pub mod response_summary;
 pub mod text;

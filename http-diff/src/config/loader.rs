@@ -6,26 +6,14 @@ use std::path::Path;
 /// Configuration loader trait
 pub trait ConfigLoader {
     fn load_from_file<P: AsRef<Path>>(path: P) -> Result<HttpDiffConfig>;
-    fn load_with_validation<P: AsRef<Path>>(path: P) -> Result<HttpDiffConfig>;
 }
 
 /// Default configuration loader implementation
 pub struct DefaultConfigLoader;
 
 impl ConfigLoader for DefaultConfigLoader {
-    /// Load configuration from http-diff.toml file
+    /// Load configuration from http-diff.toml file with validation and enhanced error context
     fn load_from_file<P: AsRef<Path>>(path: P) -> Result<HttpDiffConfig> {
-        let content =
-            std::fs::read_to_string(&path).map_err(|_| HttpDiffError::ConfigNotFound {
-                path: path.as_ref().to_path_buf(),
-            })?;
-
-        let config: HttpDiffConfig = toml::from_str(&content)?;
-        Ok(config)
-    }
-
-    /// Load configuration with enhanced error context
-    fn load_with_validation<P: AsRef<Path>>(path: P) -> Result<HttpDiffConfig> {
         let path_ref = path.as_ref();
 
         // Check if file exists and provide helpful error message
@@ -79,13 +67,8 @@ impl HttpDiffConfig {
         crate::config::builder::HttpDiffConfigBuilder::new()
     }
 
-    /// Load configuration from http-diff.toml file
+    /// Load configuration from http-diff.toml file with validation and enhanced error context
     pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         DefaultConfigLoader::load_from_file(path)
-    }
-
-    /// Load configuration with enhanced error context
-    pub fn load_with_validation<P: AsRef<Path>>(path: P) -> Result<Self> {
-        DefaultConfigLoader::load_with_validation(path)
     }
 }

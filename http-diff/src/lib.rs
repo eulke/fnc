@@ -190,7 +190,7 @@ mod tests {
     #[test]
     fn test_factory_functions() {
         let config = HttpDiffConfig::builder()
-            .environment("test", "https://test.example.com")
+            .environment("test", "https://test.example.com", None)
             .get_route("health", "/health")
             .build()
             .unwrap();

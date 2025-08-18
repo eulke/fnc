@@ -19,81 +19,65 @@ impl HttpDiffConfigBuilder {
         }
     }
 
-    /// Add an environment
+    /// Add an environment with optional headers
     #[must_use]
-    pub fn environment<S: Into<String>>(mut self, name: S, base_url: S) -> Self {
-        self.environments.insert(
-            name.into(),
-            Environment {
-                base_url: base_url.into(),
-                headers: None,
-                is_base: false,
-            },
-        );
-        self
-    }
-
-    /// Add an environment with headers
-    pub fn environment_with_headers<S: Into<String>>(
-        mut self,
-        name: S,
-        base_url: S,
-        headers: HashMap<String, String>,
+    pub fn environment<S: Into<String>>(
+        mut self, 
+        name: S, 
+        base_url: S, 
+        headers: Option<HashMap<String, String>>
     ) -> Self {
         self.environments.insert(
             name.into(),
             Environment {
                 base_url: base_url.into(),
-                headers: Some(headers),
+                headers,
                 is_base: false,
             },
         );
         self
     }
 
-    /// Set global configuration
+    /// Set global configuration directly
     pub fn global_config(mut self, global: GlobalConfig) -> Self {
         self.global = Some(global);
         self
     }
 
-    /// Set timeout in seconds
-    pub fn timeout(mut self, seconds: u64) -> Self {
-        let mut global = self.global.unwrap_or_default();
-        global.timeout_seconds = Some(seconds);
-        self.global = Some(global);
+    /// Configure global settings using fluent builder
+    pub fn configure_global<F>(mut self, configure_fn: F) -> Self 
+    where
+        F: FnOnce(crate::config::global_builder::GlobalConfigBuilder) -> crate::config::global_builder::GlobalConfigBuilder,
+    {
+        let builder = if let Some(existing) = self.global.take() {
+            crate::config::global_builder::GlobalConfigBuilder::from_config(existing)
+        } else {
+            crate::config::global_builder::GlobalConfigBuilder::new()
+        };
+        
+        let global_config = configure_fn(builder).build();
+        self.global = Some(global_config);
         self
     }
 
-    /// Set whether to follow redirects
-    pub fn follow_redirects(mut self, follow: bool) -> Self {
-        let mut global = self.global.unwrap_or_default();
-        global.follow_redirects = Some(follow);
-        self.global = Some(global);
-        self
+    /// Set timeout in seconds (convenience method)
+    pub fn timeout(self, seconds: u64) -> Self {
+        self.configure_global(|global| global.timeout(seconds))
     }
 
-    /// Add global headers
-    pub fn global_headers(mut self, headers: HashMap<String, String>) -> Self {
-        let mut global = self.global.unwrap_or_default();
-        global.headers = Some(headers);
-        self.global = Some(global);
-        self
+    /// Set whether to follow redirects (convenience method)
+    pub fn follow_redirects(self, follow: bool) -> Self {
+        self.configure_global(|global| global.follow_redirects(follow))
     }
 
-    /// Add a global header
-    pub fn global_header<S: Into<String>>(mut self, key: S, value: S) -> Self {
-        let mut global = self.global.unwrap_or_default();
-        if global.headers.is_none() {
-            global.headers = Some(HashMap::new());
-        }
-        global
-            .headers
-            .as_mut()
-            .unwrap()
-            .insert(key.into(), value.into());
-        self.global = Some(global);
-        self
+    /// Add global headers (convenience method)
+    pub fn global_headers(self, headers: HashMap<String, String>) -> Self {
+        self.configure_global(|global| global.headers(headers))
+    }
+
+    /// Add a global header (convenience method)
+    pub fn global_header<S: Into<String>>(self, key: S, value: S) -> Self {
+        self.configure_global(|global| global.header(key, value))
     }
 
     /// Add a route
@@ -102,33 +86,43 @@ impl HttpDiffConfigBuilder {
         self
     }
 
-    /// Add a simple GET route
+    /// Add a route with specified HTTP method and optional body
     #[must_use]
-    pub fn get_route<S: Into<String>>(mut self, name: S, path: S) -> Self {
+    pub fn add_route<N, M, P, B>(
+        mut self, 
+        name: N, 
+        method: M, 
+        path: P, 
+        body: Option<B>
+    ) -> Self 
+    where
+        N: Into<String>,
+        M: Into<String>, 
+        P: Into<String>,
+        B: Into<String>,
+    {
         self.routes.push(Route {
             name: name.into(),
-            method: "GET".to_string(),
+            method: method.into(),
             path: path.into(),
             headers: None,
             params: None,
             base_urls: None,
-            body: None,
+            body: body.map(|b| b.into()),
         });
         self
     }
 
-    /// Add a POST route with body
-    pub fn post_route<S: Into<String>>(mut self, name: S, path: S, body: S) -> Self {
-        self.routes.push(Route {
-            name: name.into(),
-            method: "POST".to_string(),
-            path: path.into(),
-            headers: None,
-            params: None,
-            base_urls: None,
-            body: Some(body.into()),
-        });
-        self
+    /// Add a simple GET route (convenience method)
+    #[must_use]
+    pub fn get_route<S: Into<String>>(self, name: S, path: S) -> Self {
+        self.add_route(name, "GET", path, None::<&str>)
+    }
+
+    /// Add a POST route with body (convenience method)  
+    #[must_use]
+    pub fn post_route<S: Into<String>>(self, name: S, path: S, body: S) -> Self {
+        self.add_route(name, "POST", path, Some(body))
     }
 
     /// Build the configuration

@@ -4,8 +4,6 @@
 //! with configurable formatting options.
 
 use super::table::{cells, TableBuilder, TableStyle};
-use std::fmt::Write;
-
 /// Configuration for text formatting operations
 #[derive(Debug, Clone)]
 pub struct FormatterConfig {
@@ -87,49 +85,18 @@ impl TextFormatter {
         label1: &str,
         label2: &str,
     ) -> String {
-        let lines1 = text1.lines().count();
-        let lines2 = text2.lines().count();
-        let size1 = text1.len();
-        let size2 = text2.len();
+        // Use shared utility for basic summary with disabled tips (we add our own)
+        let builder = crate::utils::response_summary::LargeResponseSummaryBuilder::new()
+            .with_tips(false);
+        let mut output = builder.build_summary(text1, text2, &label1.to_uppercase(), &label2.to_uppercase());
 
-        let mut table = TableBuilder::new();
-        table.headers(vec!["Environment", "Size (bytes)", "Lines"]);
-        table.row(vec![
-            &label1.to_uppercase(),
-            &size1.to_string(),
-            &lines1.to_string(),
-        ]);
-        table.row(vec![
-            &label2.to_uppercase(),
-            &size2.to_string(),
-            &lines2.to_string(),
-        ]);
-
-        let mut output = String::new();
-        writeln!(output, "🔍 Large Response Comparison Summary").unwrap();
-        writeln!(
-            output,
-            "⚠️  Responses are too large for detailed diff - showing summary only\n"
-        )
-        .unwrap();
-        output.push_str(&table.build());
-        writeln!(output).unwrap();
-
-        writeln!(output, "\n📈 Differences:").unwrap();
-        let size_diff = (size1 as i64 - size2 as i64).abs();
-        writeln!(output, "   Size difference: {} bytes", size_diff).unwrap();
-
-        if lines1 != lines2 {
-            let line_diff = (lines1 as i64 - lines2 as i64).abs();
-            writeln!(output, "   Line count difference: {} lines", line_diff).unwrap();
-        }
-
-        // Try to detect what kind of differences exist
+        // Add sample differences detection (unique to this formatter)
         let first_lines1: Vec<_> = text1.lines().take(10).collect();
         let first_lines2: Vec<_> = text2.lines().take(10).collect();
 
         if first_lines1 != first_lines2 {
-            writeln!(output, "\n🔍 Sample Differences (first 10 lines):").unwrap();
+            use std::fmt::Write;
+            writeln!(output, "🔍 Sample Differences (first 10 lines):").unwrap();
             for (i, (line1, line2)) in first_lines1.iter().zip(first_lines2.iter()).enumerate() {
                 if line1 != line2 {
                     writeln!(output, "   Line {}: content differs", i + 1).unwrap();
@@ -140,6 +107,7 @@ impl TextFormatter {
                     }
                 }
             }
+            writeln!(output).unwrap();
         }
 
         output

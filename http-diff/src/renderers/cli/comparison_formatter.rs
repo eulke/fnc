@@ -151,43 +151,23 @@ impl ComparisonFormatter {
             .side_by_side_diff(text1, text2, env1, env2)
     }
 
-    /// Format large response summary
+    /// Format large response summary using shared utility
     fn format_large_response_summary(
         &self,
         body_diff: &BodyDiff,
         env1: &str,
         env2: &str,
     ) -> String {
-        let lines1 = body_diff.normalized_body1.lines().count();
-        let lines2 = body_diff.normalized_body2.lines().count();
-        let size1 = body_diff.normalized_body1.len();
-        let size2 = body_diff.normalized_body2.len();
-
-        let mut table = TableBuilder::new();
-        table.headers(vec!["Environment", "Response Size", "Line Count"]);
-        table.row(vec![env1, &format!("{} bytes", size1), &lines1.to_string()]);
-        table.row(vec![env2, &format!("{} bytes", size2), &lines2.to_string()]);
-        let table_output = table.build();
-
-        let mut output = String::new();
-        output.push_str("\n🔍 Large Response Comparison Summary\n");
-        output.push_str("⚠️  Responses are too large for detailed diff - showing summary only\n\n");
-        output.push_str(&table_output);
-
-        // Add size difference analysis
-        output.push_str("\n📈 Differences:\n");
-        let size_diff = (size1 as i64 - size2 as i64).abs();
-        output.push_str(&format!("   Size difference: {} bytes\n", size_diff));
-
-        if lines1 != lines2 {
-            let line_diff = (lines1 as i64 - lines2 as i64).abs();
-            output.push_str(&format!("   Line count difference: {} lines\n", line_diff));
-        }
-
-        output.push_str(
-            "\n💡 Tip: Use curl commands or reduce response size for detailed comparison\n",
-        );
-        output
+        let builder = crate::utils::response_summary::LargeResponseSummaryBuilder::new();
+        format!(
+            "\n{}",
+            builder.build_summary(
+                &body_diff.normalized_body1,
+                &body_diff.normalized_body2,
+                env1,
+                env2
+            )
+        )
     }
 }
 
@@ -296,10 +276,10 @@ mod tests {
 
         assert!(output.contains("Large Response Comparison Summary"));
         assert!(output.contains("Environment"));
-        assert!(output.contains("Response Size"));
-        assert!(output.contains("60000 bytes"));
+        assert!(output.contains("Size (bytes)"));
+        assert!(output.contains("60000"));
         assert!(output.contains("Size difference:"));
-        assert!(output.contains("💡 Tip:"));
+        assert!(output.contains("💡 Use curl commands"));
     }
 
     #[test]

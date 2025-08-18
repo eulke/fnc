@@ -186,42 +186,21 @@ impl DiffProcessor {
         data
     }
 
-    /// Create a summary for large response body diffs
+    /// Create a summary for large response body diffs using shared utility
     fn create_body_summary(&self, body_diff: &BodyDiff) -> BodyDiffSummary {
-        let lines1 = body_diff.normalized_body1.lines().count();
-        let lines2 = body_diff.normalized_body2.lines().count();
-        let size1 = body_diff.normalized_body1.len();
-        let size2 = body_diff.normalized_body2.len();
-
-        let mut sample_differences = Vec::new();
-
-        // Try to detect sample differences from the beginning of responses
-        let first_lines1: Vec<_> = body_diff.normalized_body1.lines().take(10).collect();
-        let first_lines2: Vec<_> = body_diff.normalized_body2.lines().take(10).collect();
-
-        for (i, (line1, line2)) in first_lines1.iter().zip(first_lines2.iter()).enumerate() {
-            if line1 != line2 {
-                sample_differences.push(format!("Line {}: content differs", i + 1));
-                if sample_differences.len() >= 5 {
-                    // Limit sample differences to avoid overwhelming output
-                    sample_differences.push("... (additional differences truncated)".to_string());
-                    break;
-                }
-            }
-        }
-
-        // Check if one response has more lines than the other
-        if lines1 != lines2 {
-            let diff = (lines1 as i64 - lines2 as i64).abs();
-            sample_differences.push(format!("Line count differs by {} lines", diff));
-        }
-
+        let builder = crate::utils::response_summary::LargeResponseSummaryBuilder::new();
+        let summary = builder.build_structured_summary(
+            &body_diff.normalized_body1,
+            &body_diff.normalized_body2,
+        );
+        
+        // Convert from shared utility format to local BodyDiffSummary format
         BodyDiffSummary {
-            size1,
-            size2,
-            lines1,
-            lines2,
-            sample_differences,
+            size1: summary.size1,
+            size2: summary.size2,
+            lines1: summary.lines1,
+            lines2: summary.lines2,
+            sample_differences: summary.sample_differences,
         }
     }
 
