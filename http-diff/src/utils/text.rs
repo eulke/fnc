@@ -25,10 +25,6 @@ pub fn truncate_lines(text: &str, max_lines: usize) -> String {
     result
 }
 
-/// Get a preview of text (first few lines)
-pub fn preview(text: &str, max_lines: usize) -> String {
-    truncate_lines(text, max_lines)
-}
 
 /// Check if two texts are identical
 pub fn are_identical(text1: &str, text2: &str) -> bool {
@@ -46,6 +42,6 @@ mod tests {
         assert_eq!(line_count(text), 4);
         assert_eq!(byte_size(text), text.len());
         assert_eq!(truncate_lines(text, 2), "line1\nline2\n... (truncated)");
-        assert_eq!(preview(text, 3), "line1\nline2\nline3\n... (truncated)");
+        assert_eq!(truncate_lines(text, 3), "line1\nline2\nline3\n... (truncated)");
     }
 }

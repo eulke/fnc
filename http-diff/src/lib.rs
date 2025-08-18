@@ -66,25 +66,11 @@ pub use error::{HttpDiffError, Result};
 // Re-export utility modules
 pub use url_builder::UrlBuilder;
 
-/// Create a default HTTP client with configuration
-pub fn create_http_client(config: HttpDiffConfig) -> Result<DefaultHttpClient> {
-    DefaultHttpClient::new(config)
-}
-
-/// Create a default test runner with configuration
-pub fn create_test_runner(
-    config: HttpDiffConfig,
-    client: impl HttpClient,
-    comparator: impl ResponseComparator,
-) -> Result<DefaultTestRunner<impl HttpClient, impl ResponseComparator>> {
-    DefaultTestRunner::new(config, client, comparator)
-}
-
 /// Create a test runner with default implementations
 pub fn create_default_test_runner(
     config: HttpDiffConfig,
 ) -> Result<DefaultTestRunner<DefaultHttpClient, DefaultResponseComparator>> {
-    let client = create_http_client(config.clone())?;
+    let client = DefaultHttpClient::new(config.clone())?;
     let comparator = DefaultResponseComparator::new();
     DefaultTestRunner::new(config, client, comparator)
 }
@@ -209,8 +195,8 @@ mod tests {
             .build()
             .unwrap();
 
-        // Test creating HTTP client
-        let client = create_http_client(config.clone());
+        // Test creating HTTP client directly
+        let client = DefaultHttpClient::new(config.clone());
         assert!(client.is_ok());
 
         // Test creating default test runner

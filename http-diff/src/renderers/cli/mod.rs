@@ -14,4 +14,4 @@ pub use comparison_formatter::ComparisonFormatter;
 pub use error_renderer::ErrorRenderer;
 pub use renderer::CliRenderer;
 pub use table::{TableBuilder, TableStyle};
-pub use text_formatter::{DiffStyle, FormatterConfig, TextFormatter};
+pub use text_formatter::{FormatterConfig, TextFormatter};

@@ -1,5 +1,8 @@
 use std::collections::HashMap;
 
+/// Default threshold for large response processing (50KB)
+pub const DEFAULT_LARGE_RESPONSE_THRESHOLD: usize = 50_000;
+
 /// HTTP response data with metadata
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct HttpResponse {
@@ -40,7 +43,7 @@ impl HttpResponse {
 
     /// Get the number of lines in the response body
     pub fn line_count(&self) -> usize {
-        self.body.lines().count()
+        crate::utils::text::line_count(&self.body)
     }
 }
 

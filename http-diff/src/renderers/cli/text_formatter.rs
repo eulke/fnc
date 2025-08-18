@@ -20,21 +20,13 @@ pub struct FormatterConfig {
 impl Default for FormatterConfig {
     fn default() -> Self {
         Self {
-            large_response_threshold: 50_000, // 50KB
+            large_response_threshold: crate::types::DEFAULT_LARGE_RESPONSE_THRESHOLD,
             max_column_width: 80,
             preserve_ansi: true,
         }
     }
 }
 
-/// Diff view style for text comparison
-#[derive(Debug, Clone, PartialEq)]
-pub enum DiffStyle {
-    /// Traditional unified diff (up/down)
-    Unified,
-    /// Side-by-side diff view
-    SideBySide,
-}
 
 /// Text formatter with various utility functions
 pub struct TextFormatter {

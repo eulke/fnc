@@ -209,7 +209,7 @@ mod tests {
 
     #[test]
     fn test_identical_responses() {
-        let analyzer = DifferenceAnalyzer::new(vec![], true, 50_000);
+        let analyzer = DifferenceAnalyzer::new(vec![], true, crate::types::DEFAULT_LARGE_RESPONSE_THRESHOLD);
 
         let response1 = create_test_response(200, r#"{"status": "ok"}"#);
         let response2 = create_test_response(200, r#"{"status": "ok"}"#);
@@ -222,7 +222,7 @@ mod tests {
 
     #[test]
     fn test_status_code_difference() {
-        let analyzer = DifferenceAnalyzer::new(vec![], true, 50_000);
+        let analyzer = DifferenceAnalyzer::new(vec![], true, crate::types::DEFAULT_LARGE_RESPONSE_THRESHOLD);
 
         let response1 = create_test_response(200, r#"{"status": "ok"}"#);
         let response2 = create_test_response(404, r#"{"error": "not found"}"#);
@@ -243,7 +243,7 @@ mod tests {
 
     #[test]
     fn test_body_difference_analysis() {
-        let analyzer = DifferenceAnalyzer::new(vec![], true, 50_000);
+        let analyzer = DifferenceAnalyzer::new(vec![], true, crate::types::DEFAULT_LARGE_RESPONSE_THRESHOLD);
 
         let response1 = create_test_response(200, r#"{"status": "ok", "data": "test"}"#);
         let response2 = create_test_response(200, r#"{"status": "ok", "data": "prod"}"#);
@@ -266,7 +266,7 @@ mod tests {
 
     #[test]
     fn test_header_difference_analysis() {
-        let analyzer = DifferenceAnalyzer::new(vec![], true, 50_000);
+        let analyzer = DifferenceAnalyzer::new(vec![], true, crate::types::DEFAULT_LARGE_RESPONSE_THRESHOLD);
 
         let mut response1 = create_test_response(200, r#"{"status": "ok"}"#);
         let mut response2 = create_test_response(200, r#"{"status": "ok"}"#);

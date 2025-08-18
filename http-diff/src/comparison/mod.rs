@@ -28,7 +28,7 @@ impl ResponseComparator {
         ];
 
         Self {
-            analyzer: DifferenceAnalyzer::new(ignore_headers, true, 50_000),
+            analyzer: DifferenceAnalyzer::new(ignore_headers, true, crate::types::DEFAULT_LARGE_RESPONSE_THRESHOLD),
             compare_headers: false,
             diff_view_style: DiffViewStyle::Unified,
         }
@@ -37,7 +37,7 @@ impl ResponseComparator {
     /// Create a comparator with custom settings
     pub fn with_settings(ignore_headers: Vec<String>, ignore_whitespace: bool) -> Self {
         Self {
-            analyzer: DifferenceAnalyzer::new(ignore_headers, ignore_whitespace, 50_000),
+            analyzer: DifferenceAnalyzer::new(ignore_headers, ignore_whitespace, crate::types::DEFAULT_LARGE_RESPONSE_THRESHOLD),
             compare_headers: false,
             diff_view_style: DiffViewStyle::Unified,
         }

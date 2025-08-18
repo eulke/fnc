@@ -18,7 +18,7 @@ impl DiffProcessor {
     /// Create a new diff processor with default settings
     pub fn new() -> Self {
         Self {
-            large_response_threshold: 50_000, // 50KB
+            large_response_threshold: crate::types::DEFAULT_LARGE_RESPONSE_THRESHOLD,
         }
     }
 
