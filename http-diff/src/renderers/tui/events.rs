@@ -8,8 +8,8 @@ mod events_dashboard;
 
 /// Poll for input and translate to a top-level Msg for reducer
 pub fn next_msg(app: &TuiApp) -> Result<Option<Msg>> {
-    // Check for events with a timeout
-    if event::poll(Duration::from_millis(100))
+    // Check for events with a timeout (16ms = ~60fps for responsive UI)
+    if event::poll(Duration::from_millis(16))
         .map_err(|e| HttpDiffError::general(format!("Failed to poll events: {}", e)))?
     {
         match event::read()

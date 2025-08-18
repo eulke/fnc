@@ -61,6 +61,8 @@ impl DifferenceAnalyzer {
                     env1, env2, response1.status, response2.status
                 ),
                 diff_output: None,
+                header_diff: None,
+                body_diff: None,
             });
         }
 
@@ -68,21 +70,19 @@ impl DifferenceAnalyzer {
         if compare_headers {
             if let Some(header_diff) = self.analyze_headers(&response1.headers, &response2.headers)
             {
-                differences.push(Difference {
-                    category: DifferenceCategory::Headers,
-                    description: "Header differences detected".to_string(),
-                    diff_output: Some(serde_json::to_string(&header_diff).unwrap_or_default()),
-                });
+                differences.push(Difference::with_header_diff(
+                    "Header differences detected".to_string(),
+                    header_diff,
+                ));
             }
         }
 
         // Compare bodies
         if let Some(body_diff) = self.analyze_bodies(&response1.body, &response2.body) {
-            differences.push(Difference {
-                category: DifferenceCategory::Body,
-                description: "Body differences detected".to_string(),
-                diff_output: Some(serde_json::to_string(&body_diff).unwrap_or_default()),
-            });
+            differences.push(Difference::with_body_diff(
+                "Body differences detected".to_string(),
+                body_diff,
+            ));
         }
 
         differences
@@ -256,12 +256,9 @@ mod tests {
         assert_eq!(differences.len(), 1);
         assert_eq!(differences[0].category, DifferenceCategory::Body);
 
-        // Should contain serialized BodyDiff data
-        assert!(differences[0].diff_output.is_some());
-        let body_diff_json = differences[0].diff_output.as_ref().unwrap();
-
-        // Verify we can deserialize the body diff data
-        let body_diff: BodyDiff = serde_json::from_str(body_diff_json).unwrap();
+        // Should contain structured BodyDiff data
+        assert!(differences[0].body_diff.is_some());
+        let body_diff = differences[0].body_diff.as_ref().unwrap();
         assert!(!body_diff.is_large_response);
         assert!(body_diff.normalized_body1.contains("test"));
         assert!(body_diff.normalized_body2.contains("prod"));
@@ -287,9 +284,8 @@ mod tests {
         assert_eq!(differences.len(), 1);
         assert_eq!(differences[0].category, DifferenceCategory::Headers);
 
-        // Should contain serialized HeaderDiff data
-        let header_diff_json = differences[0].diff_output.as_ref().unwrap();
-        let header_diffs: Vec<HeaderDiff> = serde_json::from_str(header_diff_json).unwrap();
+        // Should contain structured HeaderDiff data
+        let header_diffs = differences[0].header_diff.as_ref().unwrap();
 
         assert_eq!(header_diffs.len(), 1);
         assert_eq!(header_diffs[0].name, "X-Version");
@@ -317,8 +313,7 @@ mod tests {
         assert_eq!(differences.len(), 1);
         assert_eq!(differences[0].category, DifferenceCategory::Body);
 
-        let body_diff_json = differences[0].diff_output.as_ref().unwrap();
-        let body_diff: BodyDiff = serde_json::from_str(body_diff_json).unwrap();
+        let body_diff = differences[0].body_diff.as_ref().unwrap();
 
         assert!(body_diff.is_large_response);
         assert_eq!(body_diff.total_size, 120);

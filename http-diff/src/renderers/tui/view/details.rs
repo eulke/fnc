@@ -214,7 +214,7 @@ fn draw_details_errors_tab(f: &mut Frame, app: &TuiApp, result: &ComparisonResul
                     for line in body.lines().take(5) {
                         error_lines.push(format!("  {}", line));
                     }
-                    if body.lines().count() > 5 {
+                    if crate::utils::response_summary::count_lines_efficient(body) > 5 {
                         error_lines.push("  ... (truncated)".to_string());
                     }
                 }

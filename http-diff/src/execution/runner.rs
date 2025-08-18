@@ -3,10 +3,10 @@ use crate::error::{HttpDiffError, Result};
 use crate::execution::progress::{ProgressCallback, ProgressTracker};
 use crate::traits::{HttpClient, ResponseComparator, TestRunner};
 use crate::types::{ExecutionError, ExecutionResult};
-use futures::stream::{FuturesUnordered, StreamExt};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
+use futures::stream::{FuturesUnordered, StreamExt};
 
 /// Type alias for the most common concrete TestRunner implementation
 pub type DefaultTestRunner =
@@ -15,8 +15,8 @@ pub type DefaultTestRunner =
 /// Test runner implementation
 pub struct TestRunnerImpl<C, R>
 where
-    C: HttpClient,
-    R: ResponseComparator,
+    C: HttpClient + 'static,
+    R: ResponseComparator + 'static,
 {
     config: HttpDiffConfig,
     client: Arc<C>,
@@ -26,8 +26,8 @@ where
 
 impl<C, R> TestRunnerImpl<C, R>
 where
-    C: HttpClient,
-    R: ResponseComparator,
+    C: HttpClient + 'static,
+    R: ResponseComparator + 'static,
 {
     /// Create a new test runner
     pub fn new(config: HttpDiffConfig, client: C, comparator: R) -> Result<Self> {
@@ -45,7 +45,7 @@ where
         self
     }
 
-    /// Execute tests concurrently with controlled parallelism
+    /// Execute tests concurrently with controlled parallelism and streaming progress
     async fn execute_concurrent(
         &self,
         user_data: &[crate::config::UserData],
@@ -61,169 +61,178 @@ where
             callback(&progress);
         }
 
-        // Use semaphore to limit concurrent requests
+        // Use semaphore for concurrency limiting
         let semaphore = Arc::new(Semaphore::new(self.max_concurrent_requests));
-        let mut request_futures = FuturesUnordered::new();
+        
+        // Data structures to collect responses and create comparisons
+        let mut route_user_responses: HashMap<(String, usize), HashMap<String, crate::types::HttpResponse>> = HashMap::new();
+        let mut results = Vec::new();
+        let mut all_errors = Vec::new();
 
-        // Create all request tasks upfront
-        for route in routes {
-            for user in user_data {
-                // For each route-user combination, execute requests to all environments
-                let route_clone = (*route).clone();
-                let user_clone = user.clone();
-                let environments_clone = environments.to_vec();
-                let client = self.client.clone();
-                let semaphore_clone = semaphore.clone();
+        // Create individual request tasks (one per request, not per route-user combination)
+        let mut request_tasks: FuturesUnordered<tokio::task::JoinHandle<Result<(usize, usize, String, Option<crate::types::HttpResponse>, bool, Option<ExecutionError>)>>> = FuturesUnordered::new();
+        
+        for (route_idx, route) in routes.iter().enumerate() {
+            for (user_idx, user) in user_data.iter().enumerate() {
+                for env in environments {
+                    let route_arc = Arc::new((*route).clone());
+                    let user_arc = Arc::new(user.clone());
+                    let env_name = env.clone();
+                    let client = self.client.clone();
+                    let semaphore_clone = semaphore.clone();
 
-                let request_task = async move {
-                    let mut responses = HashMap::new();
-                    let mut request_results = Vec::new();
-                    let mut errors = Vec::new();
-
-                    // Execute requests to all environments for this route-user combination
-                    for env in &environments_clone {
+                    let task = tokio::spawn(async move {
                         let _permit = semaphore_clone.acquire().await.map_err(|e| {
                             HttpDiffError::general(format!("Failed to acquire semaphore: {}", e))
                         })?;
 
-                        match client.execute_request(&route_clone, env, &user_clone).await {
+                        match client.execute_request(&route_arc, &env_name, &user_arc).await {
                             Ok(response) => {
                                 let success = response.is_success();
-                                responses.insert(env.clone(), response);
-                                request_results.push(success);
+                                Ok((route_idx, user_idx, env_name, Some(response), success, None))
                             }
                             Err(e) => {
-                                // Collect error instead of printing to stderr
-                                errors.push(ExecutionError::request_error(
-                                    route_clone.name.clone(),
-                                    env.clone(),
+                                let error = ExecutionError::request_error(
+                                    route_arc.name.clone(),
+                                    env_name.clone(),
                                     e.to_string(),
-                                ));
-                                request_results.push(false);
+                                );
+                                Ok((route_idx, user_idx, env_name, None, false, Some(error)))
                             }
                         }
-                    }
+                    });
 
-                    Result::<_>::Ok((route_clone, user_clone, responses, request_results, errors))
-                };
-
-                request_futures.push(request_task);
+                    request_tasks.push(task);
+                }
             }
         }
 
-        let mut results = Vec::new();
-        let mut all_errors = Vec::new();
-
-        // Process completed requests as they finish
-        while let Some(request_result) = request_futures.next().await {
-            match request_result {
-                Ok((route, user, responses, request_success_flags, mut errors)) => {
-                    // Update progress for all requests in this batch
-                    for success in &request_success_flags {
-                        progress.request_completed(*success);
-                    }
-
+        // Process requests as they complete for streaming progress updates
+        while let Some(task_result) = request_tasks.next().await {
+            match task_result {
+                Ok(Ok((route_idx, user_idx, env_name, response_opt, success, error_opt))) => {
+                    // Update progress immediately for each completed request
+                    progress.request_completed(success);
+                    
                     if let Some(ref callback) = progress_callback {
                         callback(&progress);
                     }
 
-                    // Errors are already collected in the all_errors vector
-                    all_errors.append(&mut errors);
+                    // Collect response for later comparison
+                    if let Some(response) = response_opt {
+                        let key = (routes[route_idx].name.clone(), user_idx);
+                        route_user_responses.entry(key).or_insert_with(HashMap::new).insert(env_name, response);
+                    }
 
-                    // Only create comparison result if we have at least 2 responses
-                    if responses.len() >= 2 {
-                        // Determine base env from config (if any)
-                        let base_env_opt = self
-                            .config
-                            .environments
-                            .iter()
-                            .find(|(_k, v)| v.is_base)
-                            .map(|(k, _)| k.clone());
+                    // Collect errors
+                    if let Some(error) = error_opt {
+                        all_errors.push(error);
+                    }
+                }
+                Ok(Err(e)) => {
+                    // Task completed but returned an error
+                    progress.request_completed(false);
+                    if let Some(ref callback) = progress_callback {
+                        callback(&progress);
+                    }
+                    
+                    let error = ExecutionError::general_execution_error(e.to_string());
+                    all_errors.push(error);
+                }
+                Err(e) => {
+                    // Task itself failed (JoinError)
+                    progress.request_completed(false);
+                    if let Some(ref callback) = progress_callback {
+                        callback(&progress);
+                    }
+                    
+                    let error = ExecutionError::general_execution_error(format!("Task panicked: {}", e));
+                    all_errors.push(error);
+                }
+            }
+        }
 
-                        if let Some(base_env) = base_env_opt.clone() {
-                            if responses.contains_key(&base_env) {
-                                // Create one comparison per (base, other)
-                                for (env, resp) in responses.iter() {
-                                    if env == &base_env {
-                                        continue;
-                                    }
-                                    let mut pair_map = HashMap::new();
-                                    if let Some(base_resp) = responses.get(&base_env) {
-                                        pair_map.insert(base_env.clone(), base_resp.clone());
-                                        pair_map.insert(env.clone(), resp.clone());
-                                    }
+        // Now create comparisons from collected responses
+        for ((route_name, user_idx), responses) in route_user_responses {
+            if responses.len() >= 2 {
+                let user = &user_data[user_idx];
+                
+                // Determine base env from config (if any)
+                let base_env_opt = self
+                    .config
+                    .environments
+                    .iter()
+                    .find(|(_k, v)| v.is_base)
+                    .map(|(k, _)| k.clone());
 
-                                    match self.comparator.compare_responses(
-                                        route.name.clone(),
-                                        user.data.clone(),
-                                        pair_map,
-                                    ) {
-                                        Ok(mut comparison_result) => {
-                                            comparison_result.base_environment =
-                                                Some(base_env.clone());
-                                            results.push(comparison_result);
-                                        }
-                                        Err(e) => {
-                                            let error = ExecutionError::comparison_error(
-                                                route.name.clone(),
-                                                e.to_string(),
-                                            );
-                                            all_errors.push(error);
-                                        }
-                                    }
-                                }
-                            } else {
-                                // Fallback to comparing all responses if base not present in this batch
-                                match self.comparator.compare_responses(
-                                    route.name.clone(),
-                                    user.data.clone(),
-                                    responses,
-                                ) {
-                                    Ok(mut comparison_result) => {
-                                        comparison_result.base_environment = base_env_opt;
-                                        results.push(comparison_result);
-                                    }
-                                    Err(e) => {
-                                        let error = ExecutionError::comparison_error(
-                                            route.name.clone(),
-                                            e.to_string(),
-                                        );
-                                        all_errors.push(error);
-                                    }
-                                }
+                if let Some(base_env) = base_env_opt.clone() {
+                    if responses.contains_key(&base_env) {
+                        // Create one comparison per (base, other)
+                        for (env, resp) in responses.iter() {
+                            if env == &base_env {
+                                continue;
                             }
-                        } else {
-                            // No base configured: compare all responses together (existing behavior)
+                            let mut pair_map = HashMap::new();
+                            if let Some(base_resp) = responses.get(&base_env) {
+                                pair_map.insert(base_env.clone(), base_resp.clone());
+                                pair_map.insert(env.clone(), resp.clone());
+                            }
+
                             match self.comparator.compare_responses(
-                                route.name.clone(),
+                                route_name.clone(),
                                 user.data.clone(),
-                                responses,
+                                pair_map,
                             ) {
-                                Ok(comparison_result) => {
+                                Ok(mut comparison_result) => {
+                                    comparison_result.base_environment = Some(base_env.clone());
                                     results.push(comparison_result);
                                 }
                                 Err(e) => {
                                     let error = ExecutionError::comparison_error(
-                                        route.name.clone(),
+                                        route_name.clone(),
                                         e.to_string(),
                                     );
                                     all_errors.push(error);
                                 }
                             }
                         }
+                    } else {
+                        // Fallback to comparing all responses if base not present
+                        match self.comparator.compare_responses(
+                            route_name.clone(),
+                            user.data.clone(),
+                            responses,
+                        ) {
+                            Ok(mut comparison_result) => {
+                                comparison_result.base_environment = base_env_opt.clone();
+                                results.push(comparison_result);
+                            }
+                            Err(e) => {
+                                let error = ExecutionError::comparison_error(
+                                    route_name.clone(),
+                                    e.to_string(),
+                                );
+                                all_errors.push(error);
+                            }
+                        }
                     }
-                }
-                Err(e) => {
-                    let error = ExecutionError::general_execution_error(e.to_string());
-                    all_errors.push(error);
-
-                    // Still need to update progress for failed requests
-                    for _ in 0..environments.len() {
-                        progress.request_completed(false);
-                    }
-
-                    if let Some(ref callback) = progress_callback {
-                        callback(&progress);
+                } else {
+                    // No base configured: compare all responses together
+                    match self.comparator.compare_responses(
+                        route_name.clone(),
+                        user.data.clone(),
+                        responses,
+                    ) {
+                        Ok(comparison_result) => {
+                            results.push(comparison_result);
+                        }
+                        Err(e) => {
+                            let error = ExecutionError::comparison_error(
+                                route_name.clone(),
+                                e.to_string(),
+                            );
+                            all_errors.push(error);
+                        }
                     }
                 }
             }

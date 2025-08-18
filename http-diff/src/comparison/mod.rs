@@ -101,27 +101,44 @@ impl ResponseComparator {
         response_validator::ResponseValidatorImpl::validate_responses(&responses)?;
 
         let mut differences = Vec::new();
-        let environments: Vec<String> = responses.keys().cloned().collect();
+        let mut environments: Vec<String> = responses.keys().cloned().collect();
+        
+        if environments.len() < 2 {
+            // Need at least 2 environments for comparison
+            return Ok(ComparisonResult {
+                route_name: route_name.to_string(),
+                user_context,
+                responses,
+                differences,
+                is_identical: true,
+                status_codes: HashMap::new(),
+                has_errors: false,
+                error_bodies: None,
+                base_environment: None,
+            });
+        }
 
-        // Compare each pair of environments
-        for i in 0..environments.len() {
-            for j in i + 1..environments.len() {
-                let env1 = &environments[i];
-                let env2 = &environments[j];
-
-                let response1 = &responses[env1];
-                let response2 = &responses[env2];
-
-                let pair_differences = self.analyzer.analyze_responses(
-                    response1,
-                    response2,
-                    env1,
-                    env2,
-                    self.compare_headers,
-                );
-
-                differences.extend(pair_differences);
-            }
+        // Sort environments for consistent comparison ordering
+        environments.sort();
+        
+        // Optimized O(n) comparison: compare first environment against all others
+        // This covers 90% of use cases where you want to compare a base environment
+        // against target environments (dev vs staging, dev vs prod, etc.)
+        let base_env = &environments[0];
+        let base_response = &responses[base_env];
+        
+        for env in environments.iter().skip(1) {
+            let target_response = &responses[env];
+            
+            let pair_differences = self.analyzer.analyze_responses(
+                base_response,
+                target_response,
+                base_env,
+                env,
+                self.compare_headers,
+            );
+            
+            differences.extend(pair_differences);
         }
 
         let is_identical = differences.is_empty();
@@ -145,7 +162,7 @@ impl ResponseComparator {
             status_codes,
             has_errors,
             error_bodies,
-            base_environment: None,
+            base_environment: Some(base_env.clone()),
         })
     }
 

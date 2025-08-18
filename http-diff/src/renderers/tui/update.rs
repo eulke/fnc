@@ -81,12 +81,10 @@ pub fn update(app: &mut TuiApp, msg: Msg) -> Effect {
         Msg::Exec(em) => {
             match em {
                 ExecMsg::Progress {
-                    completed,
-                    total,
+                    tracker,
                     op,
                 } => {
-                    app.total_tests = total;
-                    app.update_execution_progress(completed, op);
+                    app.update_execution_progress(tracker, op);
                 }
                 ExecMsg::Completed(results) => {
                     app.complete_execution(results);

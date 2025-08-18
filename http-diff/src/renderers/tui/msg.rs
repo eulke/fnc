@@ -1,4 +1,5 @@
 use crate::types::ComparisonResult;
+use crate::execution::progress::ProgressTracker;
 
 /// Top-level application messages (unidirectional flow)
 #[derive(Debug, Clone)]
@@ -69,8 +70,7 @@ pub enum DetailsMsg {
 #[derive(Debug, Clone)]
 pub enum ExecMsg {
     Progress {
-        completed: usize,
-        total: usize,
+        tracker: ProgressTracker,
         op: String,
     },
     Completed(Vec<ComparisonResult>),

@@ -445,7 +445,7 @@ impl HtmlComponents {
                     .headers
                     .get("content-type")
                     .unwrap_or(&"unknown".to_string()),
-                response.body.lines().count()
+                crate::utils::response_summary::count_lines_efficient(&response.body)
             )
         } else {
             String::new()

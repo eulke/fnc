@@ -118,13 +118,34 @@ impl HttpClientImpl {
         })
     }
 
-    /// Generate a curl command equivalent for the request
+    /// Generate a curl command equivalent for the request (optimized for memory efficiency)
     fn generate_curl_command(&self, request: &reqwest::Request, route: &Route) -> String {
-        // Estimate capacity to avoid reallocations
-        let estimated_capacity = 50
-            + (request.headers().len() * 50)
-            + route.body.as_ref().map_or(0, |b| b.len())
-            + request.url().as_str().len();
+        // More accurate capacity estimation to minimize reallocations
+        let mut estimated_capacity = 4; // "curl"
+        
+        // Method (if not GET)
+        if request.method() != "GET" {
+            estimated_capacity += 4 + request.method().as_str().len(); // " -X " + method
+        }
+        
+        // Headers with more accurate estimation
+        for (name, value) in request.headers() {
+            if value.to_str().is_ok() {
+                estimated_capacity += 6 + name.as_str().len() + value.len(); // " -H '" + name + ": " + value + "'"
+            }
+        }
+        
+        // Body
+        if let Some(body) = &route.body {
+            estimated_capacity += 5 + body.len(); // " -d '" + body + "'"
+        }
+        
+        // URL
+        estimated_capacity += 3 + request.url().as_str().len(); // " '" + url + "'"
+        
+        // Add 10% buffer to handle estimation errors
+        estimated_capacity = (estimated_capacity as f32 * 1.1) as usize;
+        
         let mut result = String::with_capacity(estimated_capacity);
 
         result.push_str("curl");
@@ -135,9 +156,10 @@ impl HttpClientImpl {
             result.push_str(request.method().as_str());
         }
 
-        // Add headers
+        // Add headers with optimized string building
         for (name, value) in request.headers() {
             if let Ok(value_str) = value.to_str() {
+                // Build header string efficiently without temporary allocations
                 result.push_str(" -H '");
                 result.push_str(name.as_str());
                 result.push_str(": ");
@@ -148,14 +170,17 @@ impl HttpClientImpl {
 
         // Add body if present
         if let Some(body) = &route.body {
+            result.reserve(5 + body.len()); // Ensure capacity before appending
             result.push_str(" -d '");
             result.push_str(body);
             result.push('\'');
         }
 
         // Add URL
+        let url = request.url().as_str();
+        result.reserve(3 + url.len()); // Ensure capacity before appending
         result.push_str(" '");
-        result.push_str(request.url().as_str());
+        result.push_str(url);
         result.push('\'');
 
         result

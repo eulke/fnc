@@ -63,10 +63,9 @@ pub async fn execute_http_tests_async(
         create_default_test_runner, ProgressCallback, TestRunner,
     };
 
-    // Send initial progress
+    // Send initial progress with empty tracker
     let _ = tx.send(ExecMsg::Progress {
-        completed: 0,
-        total: 0,
+        tracker: crate::execution::progress::ProgressTracker::new(0),
         op: "Loading configuration...".to_string(),
     });
 
@@ -95,8 +94,7 @@ pub async fn execute_http_tests_async(
 
     // Send progress update
     let _ = tx.send(ExecMsg::Progress {
-        completed: 0,
-        total: 0,
+        tracker: crate::execution::progress::ProgressTracker::new(0),
         op: "Creating test runner...".to_string(),
     });
 
@@ -114,27 +112,48 @@ pub async fn execute_http_tests_async(
 
     // Set up progress callback using ProgressTracker as single source of truth
     let tx_clone = tx.clone();
+    let last_state = std::sync::Arc::new(std::sync::Mutex::new((std::time::Instant::now(), 0usize)));
+    
     let progress_callback: ProgressCallback = Box::new(move |progress_tracker| {
-        let operation = format!(
-            "Completed {}/{} requests ({} successful, {} failed)",
-            progress_tracker.completed_requests,
-            progress_tracker.total_requests,
-            progress_tracker.successful_requests,
-            progress_tracker.failed_requests
-        );
+        // Rate limit progress updates to prevent UI spam (max every 50ms)
+        let now = std::time::Instant::now();
+        let should_update = if let Ok(mut state) = last_state.lock() {
+            let (last_update, last_completed) = &mut *state;
+            let update_needed = progress_tracker.completed_requests != *last_completed || 
+                               now.duration_since(*last_update).as_millis() >= 50;
+            
+            if update_needed {
+                *last_update = now;
+                *last_completed = progress_tracker.completed_requests;
+            }
+            update_needed
+        } else {
+            true // If lock fails, send update anyway
+        };
+        
+        if should_update {
+            let operation = format!(
+                "Completed {}/{} requests ({} successful, {} failed)",
+                progress_tracker.completed_requests,
+                progress_tracker.total_requests,
+                progress_tracker.successful_requests,
+                progress_tracker.failed_requests
+            );
 
-        let _ = tx_clone.send(ExecMsg::Progress {
-            completed: progress_tracker.completed_requests,
-            total: progress_tracker.total_requests,
-            op: operation,
-        });
+            let _ = tx_clone.send(ExecMsg::Progress {
+                tracker: progress_tracker.clone(),
+                op: operation,
+            });
+        }
     });
 
-    // Execute tests
+    // Calculate total requests and send initial progress with correct total
+    let total_requests = selected_environments.len() * selected_routes.len() * user_data.len();
+    let initial_tracker = crate::execution::progress::ProgressTracker::new(total_requests);
+    
     let _ = tx.send(ExecMsg::Progress {
-        completed: 0,
-        total: 0,
-        op: "Starting HTTP tests...".to_string(),
+        tracker: initial_tracker,
+        op: format!("Starting {} HTTP tests...", total_requests),
     });
 
     match runner

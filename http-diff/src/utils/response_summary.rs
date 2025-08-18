@@ -24,13 +24,25 @@ pub struct ResponseDiffSummary {
 }
 
 impl ResponseStats {
-    /// Create response statistics from text
+    /// Create response statistics from text (optimized to avoid duplicate calculations)
     pub fn from_text(text: &str) -> Self {
+        let line_count = count_lines_efficient(text);
         Self {
             size_bytes: text.len(),
-            line_count: text.lines().count(),
+            line_count,
             text: text.to_string(),
         }
+    }
+}
+
+/// Efficient line counting utility to avoid duplicate calculations across the codebase
+#[inline]
+pub fn count_lines_efficient(text: &str) -> usize {
+    if text.is_empty() {
+        0
+    } else {
+        // Count newlines and add 1 (more efficient than .lines().count())
+        text.bytes().filter(|&b| b == b'\n').count() + 1
     }
 }
 

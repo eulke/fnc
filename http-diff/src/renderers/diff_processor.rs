@@ -41,7 +41,14 @@ impl DiffProcessor {
         for difference in &result.differences {
             match difference.category {
                 DifferenceCategory::Headers if compare_headers => {
-                    if let Some(ref diff_output) = difference.diff_output {
+                    // Use structured data directly instead of JSON deserialization
+                    if let Some(ref header_diffs) = difference.header_diff {
+                        let envs = self.extract_environment_names(result)?;
+                        let header_diff_data =
+                            self.process_header_diffs(header_diffs, &envs.0, &envs.1);
+                        diff_data.set_headers(header_diff_data);
+                    } else if let Some(ref diff_output) = difference.diff_output {
+                        // Fallback for backward compatibility
                         let header_diffs: Vec<HeaderDiff> = serde_json::from_str(diff_output)
                             .map_err(|e| format!("Failed to parse header diff data: {}", e))?;
 
@@ -52,7 +59,13 @@ impl DiffProcessor {
                     }
                 }
                 DifferenceCategory::Body => {
-                    if let Some(ref diff_output) = difference.diff_output {
+                    // Use structured data directly instead of JSON deserialization
+                    if let Some(ref body_diff) = difference.body_diff {
+                        let envs = self.extract_environment_names(result)?;
+                        let body_diff_data = self.process_body_diff(body_diff, &envs.0, &envs.1);
+                        diff_data.set_body(body_diff_data);
+                    } else if let Some(ref diff_output) = difference.diff_output {
+                        // Fallback for backward compatibility
                         let body_diff: BodyDiff = serde_json::from_str(diff_output)
                             .map_err(|e| format!("Failed to parse body diff data: {}", e))?;
 

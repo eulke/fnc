@@ -41,9 +41,9 @@ impl HttpResponse {
         !self.is_success()
     }
 
-    /// Get the number of lines in the response body
+    /// Get the number of lines in the response body (using efficient shared utility)
     pub fn line_count(&self) -> usize {
-        self.body.lines().count()
+        crate::utils::response_summary::count_lines_efficient(&self.body)
     }
 }
 
@@ -114,6 +114,10 @@ pub struct Difference {
     pub category: DifferenceCategory,
     pub description: String,
     pub diff_output: Option<String>,
+    /// Structured header diff data (avoids JSON serialization/deserialization)
+    pub header_diff: Option<Vec<crate::comparison::analyzer::HeaderDiff>>,
+    /// Structured body diff data (avoids JSON serialization/deserialization)
+    pub body_diff: Option<crate::comparison::analyzer::BodyDiff>,
 }
 
 impl Difference {
@@ -123,6 +127,8 @@ impl Difference {
             category,
             description,
             diff_output: None,
+            header_diff: None,
+            body_diff: None,
         }
     }
 
@@ -136,6 +142,36 @@ impl Difference {
             category,
             description,
             diff_output: Some(diff_output),
+            header_diff: None,
+            body_diff: None,
+        }
+    }
+
+    /// Create a header difference with structured data
+    pub fn with_header_diff(
+        description: String,
+        header_diff: Vec<crate::comparison::analyzer::HeaderDiff>,
+    ) -> Self {
+        Self {
+            category: DifferenceCategory::Headers,
+            description,
+            diff_output: None,
+            header_diff: Some(header_diff),
+            body_diff: None,
+        }
+    }
+
+    /// Create a body difference with structured data
+    pub fn with_body_diff(
+        description: String,
+        body_diff: crate::comparison::analyzer::BodyDiff,
+    ) -> Self {
+        Self {
+            category: DifferenceCategory::Body,
+            description,
+            diff_output: None,
+            header_diff: None,
+            body_diff: Some(body_diff),
         }
     }
 }

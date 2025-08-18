@@ -1,5 +1,6 @@
 use crate::renderers::report::{ReportMetadata, ReportRendererFactory};
 use crate::types::{ComparisonResult, DiffViewStyle};
+use crate::execution::progress::ProgressTracker;
 use ratatui::widgets::{ListState, ScrollbarState, TableState};
 use std::fs;
 
@@ -178,14 +179,10 @@ pub struct TuiApp {
     pub error_message: Option<String>,
 
     // Execution state
-    /// Total number of tests to execute
-    pub total_tests: usize,
-    /// Number of completed tests
-    pub completed_tests: usize,
+    /// Progress tracker from HTTP execution engine
+    pub progress_tracker: Option<ProgressTracker>,
     /// Current operation description
     pub current_operation: String,
-    /// Start time of execution
-    pub execution_start_time: Option<std::time::Instant>,
     /// Duration of the last completed execution
     pub last_execution_duration: Option<std::time::Duration>,
     /// Whether execution has been requested
@@ -257,10 +254,8 @@ impl TuiApp {
             config_path: "http-diff.toml".to_string(),
             users_file: "users.csv".to_string(),
             error_message: None,
-            total_tests: 0,
-            completed_tests: 0,
+            progress_tracker: None,
             current_operation: String::new(),
-            execution_start_time: None,
             last_execution_duration: None,
             execution_requested: false,
             execution_running: false,
@@ -306,10 +301,8 @@ impl TuiApp {
             config_path: "http-diff.toml".to_string(),
             users_file: "users.csv".to_string(),
             error_message: None,
-            total_tests: 0,
-            completed_tests: 0,
+            progress_tracker: None,
             current_operation: "Loading configuration...".to_string(),
-            execution_start_time: None,
             last_execution_duration: None,
             execution_requested: false,
             execution_running: false,
@@ -444,10 +437,14 @@ impl TuiApp {
             PanelFocus::Configuration => "Configuration".to_string(),
             PanelFocus::Progress => {
                 if self.execution_running {
-                    format!(
-                        "Execution Progress ({}/{})",
-                        self.completed_tests, self.total_tests
-                    )
+                    if let Some(ref tracker) = self.progress_tracker {
+                        format!(
+                            "Execution Progress ({}/{})",
+                            tracker.completed_requests, tracker.total_requests
+                        )
+                    } else {
+                        "Execution Starting...".to_string()
+                    }
                 } else if self.results.is_empty() {
                     "Execution Ready".to_string()
                 } else {
@@ -701,9 +698,7 @@ impl TuiApp {
         self.execution_requested = true;
         self.execution_running = false;
         self.execution_cancelled = false;
-        // Don't calculate total_tests here - let HTTP runner determine correct total
-        self.total_tests = 0; // Will be updated by ProgressTracker
-        self.completed_tests = 0;
+        self.progress_tracker = None; // Will be updated by progress callbacks
         self.current_operation = "Preparing to start HTTP tests...".to_string();
         self.error_message = None;
     }
@@ -716,8 +711,11 @@ impl TuiApp {
         self.execution_running = true;
         self.execution_cancelled = false;
         self.current_operation = "Starting HTTP tests...".to_string();
-        self.execution_start_time = Some(std::time::Instant::now());
         self.last_execution_duration = None;
+        
+        // Create initial progress tracker to show immediate feedback
+        // The total will be updated when the first real progress update arrives
+        self.progress_tracker = Some(ProgressTracker::new(1));
     }
 
     /// Cancel execution
@@ -728,8 +726,8 @@ impl TuiApp {
     }
 
     /// Update execution progress
-    pub fn update_execution_progress(&mut self, completed: usize, operation: String) {
-        self.completed_tests = completed;
+    pub fn update_execution_progress(&mut self, tracker: ProgressTracker, operation: String) {
+        self.progress_tracker = Some(tracker);
         self.current_operation = operation;
     }
 
@@ -743,9 +741,9 @@ impl TuiApp {
             self.selected_index = 0;
         }
         self.selected_index = 0;
-        // Calculate and store duration if available before clearing start time
-        if let Some(start) = self.execution_start_time.take() {
-            self.last_execution_duration = Some(start.elapsed());
+        // Calculate and store duration if available from progress tracker
+        if let Some(ref tracker) = self.progress_tracker {
+            self.last_execution_duration = Some(tracker.elapsed_time());
         }
         self.execution_running = false;
         self.execution_requested = false;
