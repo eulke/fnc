@@ -20,6 +20,9 @@ pub struct Environment {
     pub base_url: String,
     /// Environment-specific headers
     pub headers: Option<HashMap<String, String>>,
+    /// Whether this environment should be treated as the base for comparisons
+    #[serde(default)]
+    pub is_base: bool,
 }
 
 /// Global configuration settings

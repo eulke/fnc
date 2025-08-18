@@ -210,6 +210,7 @@ mod tests {
                     headers.insert("X-Scope".to_string(), "test".to_string());
                     headers
                 }),
+                is_base: false,
             },
         );
 
@@ -375,6 +376,7 @@ mod tests {
             Environment {
                 base_url: "https://api.example.com".to_string(),
                 headers: None,
+                is_base: false,
             },
         );
 

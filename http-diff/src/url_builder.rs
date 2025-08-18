@@ -170,6 +170,7 @@ mod tests {
             crate::config::Environment {
                 base_url: "https://api-dev.example.com".to_string(),
                 headers: None,
+                is_base: false,
             },
         );
 

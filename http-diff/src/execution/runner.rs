@@ -138,26 +138,100 @@ where
 
                     // Only create comparison result if we have at least 2 responses
                     if responses.len() >= 2 {
-                        match self.comparator.compare_responses(
-                            route.name.clone(),
-                            user.data.clone(),
-                            responses,
-                        ) {
-                            Ok(comparison_result) => {
-                                results.push(comparison_result);
-                            }
-                            Err(e) => {
-                                let error = ExecutionError::comparison_error(
-                                    route.name.clone(),
-                                    e.to_string(),
-                                );
-                                if let Some(ref collector) = error_collector {
-                                    collector.record_comparison_error(
-                                        &error.route,
-                                        error.message.clone(),
-                                    );
+                        // Determine base env from config (if any)
+                        let base_env_opt = self
+                            .config
+                            .environments
+                            .iter()
+                            .find(|(_k, v)| v.is_base)
+                            .map(|(k, _)| k.clone());
+
+                        if let Some(base_env) = base_env_opt.clone() {
+                            if responses.contains_key(&base_env) {
+                                // Create one comparison per (base, other)
+                                for (env, resp) in responses.iter() {
+                                    if env == &base_env {
+                                        continue;
+                                    }
+                                    let mut pair_map = HashMap::new();
+                                    if let Some(base_resp) = responses.get(&base_env) {
+                                        pair_map.insert(base_env.clone(), base_resp.clone());
+                                        pair_map.insert(env.clone(), resp.clone());
+                                    }
+
+                                    match self.comparator.compare_responses(
+                                        route.name.clone(),
+                                        user.data.clone(),
+                                        pair_map,
+                                    ) {
+                                        Ok(mut comparison_result) => {
+                                            comparison_result.base_environment = Some(base_env.clone());
+                                            results.push(comparison_result);
+                                        }
+                                        Err(e) => {
+                                            let error = ExecutionError::comparison_error(
+                                                route.name.clone(),
+                                                e.to_string(),
+                                            );
+                                            if let Some(ref collector) = error_collector {
+                                                collector.record_comparison_error(
+                                                    &error.route,
+                                                    error.message.clone(),
+                                                );
+                                            }
+                                            all_errors.push(error);
+                                        }
+                                    }
                                 }
-                                all_errors.push(error);
+                            } else {
+                                // Fallback to comparing all responses if base not present in this batch
+                                match self.comparator.compare_responses(
+                                    route.name.clone(),
+                                    user.data.clone(),
+                                    responses,
+                                ) {
+                                    Ok(mut comparison_result) => {
+                                        comparison_result.base_environment = base_env_opt;
+                                        results.push(comparison_result);
+                                    }
+                                    Err(e) => {
+                                        let error = ExecutionError::comparison_error(
+                                            route.name.clone(),
+                                            e.to_string(),
+                                        );
+                                        if let Some(ref collector) = error_collector {
+                                            collector.record_comparison_error(
+                                                &error.route,
+                                                error.message.clone(),
+                                            );
+                                        }
+                                        all_errors.push(error);
+                                    }
+                                }
+                            }
+                        } else {
+                            // No base configured: compare all responses together (existing behavior)
+                            match self.comparator.compare_responses(
+                                route.name.clone(),
+                                user.data.clone(),
+                                responses,
+                            ) {
+                                Ok(comparison_result) => {
+                                    results.push(comparison_result);
+                                }
+                                Err(e) => {
+                                    let error = ExecutionError::comparison_error(
+                                        route.name.clone(),
+                                        e.to_string(),
+                                    );
+                                    if let Some(ref collector) = error_collector {
+                                        collector.record_comparison_error(
+                                            &error.route,
+                                            error.message.clone(),
+                                        );
+                                    }
+                                    all_errors.push(error);
+                                }
                             }
                         }
                     }
@@ -259,5 +333,73 @@ where
             progress_callback,
         )
         .await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::types::{Environment, HttpDiffConfig, Route};
+    use crate::testing::mocks::{test_helpers::*, MockHttpClient, MockResponseComparator};
+
+    #[tokio::test]
+    async fn test_base_environment_pairing() {
+        // Build config with base environment
+        let mut environments = HashMap::new();
+        environments.insert(
+            "base".to_string(),
+            Environment {
+                base_url: "https://base.example.com".to_string(),
+                headers: None,
+                is_base: true,
+            },
+        );
+        environments.insert(
+            "other".to_string(),
+            Environment {
+                base_url: "https://other.example.com".to_string(),
+                headers: None,
+                is_base: false,
+            },
+        );
+
+        let route = Route {
+            name: "health".to_string(),
+            method: "GET".to_string(),
+            path: "/health".to_string(),
+            headers: None,
+            params: None,
+            base_urls: None,
+            body: None,
+        };
+
+        let config = HttpDiffConfig {
+            environments,
+            global: None,
+            routes: vec![route.clone()],
+        };
+
+        // Prepare mock client responses
+        let base_response = create_mock_response(200, "base ok");
+        let other_response = create_mock_response(200, "other ok");
+        let client = MockHttpClient::new()
+            .with_response("health:base".to_string(), base_response)
+            .with_response("health:other".to_string(), other_response);
+
+        let comparator = MockResponseComparator::new();
+        let runner = TestRunnerImpl::new(config, client, comparator).unwrap();
+
+        let user_data = vec![create_mock_user_data(vec![])];
+        let result = runner
+            .execute_with_data(&user_data, None, None, None, None)
+            .await
+            .unwrap();
+
+        // Expect a single comparison between base and other
+        assert_eq!(result.comparisons.len(), 1);
+        let cmp = &result.comparisons[0];
+        assert_eq!(cmp.base_environment.as_deref(), Some("base"));
+        assert!(cmp.responses.contains_key("base"));
+        assert!(cmp.responses.contains_key("other"));
     }
 }

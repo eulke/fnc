@@ -128,6 +128,7 @@ mod tests {
             status_codes: status_codes1,
             has_errors: false,
             error_bodies: None,
+            base_environment: None,
         };
 
         let mut different_responses = responses.clone();
@@ -166,6 +167,7 @@ mod tests {
             status_codes: status_codes2,
             has_errors: true,
             error_bodies: Some(error_bodies2),
+            base_environment: None,
         };
 
         let results = vec![result1, result2];

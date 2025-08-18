@@ -20,6 +20,18 @@ impl ConfigValidator for ConfigValidatorImpl {
             return Err(HttpDiffError::invalid_config("No routes configured"));
         }
 
+        // Ensure no more than one base environment is selected
+        let base_count = config
+            .environments
+            .values()
+            .filter(|e| e.is_base)
+            .count();
+        if base_count > 1 {
+            return Err(HttpDiffError::invalid_config(
+                "Multiple environments are marked as base; only one is allowed",
+            ));
+        }
+
         // Validate that route base_url overrides reference valid environments
         for route in &config.routes {
             if let Some(base_urls) = &route.base_urls {

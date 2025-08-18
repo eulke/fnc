@@ -213,8 +213,17 @@ fn format_route_group(
     // Add detailed diff output - deserialize raw data and format it
     let env_names: Vec<String> = result.responses.keys().cloned().collect();
     if env_names.len() >= 2 {
-        let env1 = &env_names[0];
-        let env2 = &env_names[1];
+        // Orient to base if present
+        let (env1, env2) = if let Some(base) = &result.base_environment {
+            let other = env_names
+                .iter()
+                .find(|e| *e != base)
+                .cloned()
+                .unwrap_or_else(|| env_names[1].clone());
+            (base.clone(), other)
+        } else {
+            (env_names[0].clone(), env_names[1].clone())
+        };
 
         for difference in &result.differences {
             let icon = match difference.category {
@@ -233,8 +242,8 @@ fn format_route_group(
                         {
                             let formatted_diff = formatter.format_header_differences(
                                 &header_diffs,
-                                env1,
-                                env2,
+                                &env1,
+                                &env2,
                                 diff_style.clone(),
                             );
                             output.push_str(&format!(
@@ -250,8 +259,8 @@ fn format_route_group(
                         if let Ok(body_diff) = serde_json::from_str::<BodyDiff>(diff_data) {
                             let formatted_diff = formatter.format_body_difference(
                                 &body_diff,
-                                env1,
-                                env2,
+                                &env1,
+                                &env2,
                                 diff_style.clone(),
                             );
                             output.push_str(&format!(
@@ -309,6 +318,7 @@ mod tests {
             },
             has_errors: false,
             error_bodies: None,
+            base_environment: None,
         }
     }
 

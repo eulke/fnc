@@ -235,10 +235,19 @@ impl DiffProcessor {
             return Err("Need at least 2 environments for comparison".to_string());
         }
 
-        // Sort to ensure consistent ordering
+        // If a base environment is present in the result, ensure it's first
+        if let Some(base) = &result.base_environment {
+            if envs.contains(base) {
+                let other = envs.iter().find(|e| *e != base).cloned().ok_or_else(|| {
+                    "Need at least 2 environments for comparison".to_string()
+                })?;
+                return Ok((base.clone(), other));
+            }
+        }
+
+        // Sort to ensure consistent ordering when no base is set
         let mut sorted_envs = envs;
         sorted_envs.sort();
-
         Ok((sorted_envs[0].clone(), sorted_envs[1].clone()))
     }
 }

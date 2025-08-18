@@ -56,6 +56,8 @@ pub struct ComparisonResult {
     pub status_codes: HashMap<String, u16>, // env_name -> status_code
     pub has_errors: bool,                   // true if any non-2xx status
     pub error_bodies: Option<HashMap<String, String>>, // env_name -> response_body (only for errors)
+    /// Optional base environment used for orienting comparisons and diffs
+    pub base_environment: Option<String>,
 }
 
 impl ComparisonResult {
@@ -70,6 +72,7 @@ impl ComparisonResult {
             status_codes: HashMap::new(),
             has_errors: false,
             error_bodies: None,
+            base_environment: None,
         }
     }
 

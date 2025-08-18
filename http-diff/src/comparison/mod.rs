@@ -133,6 +133,7 @@ impl ResponseComparator {
             status_codes,
             has_errors,
             error_bodies,
+            base_environment: None,
         })
     }
 

@@ -47,6 +47,7 @@ pub fn create_comparison_result(
         } else {
             Some(error_bodies)
         },
+        base_environment: None,
     }
 }
 

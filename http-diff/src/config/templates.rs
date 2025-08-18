@@ -14,6 +14,7 @@ headers."X-Environment" = "testing"
 [environments.prod]
 base_url = "https://api.example.com"
 headers."X-Scope" = "prod"
+is_base = true
 
 [environments.staging]
 base_url = "https://api-staging.example.com"

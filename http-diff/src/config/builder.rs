@@ -27,6 +27,7 @@ impl HttpDiffConfigBuilder {
             Environment {
                 base_url: base_url.into(),
                 headers: None,
+                is_base: false,
             },
         );
         self
@@ -44,6 +45,7 @@ impl HttpDiffConfigBuilder {
             Environment {
                 base_url: base_url.into(),
                 headers: Some(headers),
+                is_base: false,
             },
         );
         self
