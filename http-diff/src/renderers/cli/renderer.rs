@@ -7,6 +7,7 @@ use crate::renderers::OutputRenderer;
 use crate::types::{
     ComparisonResult, DiffViewStyle, DifferenceCategory, ErrorSummary, ExecutionResult,
 };
+use crate::utils::environment_utils::EnvironmentValidator;
 use std::collections::HashMap;
 
 /// CLI renderer that produces the original colored terminal output
@@ -210,20 +211,18 @@ fn format_route_group(
     let route_header = format!("📍 Route: {} | User: {}", result.route_name, user_context);
     output.push_str(&format!("{}\n", route_header));
 
-    // Add detailed diff output - deserialize raw data and format it
-    let env_names: Vec<String> = result.responses.keys().cloned().collect();
-    if env_names.len() >= 2 {
-        // Orient to base if present
-        let (env1, env2) = if let Some(base) = &result.base_environment {
-            let other = env_names
-                .iter()
-                .find(|e| *e != base)
-                .cloned()
-                .unwrap_or_else(|| env_names[1].clone());
-            (base.clone(), other)
-        } else {
-            (env_names[0].clone(), env_names[1].clone())
-        };
+    // Add detailed diff output using consistent environment ordering
+    let resolver = result.create_environment_resolver();
+    let ordered_environments = result.get_ordered_environment_names(&resolver);
+    
+    if let Err(e) = EnvironmentValidator::validate_minimum_environments(&ordered_environments) {
+        output.push_str(&format!("⚠️  Environment validation error: {}\n", e));
+        return output;
+    }
+    
+    if ordered_environments.len() >= 2 {
+        // Use deterministic ordering - first is base, second is comparison target
+        let (env1, env2) = (ordered_environments[0].clone(), ordered_environments[1].clone());
 
         for difference in &result.differences {
             let icon = match difference.category {

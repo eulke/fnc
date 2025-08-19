@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use crate::utils::environment_utils::{EnvironmentOrderResolver, OrderedEnvironmentResponses, OrderedStatusCodes, EnvironmentValidator};
 
 /// Default threshold for large response processing (50KB)
 pub const DEFAULT_LARGE_RESPONSE_THRESHOLD: usize = 50_000;
@@ -105,6 +106,54 @@ impl ComparisonResult {
     pub fn has_consistent_status(&self) -> bool {
         let statuses: Vec<u16> = self.status_codes.values().copied().collect();
         statuses.windows(2).all(|w| w[0] == w[1])
+    }
+
+    /// Get ordered responses using environment resolver
+    pub fn get_ordered_responses(&self, resolver: &EnvironmentOrderResolver) -> OrderedEnvironmentResponses {
+        OrderedEnvironmentResponses::new(resolver, self.responses.clone())
+    }
+
+    /// Get ordered status codes using environment resolver
+    pub fn get_ordered_status_codes(&self, resolver: &EnvironmentOrderResolver) -> OrderedStatusCodes {
+        OrderedStatusCodes::new(resolver, self.status_codes.clone())
+    }
+
+    /// Get ordered environment names using resolver
+    pub fn get_ordered_environment_names(&self, resolver: &EnvironmentOrderResolver) -> Vec<String> {
+        resolver.extract_ordered_environments(&self.responses)
+    }
+
+    /// Create environment resolver from this comparison result
+    pub fn create_environment_resolver(&self) -> EnvironmentOrderResolver {
+        EnvironmentOrderResolver::from_responses(&self.responses, self.base_environment.clone())
+    }
+
+    /// Get the first response in deterministic environment order (safe replacement for .iter().next())
+    pub fn get_first_response_ordered(&self) -> Option<(String, &HttpResponse)> {
+        let resolver = self.create_environment_resolver();
+        let ordered_environments = self.get_ordered_environment_names(&resolver);
+        if let Some(first_env) = ordered_environments.first() {
+            self.responses.get(first_env).map(|response| (first_env.clone(), response))
+        } else {
+            None
+        }
+    }
+
+    /// Get the first response data only (for summary displays)
+    pub fn get_first_response_data(&self) -> Option<&HttpResponse> {
+        self.get_first_response_ordered().map(|(_, response)| response)
+    }
+
+    /// Get environment names in deterministic order (cached for performance)
+    pub fn get_environment_names_ordered(&self) -> Vec<String> {
+        let resolver = self.create_environment_resolver();
+        self.get_ordered_environment_names(&resolver)
+    }
+
+    /// Validate environment consistency for this result
+    pub fn validate_environment_consistency(&self) -> crate::error::Result<()> {
+        let resolver = self.create_environment_resolver();
+        EnvironmentValidator::validate_comparison_result(self, &resolver)
     }
 }
 

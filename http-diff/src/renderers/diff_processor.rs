@@ -7,6 +7,8 @@
 use super::diff_data::{BodyDiffData, BodyDiffSummary, DiffData, DiffRow, HeaderDiffData};
 use crate::comparison::analyzer::{BodyDiff, HeaderDiff};
 use crate::types::{ComparisonResult, DifferenceCategory};
+use crate::utils::environment_utils::EnvironmentValidator;
+use crate::error::{HttpDiffError, Result};
 
 /// Processor for extracting and organizing diff data
 pub struct DiffProcessor {
@@ -34,7 +36,7 @@ impl DiffProcessor {
         &self,
         result: &ComparisonResult,
         compare_headers: bool,
-    ) -> Result<DiffData, String> {
+    ) -> Result<DiffData> {
         let mut diff_data = DiffData::new(result.route_name.clone());
 
         // Process each difference in the comparison result
@@ -50,7 +52,7 @@ impl DiffProcessor {
                     } else if let Some(ref diff_output) = difference.diff_output {
                         // Fallback for backward compatibility
                         let header_diffs: Vec<HeaderDiff> = serde_json::from_str(diff_output)
-                            .map_err(|e| format!("Failed to parse header diff data: {}", e))?;
+                            .map_err(|e| HttpDiffError::general(format!("Failed to parse header diff data: {}", e)))?;
 
                         let envs = self.extract_environment_names(result)?;
                         let header_diff_data =
@@ -67,7 +69,7 @@ impl DiffProcessor {
                     } else if let Some(ref diff_output) = difference.diff_output {
                         // Fallback for backward compatibility
                         let body_diff: BodyDiff = serde_json::from_str(diff_output)
-                            .map_err(|e| format!("Failed to parse body diff data: {}", e))?;
+                            .map_err(|e| HttpDiffError::general(format!("Failed to parse body diff data: {}", e)))?;
 
                         let envs = self.extract_environment_names(result)?;
                         let body_diff_data = self.process_body_diff(&body_diff, &envs.0, &envs.1);
@@ -205,32 +207,21 @@ impl DiffProcessor {
         builder.build_structured_summary(&body_diff.normalized_body1, &body_diff.normalized_body2)
     }
 
-    /// Extract environment names from comparison result
+    /// Extract environment names from comparison result with consistent ordering
     fn extract_environment_names(
         &self,
         result: &ComparisonResult,
-    ) -> Result<(String, String), String> {
-        let envs: Vec<String> = result.responses.keys().cloned().collect();
-        if envs.len() < 2 {
-            return Err("Need at least 2 environments for comparison".to_string());
-        }
+    ) -> Result<(String, String)> {
+        // Use the environment resolver for consistent ordering
+        let resolver = result.create_environment_resolver();
+        let ordered_environments = result.get_ordered_environment_names(&resolver);
 
-        // If a base environment is present in the result, ensure it's first
-        if let Some(base) = &result.base_environment {
-            if envs.contains(base) {
-                let other = envs
-                    .iter()
-                    .find(|e| *e != base)
-                    .cloned()
-                    .ok_or_else(|| "Need at least 2 environments for comparison".to_string())?;
-                return Ok((base.clone(), other));
-            }
-        }
+        // Validate minimum environment count
+        EnvironmentValidator::validate_minimum_environments(&ordered_environments)?;
 
-        // Sort to ensure consistent ordering when no base is set
-        let mut sorted_envs = envs;
-        sorted_envs.sort();
-        Ok((sorted_envs[0].clone(), sorted_envs[1].clone()))
+        // For diff processing, we typically compare the first environment (base) against the second
+        // This ensures consistent environment ordering in diffs
+        Ok((ordered_environments[0].clone(), ordered_environments[1].clone()))
     }
 }
 

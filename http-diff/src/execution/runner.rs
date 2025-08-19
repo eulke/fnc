@@ -3,6 +3,7 @@ use crate::error::{HttpDiffError, Result};
 use crate::execution::progress::{ProgressCallback, ProgressTracker};
 use crate::traits::{HttpClient, ResponseComparator, TestRunner};
 use crate::types::{ExecutionError, ExecutionResult};
+use crate::utils::environment_utils::EnvironmentOrderResolver;
 use futures::stream::{FuturesUnordered, StreamExt};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -185,7 +186,7 @@ where
             if responses.len() >= 2 {
                 let user = &user_data[user_idx];
 
-                // Determine base env from config (if any)
+                // Determine base environment from config (if any)
                 let base_env_opt = self
                     .config
                     .environments
@@ -193,72 +194,27 @@ where
                     .find(|(_k, v)| v.is_base)
                     .map(|(k, _)| k.clone());
 
-                if let Some(base_env) = base_env_opt.clone() {
-                    if responses.contains_key(&base_env) {
-                        // Create one comparison per (base, other)
-                        for (env, resp) in responses.iter() {
-                            if env == &base_env {
-                                continue;
-                            }
-                            let mut pair_map = HashMap::new();
-                            if let Some(base_resp) = responses.get(&base_env) {
-                                pair_map.insert(base_env.clone(), base_resp.clone());
-                                pair_map.insert(env.clone(), resp.clone());
-                            }
+                // Create environment resolver with consistent ordering
+                let config_env_order: Vec<String> = self.config.environments.keys().cloned().collect();
+                let _resolver = EnvironmentOrderResolver::new(&config_env_order, base_env_opt.clone());
 
-                            match self.comparator.compare_responses(
-                                route_name.clone(),
-                                user.data.clone(),
-                                pair_map,
-                            ) {
-                                Ok(mut comparison_result) => {
-                                    comparison_result.base_environment = Some(base_env.clone());
-                                    results.push(comparison_result);
-                                }
-                                Err(e) => {
-                                    let error = ExecutionError::comparison_error(
-                                        route_name.clone(),
-                                        e.to_string(),
-                                    );
-                                    all_errors.push(error);
-                                }
-                            }
-                        }
-                    } else {
-                        // Fallback to comparing all responses if base not present
-                        match self.comparator.compare_responses(
-                            route_name.clone(),
-                            user.data.clone(),
-                            responses,
-                        ) {
-                            Ok(mut comparison_result) => {
-                                comparison_result.base_environment = base_env_opt.clone();
-                                results.push(comparison_result);
-                            }
-                            Err(e) => {
-                                let error = ExecutionError::comparison_error(
-                                    route_name.clone(),
-                                    e.to_string(),
-                                );
-                                all_errors.push(error);
-                            }
-                        }
+                // Create unified comparison result with proper base environment
+                match self.comparator.compare_responses(
+                    route_name.clone(),
+                    user.data.clone(),
+                    responses,
+                ) {
+                    Ok(mut comparison_result) => {
+                        // Ensure base environment is properly set from configuration
+                        comparison_result.base_environment = base_env_opt.clone();
+                        results.push(comparison_result);
                     }
-                } else {
-                    // No base configured: compare all responses together
-                    match self.comparator.compare_responses(
-                        route_name.clone(),
-                        user.data.clone(),
-                        responses,
-                    ) {
-                        Ok(comparison_result) => {
-                            results.push(comparison_result);
-                        }
-                        Err(e) => {
-                            let error =
-                                ExecutionError::comparison_error(route_name.clone(), e.to_string());
-                            all_errors.push(error);
-                        }
+                    Err(e) => {
+                        let error = ExecutionError::comparison_error(
+                            route_name.clone(),
+                            e.to_string(),
+                        );
+                        all_errors.push(error);
                     }
                 }
             }

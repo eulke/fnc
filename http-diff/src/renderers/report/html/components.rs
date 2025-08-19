@@ -4,6 +4,7 @@ use super::super::ReportMetadata;
 use super::json_diff_renderer::JsonDiffRenderer;
 use crate::renderers::diff_processor::DiffProcessor;
 use crate::types::ComparisonResult;
+use crate::utils::environment_utils::EnvironmentOrderResolver;
 
 /// Reusable HTML components for report generation
 pub struct HtmlComponents;
@@ -246,10 +247,21 @@ impl HtmlComponents {
         show_unchanged: bool,
     ) -> String {
         let route_status = Self::get_route_status(result);
+        // Create shared resolver for consistent environment ordering
+        let resolver = result.create_environment_resolver();
+        
+        // Validate environment consistency before rendering
+        if let Err(e) = result.validate_environment_consistency() {
+            return format!(
+                r#"<div class="error-message">Environment validation failed: {}</div>"#,
+                Self::escape_html(&e.to_string())
+            );
+        }
+        
         let status_badge = Self::get_status_badge(result);
         let user_context = Self::format_user_context(result);
-        let status_codes = Self::format_status_codes(result);
-        let curl_commands = Self::render_curl_commands(result);
+        let status_codes = Self::format_status_codes_with_resolver(result, &resolver);
+        let curl_commands = Self::render_curl_commands_with_resolver(result, &resolver);
 
         // Generate content based on route type
         let expandable_content = if result.has_errors {
@@ -349,15 +361,22 @@ impl HtmlComponents {
         }
     }
 
-    /// Format status codes for display
+    /// Format status codes for display with deterministic environment ordering
     fn format_status_codes(result: &ComparisonResult) -> String {
-        result
-            .status_codes
+        let resolver = result.create_environment_resolver();
+        Self::format_status_codes_with_resolver(result, &resolver)
+    }
+
+    /// Format status codes for display with shared resolver (performance optimized)
+    fn format_status_codes_with_resolver(result: &ComparisonResult, resolver: &EnvironmentOrderResolver) -> String {
+        let ordered_status_codes = result.get_ordered_status_codes(resolver);
+        
+        ordered_status_codes
             .iter()
             .map(|(env, code)| {
-                let class = if *code >= 200 && *code < 300 {
+                let class = if code >= 200 && code < 300 {
                     "success"
-                } else if *code >= 400 {
+                } else if code >= 400 {
                     "error"
                 } else {
                     "warning"
@@ -373,11 +392,19 @@ impl HtmlComponents {
             .join(" ")
     }
 
-    /// Render curl commands for a route
+    /// Render curl commands for a route with deterministic environment ordering
     fn render_curl_commands(result: &ComparisonResult) -> String {
+        let resolver = result.create_environment_resolver();
+        Self::render_curl_commands_with_resolver(result, &resolver)
+    }
+
+    /// Render curl commands for a route with shared resolver (performance optimized)
+    fn render_curl_commands_with_resolver(result: &ComparisonResult, resolver: &EnvironmentOrderResolver) -> String {
         let mut curl_commands = String::new();
 
-        for (env, response) in &result.responses {
+        let ordered_responses = result.get_ordered_responses(resolver);
+
+        for (env, response) in ordered_responses.iter() {
             let status_class = if response.status >= 200 && response.status < 300 {
                 "success"
             } else if response.status >= 400 {
@@ -421,8 +448,8 @@ impl HtmlComponents {
 
     /// Render content for identical routes
     fn render_identical_route_content(result: &ComparisonResult, curl_commands: &str) -> String {
-        // Get response details from first available response
-        let response_summary = if let Some((_, response)) = result.responses.iter().next() {
+        // Get response details from first response in deterministic environment order
+        let response_summary = if let Some(response) = result.get_first_response_data() {
             format!(
                 r#"
                 <div class="response-summary">

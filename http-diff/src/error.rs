@@ -52,6 +52,18 @@ pub enum HttpDiffError {
     #[error("Response comparison failed: {message}")]
     ComparisonFailed { message: String },
 
+    #[error("Environment mismatch: {message}")]
+    EnvironmentMismatch { message: String },
+
+    #[error("Invalid base environment '{base_environment}': {message}")]
+    InvalidBaseEnvironment { 
+        base_environment: String,
+        message: String 
+    },
+
+    #[error("Environment validation failed: {message}")]
+    EnvironmentValidation { message: String },
+
     #[error("General error: {message}")]
     General { message: String },
 }
@@ -76,6 +88,28 @@ impl HttpDiffError {
     /// Create a new comparison failed error
     pub fn comparison_failed<S: Into<String>>(message: S) -> Self {
         Self::ComparisonFailed {
+            message: message.into(),
+        }
+    }
+
+    /// Create a new environment mismatch error
+    pub fn environment_mismatch<S: Into<String>>(message: S) -> Self {
+        Self::EnvironmentMismatch {
+            message: message.into(),
+        }
+    }
+
+    /// Create a new invalid base environment error
+    pub fn invalid_base_environment<S: Into<String>>(base_environment: S, message: S) -> Self {
+        Self::InvalidBaseEnvironment {
+            base_environment: base_environment.into(),
+            message: message.into(),
+        }
+    }
+
+    /// Create a new environment validation error
+    pub fn environment_validation<S: Into<String>>(message: S) -> Self {
+        Self::EnvironmentValidation {
             message: message.into(),
         }
     }

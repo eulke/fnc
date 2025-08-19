@@ -1126,8 +1126,10 @@ impl TuiApp {
             use std::collections::BTreeSet;
             let mut set: BTreeSet<String> = BTreeSet::new();
             for result in &self.results {
-                for env in result.responses.keys() {
-                    set.insert(env.clone());
+                // Use ordered environment names instead of direct HashMap access
+                let env_names = result.get_environment_names_ordered();
+                for env in env_names {
+                    set.insert(env);
                 }
             }
             set.into_iter().collect()

@@ -6,6 +6,7 @@ pub mod response_validator;
 use crate::error::Result;
 use crate::traits::ResponseComparator as ResponseComparatorTrait;
 use crate::types::{ComparisonResult, DiffViewStyle, HttpResponse};
+use crate::utils::environment_utils::{EnvironmentOrderResolver, EnvironmentValidator};
 use analyzer::DifferenceAnalyzer;
 use std::collections::HashMap;
 
@@ -90,18 +91,25 @@ impl ResponseComparator {
         self
     }
 
-    /// Compare responses from multiple environments
-    pub fn compare_responses(
+    /// Compare responses from multiple environments with optional base environment
+    pub fn compare_responses_with_base(
         &self,
         route_name: String,
         user_context: HashMap<String, String>,
         responses: HashMap<String, HttpResponse>,
+        base_environment: Option<String>,
     ) -> Result<ComparisonResult> {
         // Validate responses
         response_validator::ResponseValidatorImpl::validate_responses(&responses)?;
 
         let mut differences = Vec::new();
-        let mut environments: Vec<String> = responses.keys().cloned().collect();
+        
+        // Use environment resolver for consistent ordering
+        let resolver = EnvironmentOrderResolver::from_responses(&responses, base_environment.clone());
+        let environments = resolver.extract_ordered_environments(&responses);
+
+        // Validate minimum environment count
+        EnvironmentValidator::validate_minimum_environments(&environments)?;
 
         if environments.len() < 2 {
             // Need at least 2 environments for comparison
@@ -114,16 +122,12 @@ impl ResponseComparator {
                 status_codes: HashMap::new(),
                 has_errors: false,
                 error_bodies: None,
-                base_environment: None,
+                base_environment: base_environment,
             });
         }
 
-        // Sort environments for consistent comparison ordering
-        environments.sort();
-
-        // Optimized O(n) comparison: compare first environment against all others
-        // This covers 90% of use cases where you want to compare a base environment
-        // against target environments (dev vs staging, dev vs prod, etc.)
+        // Use deterministic environment ordering - first environment becomes base
+        // If base_environment is specified, it will be first due to resolver ordering
         let base_env = &environments[0];
         let base_response = &responses[base_env];
 
@@ -164,6 +168,16 @@ impl ResponseComparator {
             error_bodies,
             base_environment: Some(base_env.clone()),
         })
+    }
+
+    /// Compare responses from multiple environments (legacy method)
+    pub fn compare_responses(
+        &self,
+        route_name: String,
+        user_context: HashMap<String, String>,
+        responses: HashMap<String, HttpResponse>,
+    ) -> Result<ComparisonResult> {
+        self.compare_responses_with_base(route_name, user_context, responses, None)
     }
 
     /// Get the configured diff view style for use by renderers
