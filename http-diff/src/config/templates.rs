@@ -26,6 +26,8 @@ headers."X-Scope" = "staging"
 timeout_seconds = 30
 # Whether to follow HTTP redirects
 follow_redirects = true
+# Maximum number of concurrent requests (1-100)
+max_concurrent_requests = 10
 
 # Global headers applied to all requests
 [global.headers]

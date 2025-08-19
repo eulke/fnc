@@ -31,11 +31,18 @@ where
 {
     /// Create a new test runner
     pub fn new(config: HttpDiffConfig, client: C, comparator: R) -> Result<Self> {
+        // Extract max_concurrent_requests from config, defaulting to 10
+        let max_concurrent_requests = config
+            .global
+            .as_ref()
+            .and_then(|g| g.max_concurrent_requests)
+            .unwrap_or(10);
+
         Ok(Self {
             config,
             client: Arc::new(client),
             comparator: Arc::new(comparator),
-            max_concurrent_requests: 10,
+            max_concurrent_requests,
         })
     }
 

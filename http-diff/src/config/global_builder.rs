@@ -37,6 +37,12 @@ impl GlobalConfigBuilder {
         self
     }
 
+    /// Set maximum number of concurrent requests
+    pub fn max_concurrent_requests(mut self, max_concurrent: usize) -> Self {
+        self.config.max_concurrent_requests = Some(max_concurrent);
+        self
+    }
+
     /// Set global headers (replaces any existing headers)
     pub fn headers(mut self, headers: HashMap<String, String>) -> Self {
         self.config.headers = Some(headers);
@@ -71,12 +77,14 @@ mod tests {
         let config = GlobalConfigBuilder::new()
             .timeout(30)
             .follow_redirects(true)
+            .max_concurrent_requests(5)
             .header("Authorization", "Bearer token")
             .header("Accept", "application/json")
             .build();
 
         assert_eq!(config.timeout_seconds, Some(30));
         assert_eq!(config.follow_redirects, Some(true));
+        assert_eq!(config.max_concurrent_requests, Some(5));
 
         let headers = config.headers.unwrap();
         assert_eq!(
@@ -91,17 +99,20 @@ mod tests {
         let existing = GlobalConfig {
             timeout_seconds: Some(60),
             follow_redirects: Some(false),
+            max_concurrent_requests: Some(20),
             headers: None,
             params: None,
         };
 
         let config = GlobalConfigBuilder::from_config(existing)
             .timeout(30) // override
+            .max_concurrent_requests(15) // override
             .header("X-Custom", "value")
             .build();
 
         assert_eq!(config.timeout_seconds, Some(30));
         assert_eq!(config.follow_redirects, Some(false));
+        assert_eq!(config.max_concurrent_requests, Some(15));
 
         let headers = config.headers.unwrap();
         assert_eq!(headers.get("X-Custom"), Some(&"value".to_string()));

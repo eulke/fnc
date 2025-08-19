@@ -98,6 +98,15 @@ impl ConfigValidatorImpl {
                     ));
                 }
             }
+            
+            // Validate max_concurrent_requests if specified
+            if let Some(max_concurrent) = global.max_concurrent_requests {
+                if max_concurrent == 0 || max_concurrent > 100 {
+                    return Err(HttpDiffError::invalid_config(
+                        "max_concurrent_requests must be between 1 and 100".to_string(),
+                    ));
+                }
+            }
         }
 
         Ok(())

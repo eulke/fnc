@@ -32,6 +32,8 @@ pub struct GlobalConfig {
     pub timeout_seconds: Option<u64>,
     /// Whether to follow redirects
     pub follow_redirects: Option<bool>,
+    /// Maximum number of concurrent requests
+    pub max_concurrent_requests: Option<usize>,
     /// Global headers applied to all requests
     pub headers: Option<HashMap<String, String>>,
     /// Global query parameters applied to all requests
@@ -158,6 +160,7 @@ impl Default for GlobalConfig {
         Self {
             timeout_seconds: Some(30),
             follow_redirects: Some(true),
+            max_concurrent_requests: Some(10),
             headers: None,
             params: None,
         }

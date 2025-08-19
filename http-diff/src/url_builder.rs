@@ -179,6 +179,7 @@ mod tests {
             global: Some(crate::config::GlobalConfig {
                 timeout_seconds: None,
                 follow_redirects: None,
+                max_concurrent_requests: None,
                 headers: None,
                 params: Some({
                     let mut params = HashMap::new();

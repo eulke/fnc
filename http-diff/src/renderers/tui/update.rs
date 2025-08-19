@@ -145,7 +145,19 @@ fn handle_results(app: &mut TuiApp, msg: ResultsMsg) -> Effect {
             app.selected_index = max;
             app.sync_results_table_state();
         }
-        ResultsMsg::SetFilterTab(n) => app.switch_details_tab(n), // reuse existing for now
+        ResultsMsg::SetFilterTab(n) => {
+            app.filter_state.current_tab = (n - 1) % 4;
+            app.update_filter_from_tab();
+            app.sync_results_table_state();
+        }
+        ResultsMsg::NextFilterTab => {
+            app.next_filter_tab();
+            app.sync_results_table_state();
+        }
+        ResultsMsg::PrevFilterTab => {
+            app.previous_filter_tab();
+            app.sync_results_table_state();
+        }
         ResultsMsg::ToggleFilterPanel => app.toggle_filter_panel(),
         ResultsMsg::ClearFilters => app.clear_filters(),
     }

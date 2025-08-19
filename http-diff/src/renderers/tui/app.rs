@@ -452,8 +452,13 @@ impl TuiApp {
                 }
             }
             PanelFocus::Results => {
-                let (total, _identical, _different, errors) = self.get_filter_counts();
-                format!("Results ({} total, {} errors)", total, errors)
+                let (total, identical, different, errors) = self.get_filter_counts();
+                match self.filter_state.status_filter {
+                    StatusFilter::All => format!("Results ({} total)", total),
+                    StatusFilter::Identical => format!("Results - Identical ({}/{})", identical, total),
+                    StatusFilter::Different => format!("Results - Different ({}/{})", different, total),
+                    StatusFilter::ErrorsOnly => format!("Results - Errors ({}/{})", errors, total),
+                }
             }
             PanelFocus::Details => {
                 if let Some(result) = self.current_filtered_result() {
@@ -472,10 +477,6 @@ impl TuiApp {
             .unwrap_or(false)
     }
 
-    /// Get help text for the current view (always Dashboard mode)
-    pub fn get_help_text(&self) -> &'static str {
-        "Tab: Switch panels | ↑↓←→: Navigate | R: Run tests | S: Save HTML report | 1-4: Tabs (Details) | D: Toggle diff | x: Expand | q: Quit"
-    }
 
     // === Dashboard Panel Navigation ===
 
@@ -1062,7 +1063,7 @@ impl TuiApp {
     }
 
     /// Update filter based on current tab
-    fn update_filter_from_tab(&mut self) {
+    pub fn update_filter_from_tab(&mut self) {
         self.filter_state.status_filter = match self.filter_state.current_tab {
             0 => StatusFilter::All,
             1 => StatusFilter::Identical,

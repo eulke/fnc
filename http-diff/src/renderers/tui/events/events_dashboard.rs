@@ -125,6 +125,16 @@ pub fn map_dashboard_keys_to_msg(app: &TuiApp, key: KeyEvent) -> Option<Msg> {
                 return Some(Msg::Results(ResultsMsg::ClearFilters));
             }
         }
+        KeyCode::Char('[') => {
+            if app.panel_focus == PanelFocus::Results {
+                return Some(Msg::Results(ResultsMsg::PrevFilterTab));
+            }
+        }
+        KeyCode::Char(']') => {
+            if app.panel_focus == PanelFocus::Results {
+                return Some(Msg::Results(ResultsMsg::NextFilterTab));
+            }
+        }
         KeyCode::Char('r') | KeyCode::Char('R') => {
             // Execute tests from any panel (main execution trigger)
             if !app.selected_environments.is_empty() && !app.selected_routes.is_empty() {

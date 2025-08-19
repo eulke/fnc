@@ -82,6 +82,11 @@ impl HttpDiffConfigBuilder {
         self.configure_global(|global| global.header(key, value))
     }
 
+    /// Set maximum number of concurrent requests (convenience method)
+    pub fn max_concurrent_requests(self, max_concurrent: usize) -> Self {
+        self.configure_global(|global| global.max_concurrent_requests(max_concurrent))
+    }
+
     /// Add a route
     pub fn route(mut self, route: Route) -> Self {
         self.routes.push(route);
