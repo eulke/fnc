@@ -50,7 +50,6 @@ pub enum ResultsMsg {
     SetFilterTab(usize),
     NextFilterTab,
     PrevFilterTab,
-    ToggleFilterPanel,
     ClearFilters,
 }
 

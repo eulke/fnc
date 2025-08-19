@@ -155,7 +155,6 @@ fn handle_results(app: &mut TuiApp, msg: ResultsMsg) -> Effect {
             app.previous_filter_tab();
             app.sync_results_table_state();
         }
-        ResultsMsg::ToggleFilterPanel => app.toggle_filter_panel(),
         ResultsMsg::ClearFilters => app.clear_filters(),
     }
     Effect::None

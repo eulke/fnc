@@ -115,11 +115,6 @@ pub fn map_dashboard_keys_to_msg(app: &TuiApp, key: KeyEvent) -> Option<Msg> {
                 return Some(Msg::Config(crate::renderers::tui::msg::ConfigMsg::ClearAll));
             }
         }
-        KeyCode::Char('f') => {
-            if app.panel_focus == PanelFocus::Results {
-                return Some(Msg::Results(ResultsMsg::ToggleFilterPanel));
-            }
-        }
         KeyCode::Char('c') => {
             if app.panel_focus == PanelFocus::Results {
                 return Some(Msg::Results(ResultsMsg::ClearFilters));

@@ -16,8 +16,8 @@ pub fn draw_dashboard_results_panel(f: &mut Frame, app: &mut TuiApp, area: Rect)
     let is_focused = app.is_panel_focused(&PanelFocus::Results);
     let title = app.get_panel_title(&PanelFocus::Results);
     let has_content = !app.results.is_empty();
-    let has_activity = app.filter_state.show_filter_panel
-        || app.filter_state.status_filter != crate::renderers::tui::app::StatusFilter::All;
+    let has_activity = app.filter_state.status_filter
+        != crate::renderers::tui::app::StatusFilter::All;
 
     let block = TuiTheme::panel_block(&title, is_focused, has_content, has_activity);
 

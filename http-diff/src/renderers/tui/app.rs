@@ -63,8 +63,6 @@ pub struct FilterState {
     pub environment_filter: Option<String>,
     /// Route name pattern filter
     pub route_pattern: Option<String>,
-    /// Whether filter panel is open
-    pub show_filter_panel: bool,
     /// Current tab index for filter navigation
     pub current_tab: usize,
 }
@@ -75,7 +73,6 @@ impl Default for FilterState {
             status_filter: StatusFilter::All,
             environment_filter: None,
             route_pattern: None,
-            show_filter_panel: false,
             current_tab: 0,
         }
     }
@@ -1077,10 +1074,7 @@ impl TuiApp {
         self.selected_index = 0;
     }
 
-    /// Toggle filter panel visibility
-    pub fn toggle_filter_panel(&mut self) {
-        self.filter_state.show_filter_panel = !self.filter_state.show_filter_panel;
-    }
+    
 
     /// Set route pattern filter
     pub fn set_route_pattern(&mut self, pattern: Option<String>) {
