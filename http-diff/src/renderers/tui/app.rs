@@ -928,16 +928,6 @@ impl TuiApp {
         });
     }
 
-    /// Show brief feedback message (1.5 seconds instead of 3)
-    pub fn show_brief_feedback(&mut self, message: &str, feedback_type: FeedbackType) {
-        self.action_feedback = Some(ActionFeedback {
-            message: message.to_string(),
-            feedback_type,
-            timestamp: std::time::Instant::now(),
-            is_brief: true,
-        });
-    }
-
     /// Clear old feedback messages
     pub fn clear_old_feedback(&mut self) {
         if let Some(ref feedback) = self.action_feedback {
@@ -958,13 +948,9 @@ impl TuiApp {
         match self.focused_panel {
             FocusedPanel::Environments => {
                 self.selected_environments = self.available_environments.clone();
-                // Brief feedback for bulk operations
-                self.show_brief_feedback("All environments selected", FeedbackType::Success);
             }
             FocusedPanel::Routes => {
                 self.selected_routes = self.available_routes.clone();
-                // Brief feedback for bulk operations
-                self.show_brief_feedback("All routes selected", FeedbackType::Success);
             }
             FocusedPanel::Actions => {
                 // No select all for actions
@@ -977,13 +963,9 @@ impl TuiApp {
         match self.focused_panel {
             FocusedPanel::Environments => {
                 self.selected_environments.clear();
-                // Brief feedback for bulk operations
-                self.show_brief_feedback("All environments cleared", FeedbackType::Warning);
             }
             FocusedPanel::Routes => {
                 self.selected_routes.clear();
-                // Brief feedback for bulk operations
-                self.show_brief_feedback("All routes cleared", FeedbackType::Warning);
             }
             FocusedPanel::Actions => {
                 // No clear all for actions
