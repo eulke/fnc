@@ -70,7 +70,7 @@ pub fn map_dashboard_keys_to_msg(app: &TuiApp, key: KeyEvent) -> Option<Msg> {
                         }
                     }
                 }
-                PanelFocus::Results => Msg::Details(DetailsMsg::ScrollTop),
+                PanelFocus::Results => Msg::FocusNextPane,
                 _ => return None,
             });
         }
