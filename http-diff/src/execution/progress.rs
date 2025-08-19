@@ -7,6 +7,7 @@ pub struct ProgressTracker {
     pub completed_requests: usize,
     pub successful_requests: usize,
     pub failed_requests: usize,
+    pub skipped_routes: usize,
     #[serde(skip, default = "Instant::now")]
     pub start_time: Instant,
 }
@@ -18,6 +19,7 @@ impl ProgressTracker {
             completed_requests: 0,
             successful_requests: 0,
             failed_requests: 0,
+            skipped_routes: 0,
             start_time: Instant::now(),
         }
     }
@@ -29,6 +31,10 @@ impl ProgressTracker {
         } else {
             self.failed_requests += 1;
         }
+    }
+
+    pub fn route_skipped(&mut self) {
+        self.skipped_routes += 1;
     }
 
     pub fn progress_percentage(&self) -> f64 {

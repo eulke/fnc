@@ -194,6 +194,52 @@ mod integration_tests {
     }
 
     #[test]
+    fn test_conditional_config_parsing() {
+        use http_diff::config::HttpDiffConfig;
+
+        // Test that configuration with conditions can be parsed successfully
+        let config_toml = create_test_config_with_conditions();
+        let config: Result<HttpDiffConfig, _> = toml::from_str(&config_toml);
+        
+        assert!(config.is_ok(), "Configuration with conditions should parse successfully");
+        
+        let config = config.unwrap();
+        assert_eq!(config.routes.len(), 3);
+        
+        // Verify the premium-api route has conditions
+        let premium_route = config.routes.iter()
+            .find(|r| r.name == "premium-api")
+            .expect("Premium route should exist");
+        
+        assert!(premium_route.conditions.is_some());
+        let conditions = premium_route.conditions.as_ref().unwrap();
+        assert_eq!(conditions.len(), 2);
+        
+        // Verify condition details
+        assert_eq!(conditions[0].variable, "user_type");
+        assert_eq!(conditions[0].value, "premium");
+        assert_eq!(conditions[1].variable, "user_id");
+        assert_eq!(conditions[1].value, "1000");
+        
+        // Verify the debug-endpoint route has conditions
+        let debug_route = config.routes.iter()
+            .find(|r| r.name == "debug-endpoint")
+            .expect("Debug route should exist");
+        
+        assert!(debug_route.conditions.is_some());
+        let debug_conditions = debug_route.conditions.as_ref().unwrap();
+        assert_eq!(debug_conditions.len(), 1);
+        assert_eq!(debug_conditions[0].variable, "env.DEBUG_MODE");
+        
+        // Verify the health route has no conditions
+        let health_route = config.routes.iter()
+            .find(|r| r.name == "health")
+            .expect("Health route should exist");
+        
+        assert!(health_route.conditions.is_none());
+    }
+
+    #[test]
     fn test_error_summary_comprehensive() {
         let mixed_results = vec![
             create_comparison_result(

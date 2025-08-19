@@ -1,4 +1,5 @@
 use crate::config::{Route, UserData};
+use crate::conditions::{ConditionResult, ExecutionCondition};
 use crate::error::Result;
 use crate::types::{ComparisonResult, HttpResponse};
 use std::collections::HashMap;
@@ -50,6 +51,19 @@ pub trait ConfigValidator: Send + Sync {
 
     /// Validate configuration
     fn validate(&self, config: &Self::Config) -> Result<()>;
+}
+
+/// Trait for evaluating execution conditions
+pub trait ConditionEvaluator: Send + Sync {
+    /// Evaluate if a route should be executed based on conditions and user data
+    fn should_execute_route(&self, route: &Route, user_data: &UserData) -> Result<bool>;
+
+    /// Evaluate all conditions for a route
+    fn evaluate_conditions(
+        &self,
+        conditions: &[ExecutionCondition],
+        user_data: &UserData,
+    ) -> Result<Vec<ConditionResult>>;
 }
 
 /// Type alias for progress callback to reduce complexity

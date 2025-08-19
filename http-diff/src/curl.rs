@@ -240,6 +240,7 @@ mod tests {
             params: None,
             base_urls: None,
             body: None,
+            conditions: None,
         }];
 
         HttpDiffConfig {
@@ -332,6 +333,7 @@ mod tests {
             body: Some(
                 r#"{"message": "Hello 'world' with \"quotes\" and $special chars!"}"#.to_string(),
             ),
+            conditions: None,
         });
 
         let generator = CurlGenerator::new(config);

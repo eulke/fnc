@@ -1,3 +1,4 @@
+use crate::conditions::ExecutionCondition;
 use crate::error::{HttpDiffError, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -57,6 +58,8 @@ pub struct Route {
     pub base_urls: Option<HashMap<String, String>>,
     /// Request body for POST/PUT requests
     pub body: Option<String>,
+    /// Conditional execution rules for this route
+    pub conditions: Option<Vec<ExecutionCondition>>,
 }
 
 /// User data loaded from CSV for parameter substitution

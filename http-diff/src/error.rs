@@ -64,6 +64,18 @@ pub enum HttpDiffError {
     #[error("Environment validation failed: {message}")]
     EnvironmentValidation { message: String },
 
+    #[error("Condition evaluation failed for route '{route}': {message}")]
+    ConditionEvaluationFailed {
+        route: String,
+        message: String,
+    },
+
+    #[error("Route '{route}' skipped due to condition: {condition_reason}")]
+    RouteSkippedByCondition {
+        route: String,
+        condition_reason: String,
+    },
+
     #[error("General error: {message}")]
     General { message: String },
 }
@@ -111,6 +123,22 @@ impl HttpDiffError {
     pub fn environment_validation<S: Into<String>>(message: S) -> Self {
         Self::EnvironmentValidation {
             message: message.into(),
+        }
+    }
+
+    /// Create a new condition evaluation failed error
+    pub fn condition_evaluation_failed<S: Into<String>>(route: S, message: S) -> Self {
+        Self::ConditionEvaluationFailed {
+            route: route.into(),
+            message: message.into(),
+        }
+    }
+
+    /// Create a new route skipped by condition error
+    pub fn route_skipped_by_condition<S: Into<String>>(route: S, condition_reason: S) -> Self {
+        Self::RouteSkippedByCondition {
+            route: route.into(),
+            condition_reason: condition_reason.into(),
         }
     }
 

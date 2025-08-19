@@ -110,6 +110,7 @@ impl HttpDiffConfigBuilder {
             params: None,
             base_urls: None,
             body: body.map(|b| b.into()),
+            conditions: None,
         });
         self
     }

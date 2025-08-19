@@ -72,7 +72,53 @@ path = "/api/users"
     .to_string()
 }
 
+/// Create test configuration with conditional routes
+pub fn create_test_config_with_conditions() -> String {
+    r#"[environments.test]
+base_url = "http://127.0.0.1:8080"
+
+[environments.prod]
+base_url = "http://127.0.0.1:8081"
+
+[[routes]]
+name = "health"
+method = "GET"
+path = "/health"
+
+[[routes]]
+name = "premium-api"
+method = "GET"
+path = "/api/premium/users"
+
+[[routes.conditions]]
+variable = "user_type"
+operator = "equals"
+value = "premium"
+
+[[routes.conditions]]
+variable = "user_id"
+operator = "greater_than"
+value = "1000"
+
+[[routes]]
+name = "debug-endpoint"
+method = "GET"
+path = "/debug/health"
+
+[[routes.conditions]]
+variable = "env.DEBUG_MODE"
+operator = "equals"
+value = "true"
+"#
+    .to_string()
+}
+
 /// Create test user data CSV content
 pub fn create_test_users_csv() -> String {
     "userId,siteId,userName\n12345,MCO,test_user\n".to_string()
+}
+
+/// Create test user data CSV content with conditional fields
+pub fn create_test_users_csv_with_conditions() -> String {
+    "userId,user_type,user_id,userName\n12345,premium,1500,premium_user\n67890,basic,500,basic_user\n".to_string()
 }

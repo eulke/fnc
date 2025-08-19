@@ -4,7 +4,7 @@ use crate::progress::ProgressTracker as CliProgressTracker;
 use crate::ui;
 use dialoguer::{Confirm, theme::ColorfulTheme};
 use http_diff::{
-    CliRenderer, DefaultHttpClient, DefaultResponseComparator, DefaultTestRunner, OutputRenderer,
+    CliRenderer, ConditionEvaluatorImpl, DefaultHttpClient, DefaultResponseComparator, DefaultTestRunner, OutputRenderer,
     ProgressTracker as HttpProgressTracker, TestRunner,
     config::{HttpDiffConfig, ensure_config_files_exist, load_user_data},
     curl::CurlGenerator,
@@ -221,7 +221,8 @@ async fn execute_async(args: HttpDiffArgs) -> Result<()> {
         comparator = comparator.with_headers_comparison();
     }
 
-    let runner = DefaultTestRunner::new(config.clone(), client, comparator)
+    let condition_evaluator = ConditionEvaluatorImpl::new();
+    let runner = DefaultTestRunner::new(config.clone(), client, comparator, condition_evaluator)
         .map_err(|e| CliError::Other(format!("Failed to initialize test runner: {}", e)))?;
     progress.complete_step();
 

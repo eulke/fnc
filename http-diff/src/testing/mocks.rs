@@ -1,7 +1,8 @@
+use crate::conditions::{ConditionResult, ExecutionCondition};
 use crate::config::{Route, UserData};
 use crate::error::Result;
 use crate::execution::progress::ProgressTracker;
-use crate::traits::{HttpClient, ResponseComparator, TestRunner};
+use crate::traits::{ConditionEvaluator, HttpClient, ResponseComparator, TestRunner};
 use crate::types::{ComparisonResult, DiffViewStyle, Difference, DifferenceCategory, HttpResponse};
 use std::collections::HashMap;
 
@@ -197,6 +198,87 @@ impl TestRunner for MockTestRunner {
     }
 }
 
+/// Mock condition evaluator for testing
+pub struct MockConditionEvaluator {
+    pub should_execute_results: HashMap<String, bool>,
+    pub default_result: bool,
+    pub should_fail: bool,
+    pub failure_message: String,
+}
+
+impl MockConditionEvaluator {
+    pub fn new() -> Self {
+        Self {
+            should_execute_results: HashMap::new(),
+            default_result: true,
+            should_fail: false,
+            failure_message: "Mock condition evaluation failure".to_string(),
+        }
+    }
+
+    pub fn with_route_result(mut self, route_name: String, should_execute: bool) -> Self {
+        self.should_execute_results.insert(route_name, should_execute);
+        self
+    }
+
+    pub fn with_default_result(mut self, default_result: bool) -> Self {
+        self.default_result = default_result;
+        self
+    }
+
+    pub fn with_failure(mut self, message: String) -> Self {
+        self.should_fail = true;
+        self.failure_message = message;
+        self
+    }
+}
+
+impl Default for MockConditionEvaluator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ConditionEvaluator for MockConditionEvaluator {
+    fn should_execute_route(&self, route: &Route, _user_data: &UserData) -> Result<bool> {
+        if self.should_fail {
+            return Err(crate::error::HttpDiffError::condition_evaluation_failed(
+                &route.name,
+                &self.failure_message,
+            ));
+        }
+
+        Ok(self
+            .should_execute_results
+            .get(&route.name)
+            .copied()
+            .unwrap_or(self.default_result))
+    }
+
+    fn evaluate_conditions(
+        &self,
+        conditions: &[ExecutionCondition],
+        _user_data: &UserData,
+    ) -> Result<Vec<ConditionResult>> {
+        if self.should_fail {
+            return Err(crate::error::HttpDiffError::general(&self.failure_message));
+        }
+
+        // Create mock results for all conditions
+        let results = conditions
+            .iter()
+            .map(|condition| ConditionResult {
+                condition: condition.clone(),
+                passed: self.default_result,
+                actual_value: Some("mock_value".to_string()),
+                reason: None,
+            })
+            .collect();
+
+        Ok(results)
+    }
+}
+
 /// Helper functions for creating test data
 pub mod test_helpers {
     use super::*;
@@ -223,6 +305,25 @@ pub mod test_helpers {
             params: None,
             base_urls: None,
             body: None,
+            conditions: None,
+        }
+    }
+
+    pub fn create_mock_route_with_conditions(
+        name: &str,
+        method: &str,
+        path: &str,
+        conditions: Vec<ExecutionCondition>,
+    ) -> Route {
+        Route {
+            name: name.to_string(),
+            method: method.to_string(),
+            path: path.to_string(),
+            headers: None,
+            params: None,
+            base_urls: None,
+            body: None,
+            conditions: Some(conditions),
         }
     }
 

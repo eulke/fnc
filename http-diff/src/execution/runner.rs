@@ -1,7 +1,7 @@
 use crate::config::HttpDiffConfig;
 use crate::error::{HttpDiffError, Result};
 use crate::execution::progress::{ProgressCallback, ProgressTracker};
-use crate::traits::{HttpClient, ResponseComparator, TestRunner};
+use crate::traits::{ConditionEvaluator, HttpClient, ResponseComparator, TestRunner};
 use crate::types::{ExecutionError, ExecutionResult};
 use crate::utils::environment_utils::EnvironmentOrderResolver;
 use futures::stream::{FuturesUnordered, StreamExt};
@@ -10,28 +10,39 @@ use std::sync::Arc;
 use tokio::sync::Semaphore;
 
 /// Type alias for the most common concrete TestRunner implementation
-pub type DefaultTestRunner =
-    TestRunnerImpl<crate::http::HttpClientImpl, crate::comparison::ResponseComparator>;
+pub type DefaultTestRunner = TestRunnerImpl<
+    crate::http::HttpClientImpl,
+    crate::comparison::ResponseComparator,
+    crate::conditions::ConditionEvaluatorImpl,
+>;
 
 /// Test runner implementation
-pub struct TestRunnerImpl<C, R>
+pub struct TestRunnerImpl<C, R, E>
 where
     C: HttpClient + 'static,
     R: ResponseComparator + 'static,
+    E: ConditionEvaluator + 'static,
 {
     config: HttpDiffConfig,
     client: Arc<C>,
     comparator: Arc<R>,
+    condition_evaluator: Arc<E>,
     max_concurrent_requests: usize,
 }
 
-impl<C, R> TestRunnerImpl<C, R>
+impl<C, R, E> TestRunnerImpl<C, R, E>
 where
     C: HttpClient + 'static,
     R: ResponseComparator + 'static,
+    E: ConditionEvaluator + 'static,
 {
     /// Create a new test runner
-    pub fn new(config: HttpDiffConfig, client: C, comparator: R) -> Result<Self> {
+    pub fn new(
+        config: HttpDiffConfig,
+        client: C,
+        comparator: R,
+        condition_evaluator: E,
+    ) -> Result<Self> {
         // Extract max_concurrent_requests from config, defaulting to 10
         let max_concurrent_requests = config
             .global
@@ -43,6 +54,7 @@ where
             config,
             client: Arc::new(client),
             comparator: Arc::new(comparator),
+            condition_evaluator: Arc::new(condition_evaluator),
             max_concurrent_requests,
         })
     }
@@ -53,6 +65,37 @@ where
         self
     }
 
+    /// Filter route-user combinations based on conditions for performance optimization
+    fn filter_executable_combinations<'a>(
+        &self,
+        user_data: &'a [crate::config::UserData],
+        routes: &'a [&'a crate::config::Route],
+    ) -> Result<(Vec<(usize, usize, &'a crate::config::Route, &'a crate::config::UserData)>, usize)> {
+        let mut executable_combinations = Vec::new();
+        let mut skipped_count = 0;
+
+        for (route_idx, route) in routes.iter().enumerate() {
+            for (user_idx, user) in user_data.iter().enumerate() {
+                match self.condition_evaluator.should_execute_route(route, user) {
+                    Ok(should_execute) => {
+                        if should_execute {
+                            executable_combinations.push((route_idx, user_idx, *route, user));
+                        } else {
+                            skipped_count += 1;
+                            // Note: Route skipped due to condition evaluation
+                        }
+                    }
+                    Err(_e) => {
+                        // Note: Condition evaluation failed, skipping route
+                        skipped_count += 1;
+                    }
+                }
+            }
+        }
+
+        Ok((executable_combinations, skipped_count))
+    }
+
     /// Execute tests concurrently with controlled parallelism and streaming progress
     async fn execute_concurrent(
         &self,
@@ -61,9 +104,18 @@ where
         routes: &[&crate::config::Route],
         progress_callback: Option<Box<ProgressCallback>>,
     ) -> Result<ExecutionResult> {
-        // Calculate total requests and set up progress tracking
-        let total_requests = routes.len() * user_data.len() * environments.len();
+        // Early filtering: Filter route-user combinations based on conditions
+        let (executable_combinations, skipped_route_user_count) =
+            self.filter_executable_combinations(user_data, routes)?;
+
+        // Calculate total requests based on combinations that will actually execute
+        let total_requests = executable_combinations.len() * environments.len();
         let mut progress = ProgressTracker::new(total_requests);
+
+        // Track skipped routes in progress
+        for _ in 0..skipped_route_user_count {
+            progress.route_skipped();
+        }
 
         if let Some(ref callback) = progress_callback {
             callback(&progress);
@@ -80,7 +132,7 @@ where
         let mut results = Vec::new();
         let mut all_errors = Vec::new();
 
-        // Create individual request tasks (one per request, not per route-user combination)
+        // Create individual request tasks (one per request, only for executable combinations)
         let mut request_tasks: FuturesUnordered<
             tokio::task::JoinHandle<
                 Result<(
@@ -94,41 +146,39 @@ where
             >,
         > = FuturesUnordered::new();
 
-        for (route_idx, route) in routes.iter().enumerate() {
-            for (user_idx, user) in user_data.iter().enumerate() {
-                for env in environments {
-                    let route_arc = Arc::new((*route).clone());
-                    let user_arc = Arc::new(user.clone());
-                    let env_name = env.clone();
-                    let client = self.client.clone();
-                    let semaphore_clone = semaphore.clone();
+        for (route_idx, user_idx, route, user) in executable_combinations {
+            for env in environments {
+                let route_arc = Arc::new(route.clone());
+                let user_arc = Arc::new(user.clone());
+                let env_name = env.clone();
+                let client = self.client.clone();
+                let semaphore_clone = semaphore.clone();
 
-                    let task = tokio::spawn(async move {
-                        let _permit = semaphore_clone.acquire().await.map_err(|e| {
-                            HttpDiffError::general(format!("Failed to acquire semaphore: {}", e))
-                        })?;
+                let task = tokio::spawn(async move {
+                    let _permit = semaphore_clone.acquire().await.map_err(|e| {
+                        HttpDiffError::general(format!("Failed to acquire semaphore: {}", e))
+                    })?;
 
-                        match client
-                            .execute_request(&route_arc, &env_name, &user_arc)
-                            .await
-                        {
-                            Ok(response) => {
-                                let success = response.is_success();
-                                Ok((route_idx, user_idx, env_name, Some(response), success, None))
-                            }
-                            Err(e) => {
-                                let error = ExecutionError::request_error(
-                                    route_arc.name.clone(),
-                                    env_name.clone(),
-                                    e.to_string(),
-                                );
-                                Ok((route_idx, user_idx, env_name, None, false, Some(error)))
-                            }
+                    match client
+                        .execute_request(&route_arc, &env_name, &user_arc)
+                        .await
+                    {
+                        Ok(response) => {
+                            let success = response.is_success();
+                            Ok((route_idx, user_idx, env_name, Some(response), success, None))
                         }
-                    });
+                        Err(e) => {
+                            let error = ExecutionError::request_error(
+                                route_arc.name.clone(),
+                                env_name.clone(),
+                                e.to_string(),
+                            );
+                            Ok((route_idx, user_idx, env_name, None, false, Some(error)))
+                        }
+                    }
+                });
 
-                    request_tasks.push(task);
-                }
+                request_tasks.push(task);
             }
         }
 
@@ -274,10 +324,11 @@ where
     }
 }
 
-impl<C, R> TestRunner for TestRunnerImpl<C, R>
+impl<C, R, E> TestRunner for TestRunnerImpl<C, R, E>
 where
     C: HttpClient,
     R: ResponseComparator,
+    E: ConditionEvaluator,
 {
     async fn execute_with_data(
         &self,
@@ -329,6 +380,7 @@ mod tests {
             params: None,
             base_urls: None,
             body: None,
+            conditions: None,
         };
 
         let config = HttpDiffConfig {
@@ -345,7 +397,8 @@ mod tests {
             .with_response("health:other".to_string(), other_response);
 
         let comparator = MockResponseComparator::new();
-        let runner = TestRunnerImpl::new(config, client, comparator).unwrap();
+        let condition_evaluator = crate::conditions::ConditionEvaluatorImpl::new();
+        let runner = TestRunnerImpl::new(config, client, comparator, condition_evaluator).unwrap();
 
         let user_data = vec![create_mock_user_data(vec![])];
         let result = runner

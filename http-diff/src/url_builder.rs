@@ -204,6 +204,7 @@ mod tests {
             }),
             base_urls: None,
             body: None,
+            conditions: None,
         }
     }
 

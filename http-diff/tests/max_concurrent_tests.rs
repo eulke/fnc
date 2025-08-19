@@ -112,6 +112,7 @@ mod max_concurrent_validation_tests {
             params: None,
             base_urls: None,
             body: None,
+            conditions: None,
         };
 
         HttpDiffConfig {

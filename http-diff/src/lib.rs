@@ -18,6 +18,7 @@ pub mod http;
 // Business logic modules
 pub mod analysis;
 pub mod comparison;
+pub mod conditions;
 pub mod curl;
 
 // Presentation modules
@@ -33,13 +34,14 @@ pub mod utils;
 pub mod testing;
 
 // Re-export core traits
-pub use traits::{ConfigValidator, HttpClient, ProgressCallback, ResponseComparator, TestRunner};
+pub use traits::{ConditionEvaluator, ConfigValidator, HttpClient, ProgressCallback, ResponseComparator, TestRunner};
 
 // Re-export analysis types
 pub use analysis::{ErrorAnalysis, ErrorAnalyzer, ErrorClassifierImpl, ErrorGroup, RouteError};
 
 // Re-export main types
 pub use config::{Environment, HttpDiffConfig, HttpDiffConfigBuilder, Route, UserData};
+pub use conditions::{ConditionEvaluatorImpl, ConditionOperator, ConditionResult, ExecutionCondition};
 pub use types::{
     ComparisonResult, DiffViewStyle, Difference, DifferenceCategory, ErrorSummary, ExecutionError,
     ExecutionErrorType, ExecutionResult, HttpResponse,
@@ -65,7 +67,8 @@ pub use url_builder::UrlBuilder;
 pub fn create_default_test_runner(config: HttpDiffConfig) -> Result<DefaultTestRunner> {
     let client = DefaultHttpClient::new(config.clone())?;
     let comparator = DefaultResponseComparator::new();
-    DefaultTestRunner::new(config, client, comparator)
+    let condition_evaluator = ConditionEvaluatorImpl::new();
+    DefaultTestRunner::new(config, client, comparator, condition_evaluator)
 }
 
 /// Execute HTTP diff testing with clean architecture - requires explicit user data
