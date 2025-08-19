@@ -80,10 +80,7 @@ pub fn update(app: &mut TuiApp, msg: Msg) -> Effect {
         }
         Msg::Exec(em) => {
             match em {
-                ExecMsg::Progress {
-                    tracker,
-                    op,
-                } => {
+                ExecMsg::Progress { tracker, op } => {
                     app.update_execution_progress(tracker, op);
                 }
                 ExecMsg::Completed(results) => {

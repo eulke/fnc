@@ -98,7 +98,7 @@ impl ConfigValidatorImpl {
                     ));
                 }
             }
-            
+
             // Validate max_concurrent_requests if specified
             if let Some(max_concurrent) = global.max_concurrent_requests {
                 if max_concurrent == 0 || max_concurrent > 100 {

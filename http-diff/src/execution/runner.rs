@@ -3,10 +3,10 @@ use crate::error::{HttpDiffError, Result};
 use crate::execution::progress::{ProgressCallback, ProgressTracker};
 use crate::traits::{HttpClient, ResponseComparator, TestRunner};
 use crate::types::{ExecutionError, ExecutionResult};
+use futures::stream::{FuturesUnordered, StreamExt};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
-use futures::stream::{FuturesUnordered, StreamExt};
 
 /// Type alias for the most common concrete TestRunner implementation
 pub type DefaultTestRunner =
@@ -70,15 +70,29 @@ where
 
         // Use semaphore for concurrency limiting
         let semaphore = Arc::new(Semaphore::new(self.max_concurrent_requests));
-        
+
         // Data structures to collect responses and create comparisons
-        let mut route_user_responses: HashMap<(String, usize), HashMap<String, crate::types::HttpResponse>> = HashMap::new();
+        let mut route_user_responses: HashMap<
+            (String, usize),
+            HashMap<String, crate::types::HttpResponse>,
+        > = HashMap::new();
         let mut results = Vec::new();
         let mut all_errors = Vec::new();
 
         // Create individual request tasks (one per request, not per route-user combination)
-        let mut request_tasks: FuturesUnordered<tokio::task::JoinHandle<Result<(usize, usize, String, Option<crate::types::HttpResponse>, bool, Option<ExecutionError>)>>> = FuturesUnordered::new();
-        
+        let mut request_tasks: FuturesUnordered<
+            tokio::task::JoinHandle<
+                Result<(
+                    usize,
+                    usize,
+                    String,
+                    Option<crate::types::HttpResponse>,
+                    bool,
+                    Option<ExecutionError>,
+                )>,
+            >,
+        > = FuturesUnordered::new();
+
         for (route_idx, route) in routes.iter().enumerate() {
             for (user_idx, user) in user_data.iter().enumerate() {
                 for env in environments {
@@ -93,7 +107,10 @@ where
                             HttpDiffError::general(format!("Failed to acquire semaphore: {}", e))
                         })?;
 
-                        match client.execute_request(&route_arc, &env_name, &user_arc).await {
+                        match client
+                            .execute_request(&route_arc, &env_name, &user_arc)
+                            .await
+                        {
                             Ok(response) => {
                                 let success = response.is_success();
                                 Ok((route_idx, user_idx, env_name, Some(response), success, None))
@@ -120,7 +137,7 @@ where
                 Ok(Ok((route_idx, user_idx, env_name, response_opt, success, error_opt))) => {
                     // Update progress immediately for each completed request
                     progress.request_completed(success);
-                    
+
                     if let Some(ref callback) = progress_callback {
                         callback(&progress);
                     }
@@ -128,7 +145,10 @@ where
                     // Collect response for later comparison
                     if let Some(response) = response_opt {
                         let key = (routes[route_idx].name.clone(), user_idx);
-                        route_user_responses.entry(key).or_insert_with(HashMap::new).insert(env_name, response);
+                        route_user_responses
+                            .entry(key)
+                            .or_insert_with(HashMap::new)
+                            .insert(env_name, response);
                     }
 
                     // Collect errors
@@ -142,7 +162,7 @@ where
                     if let Some(ref callback) = progress_callback {
                         callback(&progress);
                     }
-                    
+
                     let error = ExecutionError::general_execution_error(e.to_string());
                     all_errors.push(error);
                 }
@@ -152,8 +172,9 @@ where
                     if let Some(ref callback) = progress_callback {
                         callback(&progress);
                     }
-                    
-                    let error = ExecutionError::general_execution_error(format!("Task panicked: {}", e));
+
+                    let error =
+                        ExecutionError::general_execution_error(format!("Task panicked: {}", e));
                     all_errors.push(error);
                 }
             }
@@ -163,7 +184,7 @@ where
         for ((route_name, user_idx), responses) in route_user_responses {
             if responses.len() >= 2 {
                 let user = &user_data[user_idx];
-                
+
                 // Determine base env from config (if any)
                 let base_env_opt = self
                     .config
@@ -234,10 +255,8 @@ where
                             results.push(comparison_result);
                         }
                         Err(e) => {
-                            let error = ExecutionError::comparison_error(
-                                route_name.clone(),
-                                e.to_string(),
-                            );
+                            let error =
+                                ExecutionError::comparison_error(route_name.clone(), e.to_string());
                             all_errors.push(error);
                         }
                     }

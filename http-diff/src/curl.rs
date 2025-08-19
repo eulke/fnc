@@ -105,6 +105,20 @@ impl CurlGenerator {
         Ok(commands)
     }
 
+    /// Write curl commands to a file using OutputManager for structured output
+    pub fn write_curl_commands_file_managed<P: AsRef<Path>>(
+        commands: &[CurlCommand],
+        file_path: P,
+        output_manager: &crate::output_manager::OutputManager,
+    ) -> Result<std::path::PathBuf> {
+        output_manager.ensure_structure()?;
+        let resolved_path = output_manager
+            .resolve_output_path(&file_path, crate::output_manager::OutputCategory::Scripts);
+
+        Self::write_curl_commands_file(commands, &resolved_path)?;
+        Ok(resolved_path)
+    }
+
     /// Write curl commands to a file with comprehensive documentation
     pub fn write_curl_commands_file<P: AsRef<Path>>(
         commands: &[CurlCommand],

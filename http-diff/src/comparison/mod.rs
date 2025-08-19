@@ -102,7 +102,7 @@ impl ResponseComparator {
 
         let mut differences = Vec::new();
         let mut environments: Vec<String> = responses.keys().cloned().collect();
-        
+
         if environments.len() < 2 {
             // Need at least 2 environments for comparison
             return Ok(ComparisonResult {
@@ -120,16 +120,16 @@ impl ResponseComparator {
 
         // Sort environments for consistent comparison ordering
         environments.sort();
-        
+
         // Optimized O(n) comparison: compare first environment against all others
         // This covers 90% of use cases where you want to compare a base environment
         // against target environments (dev vs staging, dev vs prod, etc.)
         let base_env = &environments[0];
         let base_response = &responses[base_env];
-        
+
         for env in environments.iter().skip(1) {
             let target_response = &responses[env];
-            
+
             let pair_differences = self.analyzer.analyze_responses(
                 base_response,
                 target_response,
@@ -137,7 +137,7 @@ impl ResponseComparator {
                 env,
                 self.compare_headers,
             );
-            
+
             differences.extend(pair_differences);
         }
 

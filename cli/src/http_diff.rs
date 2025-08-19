@@ -4,8 +4,8 @@ use crate::progress::ProgressTracker as CliProgressTracker;
 use crate::ui;
 use dialoguer::{Confirm, theme::ColorfulTheme};
 use http_diff::{
-    CliRenderer, DefaultHttpClient, DefaultResponseComparator, DefaultTestRunner,
-    OutputRenderer, ProgressTracker as HttpProgressTracker, TestRunner,
+    CliRenderer, DefaultHttpClient, DefaultResponseComparator, DefaultTestRunner, OutputRenderer,
+    ProgressTracker as HttpProgressTracker, TestRunner,
     config::{HttpDiffConfig, ensure_config_files_exist, load_user_data},
     curl::CurlGenerator,
     renderers::{ReportMetadata, ReportRendererFactory},
@@ -32,7 +32,6 @@ pub struct HttpDiffArgs {
     pub no_tui: bool,
     pub force_tui: bool,
 }
-
 
 pub fn execute(args: HttpDiffArgs) -> Result<()> {
     // Determine whether to use TUI or CLI based on arguments and environment
@@ -350,10 +349,26 @@ async fn execute_async(args: HttpDiffArgs) -> Result<()> {
         curl_commands.join("\n\n")
     );
 
-    fs::write(&args.output_file, curl_content)
+    // Use OutputManager for structured file output
+    let output_manager = http_diff::output_manager::OutputManager::current_dir()
+        .map_err(|e| CliError::Other(format!("Failed to initialize output manager: {}", e)))?;
+
+    output_manager
+        .ensure_structure()
+        .map_err(|e| CliError::Other(format!("Failed to create output directories: {}", e)))?;
+
+    let resolved_output_path = output_manager.resolve_output_path(
+        &args.output_file,
+        http_diff::output_manager::OutputCategory::Scripts,
+    );
+
+    fs::write(&resolved_output_path, curl_content)
         .map_err(|e| CliError::Other(format!("Failed to write curl commands file: {}", e)))?;
 
-    ui::success_message(&format!("Curl commands saved to {}", args.output_file));
+    ui::success_message(&format!(
+        "Curl commands saved to {}",
+        resolved_output_path.display()
+    ));
     progress.complete_step();
 
     progress.complete();
@@ -395,10 +410,20 @@ async fn execute_async(args: HttpDiffArgs) -> Result<()> {
         let report_content =
             report_renderer.render_report(&execution_result.comparisons, &metadata);
 
-        fs::write(report_file, report_content)
+        // Use OutputManager for report files
+        let resolved_report_path = output_manager.resolve_output_path(
+            report_file,
+            http_diff::output_manager::OutputCategory::Reports,
+        );
+
+        output_manager
+            .write_file_atomic(&resolved_report_path, report_content)
             .map_err(|e| CliError::Other(format!("Failed to write report file: {}", e)))?;
 
-        ui::success_message(&format!("Executive report saved to {}", report_file));
+        ui::success_message(&format!(
+            "Executive report saved to {}",
+            resolved_report_path.display()
+        ));
     }
 
     // Determine whether to use TUI or CLI output

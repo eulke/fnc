@@ -1,8 +1,7 @@
+use crate::execution::progress::ProgressTracker;
 use crate::renderers::report::{ReportMetadata, ReportRendererFactory};
 use crate::types::{ComparisonResult, DiffViewStyle};
-use crate::execution::progress::ProgressTracker;
 use ratatui::widgets::{ListState, ScrollbarState, TableState};
-use std::fs;
 
 /// Dashboard panel focus for 4-panel layout
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -455,8 +454,12 @@ impl TuiApp {
                 let (total, identical, different, errors) = self.get_filter_counts();
                 match self.filter_state.status_filter {
                     StatusFilter::All => format!("Results ({} total)", total),
-                    StatusFilter::Identical => format!("Results - Identical ({}/{})", identical, total),
-                    StatusFilter::Different => format!("Results - Different ({}/{})", different, total),
+                    StatusFilter::Identical => {
+                        format!("Results - Identical ({}/{})", identical, total)
+                    }
+                    StatusFilter::Different => {
+                        format!("Results - Different ({}/{})", different, total)
+                    }
                     StatusFilter::ErrorsOnly => format!("Results - Errors ({}/{})", errors, total),
                 }
             }
@@ -476,7 +479,6 @@ impl TuiApp {
             .map(|r| !r.is_identical)
             .unwrap_or(false)
     }
-
 
     // === Dashboard Panel Navigation ===
 
@@ -713,7 +715,7 @@ impl TuiApp {
         self.execution_cancelled = false;
         self.current_operation = "Starting HTTP tests...".to_string();
         self.last_execution_duration = None;
-        
+
         // Create initial progress tracker to show immediate feedback
         // The total will be updated when the first real progress update arrives
         self.progress_tracker = Some(ProgressTracker::new(1));
@@ -1121,15 +1123,25 @@ impl TuiApp {
             return Err("No results available to generate report".to_string());
         }
 
-        // Always use HTML format - generate filename with timestamp
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-        let report_filename = format!("http-diff-report-{}.html", timestamp);
+        // Use OutputManager for structured file output
+        let output_manager = crate::output_manager::OutputManager::current_dir()
+            .map_err(|e| format!("Failed to initialize output manager: {}", e))?;
+
+        output_manager
+            .ensure_structure()
+            .map_err(|e| format!("Failed to create output directories: {}", e))?;
+
+        // Generate timestamped filename in .http-diff/reports/
+        let report_path = output_manager
+            .generate_timestamped_filename(
+                "http-diff-report",
+                "html",
+                crate::output_manager::OutputCategory::Reports,
+            )
+            .map_err(|e| format!("Failed to generate report filename: {}", e))?;
 
         // Create report renderer (always HTML)
-        let report_renderer = ReportRendererFactory::create_renderer(&report_filename);
+        let report_renderer = ReportRendererFactory::create_renderer(&report_path);
 
         // Create metadata using selected or detected environments from results
         let env_names: Vec<String> = if !self.selected_environments.is_empty() {
@@ -1165,11 +1177,13 @@ impl TuiApp {
         // Generate report content
         let report_content = report_renderer.render_report(&self.results, &metadata);
 
-        // Write to file
-        fs::write(&report_filename, report_content)
+        // Write to file using OutputManager's atomic write
+        output_manager
+            .write_file_atomic(&report_path, report_content)
             .map_err(|e| format!("Failed to write report file: {}", e))?;
 
         // Show success feedback
+        let report_filename = report_path.display().to_string();
         self.show_feedback(
             &format!("HTML report saved to {}", report_filename),
             FeedbackType::Success,

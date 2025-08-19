@@ -24,6 +24,7 @@ pub mod curl;
 pub mod renderers;
 
 // Shared utility modules
+pub mod output_manager;
 pub mod url_builder;
 pub mod utils;
 
@@ -57,6 +58,7 @@ pub use renderers::{CliRenderer, InteractiveRenderer, OutputRenderer, TuiRendere
 pub use error::{HttpDiffError, Result};
 
 // Re-export utility modules
+pub use output_manager::{OutputCategory, OutputManager};
 pub use url_builder::UrlBuilder;
 
 /// Create a test runner with default implementations

@@ -1,5 +1,5 @@
-use crate::types::ComparisonResult;
 use crate::execution::progress::ProgressTracker;
+use crate::types::ComparisonResult;
 
 /// Top-level application messages (unidirectional flow)
 #[derive(Debug, Clone)]

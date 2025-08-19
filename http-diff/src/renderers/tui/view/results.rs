@@ -115,21 +115,21 @@ pub fn draw_dashboard_results_panel(f: &mut Frame, app: &mut TuiApp, area: Rect)
 
 fn render_filter_tabs(f: &mut Frame, app: &TuiApp, area: Rect) {
     let (total, identical, different, errors) = app.get_filter_counts();
-    
+
     let tab_titles = vec![
         format!("All ({})", total),
         format!("✓ Identical ({})", identical),
         format!("⚠ Different ({})", different),
         format!("✗ Errors ({})", errors),
     ];
-    
+
     let tabs = Tabs::new(tab_titles)
         .select(app.filter_state.current_tab)
         .style(TuiTheme::secondary_text_style())
         .highlight_style(TuiTheme::focused_style())
         .divider(" | ")
         .block(Block::default().borders(Borders::TOP | Borders::BOTTOM));
-        
+
     f.render_widget(tabs, area);
 }
 

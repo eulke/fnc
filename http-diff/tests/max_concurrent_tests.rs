@@ -215,7 +215,9 @@ mod max_concurrent_runner_tests {
             .unwrap();
 
         // Should work without error - will use defaults when needed
-        assert!(config.global.is_none() || config.global.unwrap().max_concurrent_requests.is_some());
+        assert!(
+            config.global.is_none() || config.global.unwrap().max_concurrent_requests.is_some()
+        );
     }
 
     #[test]
@@ -272,7 +274,10 @@ mod max_concurrent_edge_cases {
         let serialized = serde_json::to_string(&config).unwrap();
         let deserialized: GlobalConfig = serde_json::from_str(&serialized).unwrap();
 
-        assert_eq!(config.max_concurrent_requests, deserialized.max_concurrent_requests);
+        assert_eq!(
+            config.max_concurrent_requests,
+            deserialized.max_concurrent_requests
+        );
         assert_eq!(config.timeout_seconds, deserialized.timeout_seconds);
         assert_eq!(config.follow_redirects, deserialized.follow_redirects);
     }

@@ -122,30 +122,30 @@ impl HttpClientImpl {
     fn generate_curl_command(&self, request: &reqwest::Request, route: &Route) -> String {
         // More accurate capacity estimation to minimize reallocations
         let mut estimated_capacity = 4; // "curl"
-        
+
         // Method (if not GET)
         if request.method() != "GET" {
             estimated_capacity += 4 + request.method().as_str().len(); // " -X " + method
         }
-        
+
         // Headers with more accurate estimation
         for (name, value) in request.headers() {
             if value.to_str().is_ok() {
                 estimated_capacity += 6 + name.as_str().len() + value.len(); // " -H '" + name + ": " + value + "'"
             }
         }
-        
+
         // Body
         if let Some(body) = &route.body {
             estimated_capacity += 5 + body.len(); // " -d '" + body + "'"
         }
-        
+
         // URL
         estimated_capacity += 3 + request.url().as_str().len(); // " '" + url + "'"
-        
+
         // Add 10% buffer to handle estimation errors
         estimated_capacity = (estimated_capacity as f32 * 1.1) as usize;
-        
+
         let mut result = String::with_capacity(estimated_capacity);
 
         result.push_str("curl");

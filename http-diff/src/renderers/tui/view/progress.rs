@@ -10,7 +10,11 @@ use ratatui::{
 pub fn draw_dashboard_progress_panel(f: &mut Frame, app: &mut TuiApp, area: Rect) {
     let is_focused = app.is_panel_focused(&PanelFocus::Progress);
     let title = app.get_panel_title(&PanelFocus::Progress);
-    let has_content = !app.results.is_empty() || app.progress_tracker.as_ref().map_or(false, |t| t.total_requests > 0);
+    let has_content = !app.results.is_empty()
+        || app
+            .progress_tracker
+            .as_ref()
+            .map_or(false, |t| t.total_requests > 0);
     let has_activity = app.execution_running;
 
     let block = TuiTheme::panel_block(&title, is_focused, has_content, has_activity);
@@ -61,18 +65,21 @@ fn draw_progress_execution_view(f: &mut Frame, app: &mut TuiApp, area: Rect) {
     let (elapsed, rate) = if let Some(ref tracker) = app.progress_tracker {
         let elapsed_time = tracker.elapsed_time();
         let elapsed_str = format!("{:.1}s", elapsed_time.as_secs_f64());
-        
+
         let rate_str = if tracker.completed_requests > 0 {
             let elapsed_secs = elapsed_time.as_secs_f64();
             if elapsed_secs > 0.0 {
-                format!("{:.1} tests/s", tracker.completed_requests as f64 / elapsed_secs)
+                format!(
+                    "{:.1} tests/s",
+                    tracker.completed_requests as f64 / elapsed_secs
+                )
             } else {
                 "calculating...".to_string()
             }
         } else {
             "starting...".to_string()
         };
-        
+
         (elapsed_str, rate_str)
     } else {
         ("0.0s".to_string(), "starting...".to_string())
