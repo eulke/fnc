@@ -76,6 +76,22 @@ pub enum HttpDiffError {
         condition_reason: String,
     },
 
+    #[error("Chain configuration error: {message}")]
+    ChainConfigError { message: String },
+
+    #[error("Value extraction failed for route '{route}' extraction '{extraction_name}': {message}")]
+    ValueExtractionFailed {
+        route: String,
+        extraction_name: String,
+        message: String,
+    },
+
+    #[error("Chain dependency error for route '{route}': {message}")]
+    ChainDependencyError {
+        route: String,
+        message: String,
+    },
+
     #[error("General error: {message}")]
     General { message: String },
 }
@@ -139,6 +155,30 @@ impl HttpDiffError {
         Self::RouteSkippedByCondition {
             route: route.into(),
             condition_reason: condition_reason.into(),
+        }
+    }
+
+    /// Create a new chain configuration error
+    pub fn chain_config_error<S: Into<String>>(message: S) -> Self {
+        Self::ChainConfigError {
+            message: message.into(),
+        }
+    }
+
+    /// Create a new value extraction failed error
+    pub fn value_extraction_failed<S: Into<String>>(route: S, extraction_name: S, message: S) -> Self {
+        Self::ValueExtractionFailed {
+            route: route.into(),
+            extraction_name: extraction_name.into(),
+            message: message.into(),
+        }
+    }
+
+    /// Create a new chain dependency error
+    pub fn chain_dependency_error<S: Into<String>>(route: S, message: S) -> Self {
+        Self::ChainDependencyError {
+            route: route.into(),
+            message: message.into(),
         }
     }
 

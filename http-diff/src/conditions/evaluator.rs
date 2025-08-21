@@ -18,15 +18,19 @@ impl ConditionEvaluatorImpl {
         condition: &ExecutionCondition,
         user_data: &UserData,
     ) -> Result<ConditionResult> {
+        // Validate condition before evaluation
+        condition.validate()?;
+        
         let actual_value = self.get_variable_value(&condition.variable, user_data);
 
         let (passed, reason) = match &condition.operator {
             ConditionOperator::Exists => (actual_value.is_some(), None),
             ConditionOperator::NotExists => (actual_value.is_none(), None),
             ConditionOperator::Equals => {
+                let expected_value = condition.get_value()?;
                 let passed = actual_value
                     .as_ref()
-                    .map(|v| v == &condition.value)
+                    .map(|v| v == expected_value)
                     .unwrap_or(false);
                 let reason = if !passed && actual_value.is_none() {
                     Some(format!("Variable '{}' not found in user data", condition.variable))
@@ -36,16 +40,18 @@ impl ConditionEvaluatorImpl {
                 (passed, reason)
             }
             ConditionOperator::NotEquals => {
+                let expected_value = condition.get_value()?;
                 let passed = actual_value
                     .as_ref()
-                    .map(|v| v != &condition.value)
+                    .map(|v| v != expected_value)
                     .unwrap_or(true);
                 (passed, None)
             }
             ConditionOperator::Contains => {
+                let expected_value = condition.get_value()?;
                 let passed = actual_value
                     .as_ref()
-                    .map(|v| v.contains(&condition.value))
+                    .map(|v| v.contains(expected_value))
                     .unwrap_or(false);
                 let reason = if !passed && actual_value.is_none() {
                     Some(format!("Variable '{}' not found in user data", condition.variable))
@@ -55,17 +61,20 @@ impl ConditionEvaluatorImpl {
                 (passed, reason)
             }
             ConditionOperator::NotContains => {
+                let expected_value = condition.get_value()?;
                 let passed = actual_value
                     .as_ref()
-                    .map(|v| !v.contains(&condition.value))
+                    .map(|v| !v.contains(expected_value))
                     .unwrap_or(true);
                 (passed, None)
             }
             ConditionOperator::GreaterThan => {
-                self.evaluate_numeric_condition(&actual_value, &condition.value, |a, b| a > b)
+                let expected_value = condition.get_value()?;
+                self.evaluate_numeric_condition(&actual_value, expected_value, |a, b| a > b)
             }
             ConditionOperator::LessThan => {
-                self.evaluate_numeric_condition(&actual_value, &condition.value, |a, b| a < b)
+                let expected_value = condition.get_value()?;
+                self.evaluate_numeric_condition(&actual_value, expected_value, |a, b| a < b)
             }
         };
 
@@ -169,7 +178,7 @@ mod tests {
         let condition = ExecutionCondition {
             variable: "user_type".to_string(),
             operator: ConditionOperator::Equals,
-            value: "premium".to_string(),
+            value: Some("premium".to_string()),
         };
         let user_data = create_test_user_data();
 
@@ -184,7 +193,7 @@ mod tests {
         let condition = ExecutionCondition {
             variable: "user_type".to_string(),
             operator: ConditionOperator::Equals,
-            value: "basic".to_string(),
+            value: Some("basic".to_string()),
         };
         let user_data = create_test_user_data();
 
@@ -199,7 +208,7 @@ mod tests {
         let condition = ExecutionCondition {
             variable: "user_id".to_string(),
             operator: ConditionOperator::GreaterThan,
-            value: "1000".to_string(),
+            value: Some("1000".to_string()),
         };
         let user_data = create_test_user_data();
 
@@ -213,7 +222,7 @@ mod tests {
         let condition = ExecutionCondition {
             variable: "status".to_string(),
             operator: ConditionOperator::Contains,
-            value: "act".to_string(),
+            value: Some("act".to_string()),
         };
         let user_data = create_test_user_data();
 
@@ -227,7 +236,7 @@ mod tests {
         let condition = ExecutionCondition {
             variable: "user_type".to_string(),
             operator: ConditionOperator::Exists,
-            value: "".to_string(),
+            value: None,
         };
         let user_data = create_test_user_data();
 
@@ -241,11 +250,60 @@ mod tests {
         let condition = ExecutionCondition {
             variable: "nonexistent_field".to_string(),
             operator: ConditionOperator::NotExists,
-            value: "".to_string(),
+            value: None,
         };
         let user_data = create_test_user_data();
 
         let result = evaluator.evaluate_single_condition(&condition, &user_data).unwrap();
         assert!(result.passed);
+    }
+
+    #[test]
+    fn test_exists_condition_with_convenience_method() {
+        let evaluator = ConditionEvaluatorImpl::new();
+        let condition = ExecutionCondition::exists("user_type");
+        let user_data = create_test_user_data();
+
+        let result = evaluator.evaluate_single_condition(&condition, &user_data).unwrap();
+        assert!(result.passed);
+    }
+
+    #[test]
+    fn test_equals_condition_with_convenience_method() {
+        let evaluator = ConditionEvaluatorImpl::new();
+        let condition = ExecutionCondition::equals("user_type", "premium");
+        let user_data = create_test_user_data();
+
+        let result = evaluator.evaluate_single_condition(&condition, &user_data).unwrap();
+        assert!(result.passed);
+    }
+
+    #[test]
+    fn test_backward_compatibility_with_empty_string() {
+        let evaluator = ConditionEvaluatorImpl::new();
+        // This simulates how old configurations with value = "" would be deserialized
+        let condition = ExecutionCondition {
+            variable: "user_type".to_string(),
+            operator: ConditionOperator::Exists,
+            value: Some("".to_string()), // Empty string should still work
+        };
+        let user_data = create_test_user_data();
+
+        let result = evaluator.evaluate_single_condition(&condition, &user_data).unwrap();
+        assert!(result.passed);
+    }
+
+    #[test]
+    fn test_validation_error_for_missing_value() {
+        let evaluator = ConditionEvaluatorImpl::new();
+        let condition = ExecutionCondition {
+            variable: "user_type".to_string(),
+            operator: ConditionOperator::Equals, // Requires value
+            value: None,
+        };
+        let user_data = create_test_user_data();
+
+        let result = evaluator.evaluate_single_condition(&condition, &user_data);
+        assert!(result.is_err());
     }
 }

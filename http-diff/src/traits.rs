@@ -1,7 +1,7 @@
 use crate::config::{Route, UserData};
 use crate::conditions::{ConditionResult, ExecutionCondition};
 use crate::error::Result;
-use crate::types::{ComparisonResult, HttpResponse};
+use crate::types::{ComparisonResult, HttpResponse, ExtractionRule, ExtractionResult, ValueExtractionContext};
 use std::collections::HashMap;
 use std::future::Future;
 
@@ -64,6 +64,26 @@ pub trait ConditionEvaluator: Send + Sync {
         conditions: &[ExecutionCondition],
         user_data: &UserData,
     ) -> Result<Vec<ConditionResult>>;
+}
+
+/// Trait for value extraction from HTTP responses
+pub trait ValueExtractor: Send + Sync {
+    /// Extract values from an HTTP response according to extraction rules
+    fn extract_values(
+        &self,
+        context: &ValueExtractionContext,
+        rules: &[ExtractionRule],
+    ) -> Result<ExtractionResult>;
+
+    /// Extract a single value using a specific rule
+    fn extract_single_value(
+        &self,
+        context: &ValueExtractionContext,
+        rule: &ExtractionRule,
+    ) -> Result<Option<String>>;
+
+    /// Check if this extractor supports the given extraction rule
+    fn supports_rule(&self, rule: &ExtractionRule) -> bool;
 }
 
 /// Type alias for progress callback to reduce complexity

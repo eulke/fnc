@@ -330,6 +330,7 @@ mod tests {
             comparisons: vec![create_test_result()],
             progress: crate::execution::progress::ProgressTracker::new(1),
             errors: Vec::new(),
+            chain_metadata: None,
         };
         let output = renderer.render(&execution_result);
 

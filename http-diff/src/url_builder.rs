@@ -205,6 +205,9 @@ mod tests {
             base_urls: None,
             body: None,
             conditions: None,
+            extract: None,
+            depends_on: None,
+            wait_for_extraction: None,
         }
     }
 

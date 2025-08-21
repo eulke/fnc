@@ -241,6 +241,9 @@ mod tests {
             base_urls: None,
             body: None,
             conditions: None,
+            extract: None,
+            depends_on: None,
+            wait_for_extraction: None,
         }];
 
         HttpDiffConfig {
@@ -334,6 +337,9 @@ mod tests {
                 r#"{"message": "Hello 'world' with \"quotes\" and $special chars!"}"#.to_string(),
             ),
             conditions: None,
+            extract: None,
+            depends_on: None,
+            wait_for_extraction: None,
         });
 
         let generator = CurlGenerator::new(config);

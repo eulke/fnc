@@ -20,6 +20,7 @@ pub mod analysis;
 pub mod comparison;
 pub mod conditions;
 pub mod curl;
+pub mod extraction;
 
 // Presentation modules
 pub mod renderers;
@@ -30,11 +31,11 @@ pub mod url_builder;
 pub mod utils;
 
 // Testing utilities
-#[cfg(test)]
+#[cfg(any(test, feature = "testing"))]
 pub mod testing;
 
 // Re-export core traits
-pub use traits::{ConditionEvaluator, ConfigValidator, HttpClient, ProgressCallback, ResponseComparator, TestRunner};
+pub use traits::{ConditionEvaluator, ConfigValidator, HttpClient, ProgressCallback, ResponseComparator, TestRunner, ValueExtractor};
 
 // Re-export analysis types
 pub use analysis::{ErrorAnalysis, ErrorAnalyzer, ErrorClassifierImpl, ErrorGroup, RouteError};
@@ -44,13 +45,20 @@ pub use config::{Environment, HttpDiffConfig, HttpDiffConfigBuilder, Route, User
 pub use conditions::{ConditionEvaluatorImpl, ConditionOperator, ConditionResult, ExecutionCondition};
 pub use types::{
     ComparisonResult, DiffViewStyle, Difference, DifferenceCategory, ErrorSummary, ExecutionError,
-    ExecutionErrorType, ExecutionResult, HttpResponse,
+    ExecutionErrorType, ExecutionResult, HttpResponse, ExtractionRule, ExtractionResult,
+    ExtractionType, ExtractedValue, ValueExtractionContext, ExtractionError, ChainExecutionMetadata,
 };
 
 // Re-export implementations (clean API without "Impl" suffix)
 pub use comparison::{ResponseComparator as DefaultResponseComparator, ResponseValidatorImpl};
 pub use execution::{DefaultTestRunner, ProgressTracker, TestRunnerImpl};
 pub use http::HttpClientImpl as DefaultHttpClient;
+
+// Re-export extraction implementations
+pub use extraction::{
+    ValueExtractionEngine, ValueExtractionEngineBuilder, JsonPathExtractor, 
+    RegexExtractor, HeaderExtractor, StatusCodeExtractor,
+};
 
 // Re-export renderers
 pub use renderers::cli::{ComparisonFormatter, ErrorRenderer, TableBuilder, TableStyle};

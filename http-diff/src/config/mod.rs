@@ -11,5 +11,5 @@ pub use loader::{load_user_data, ConfigLoader};
 pub use templates::{
     ensure_config_files_exist, generate_default_config_template, generate_default_users_csv,
 };
-pub use types::{Environment, GlobalConfig, HttpDiffConfig, Route, UserData};
+pub use types::{Environment, GlobalConfig, HttpDiffConfig, Route, UserData, ValueExtractionRule, ExtractorType};
 pub use validator::ConfigValidatorImpl;

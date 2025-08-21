@@ -111,6 +111,9 @@ impl HttpDiffConfigBuilder {
             base_urls: None,
             body: body.map(|b| b.into()),
             conditions: None,
+            extract: None,
+            depends_on: None,
+            wait_for_extraction: None,
         });
         self
     }

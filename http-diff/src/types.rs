@@ -390,6 +390,8 @@ pub struct ExecutionResult {
     pub progress: crate::execution::progress::ProgressTracker,
     /// Collection of errors that occurred during execution
     pub errors: Vec<ExecutionError>,
+    /// Chain execution metadata (if applicable)
+    pub chain_metadata: Option<ChainExecutionMetadata>,
 }
 
 impl ExecutionResult {
@@ -398,11 +400,13 @@ impl ExecutionResult {
         comparisons: Vec<ComparisonResult>,
         progress: crate::execution::progress::ProgressTracker,
         errors: Vec<ExecutionError>,
+        chain_metadata: Option<ChainExecutionMetadata>,
     ) -> Self {
         Self {
             comparisons,
             progress,
             errors,
+            chain_metadata,
         }
     }
 
@@ -432,6 +436,324 @@ impl ExecutionResult {
     /// Get execution errors
     pub fn execution_errors(&self) -> Vec<&ExecutionError> {
         self.errors_by_type(ExecutionErrorType::ExecutionError)
+    }
+    
+    /// Check if this was a chain execution
+    pub fn is_chain_execution(&self) -> bool {
+        self.chain_metadata.is_some() || self.progress.is_chain_execution()
+    }
+    
+    /// Get chain execution metadata if available
+    pub fn get_chain_metadata(&self) -> Option<&ChainExecutionMetadata> {
+        self.chain_metadata.as_ref()
+    }
+}
+
+/// Represents a value extracted from an HTTP response
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ExtractedValue {
+    /// The key/name of the extracted value
+    pub key: String,
+    /// The extracted value as a string
+    pub value: String,
+    /// The extraction rule that was used
+    pub extraction_rule: String,
+    /// The extraction type (JsonPath, Regex, Header, StatusCode)
+    pub extraction_type: ExtractionType,
+    /// The environment from which this value was extracted
+    pub environment: String,
+    /// The route name from which this value was extracted
+    pub route_name: String,
+    /// Timestamp when the value was extracted
+    pub extracted_at: chrono::DateTime<chrono::Utc>,
+}
+
+impl ExtractedValue {
+    /// Create a new extracted value
+    pub fn new(
+        key: String,
+        value: String,
+        extraction_rule: String,
+        extraction_type: ExtractionType,
+        environment: String,
+        route_name: String,
+    ) -> Self {
+        Self {
+            key,
+            value,
+            extraction_rule,
+            extraction_type,
+            environment,
+            route_name,
+            extracted_at: chrono::Utc::now(),
+        }
+    }
+}
+
+/// Context information for value extraction operations
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ValueExtractionContext {
+    /// The route name being processed
+    pub route_name: String,
+    /// The environment being processed
+    pub environment: String,
+    /// The HTTP response from which values are being extracted
+    pub response: HttpResponse,
+    /// User data context for the current request
+    pub user_context: HashMap<String, String>,
+    /// Timestamp when extraction started
+    pub started_at: chrono::DateTime<chrono::Utc>,
+}
+
+impl ValueExtractionContext {
+    /// Create a new value extraction context
+    pub fn new(
+        route_name: String,
+        environment: String,
+        response: HttpResponse,
+        user_context: HashMap<String, String>,
+    ) -> Self {
+        Self {
+            route_name,
+            environment,
+            response,
+            user_context,
+            started_at: chrono::Utc::now(),
+        }
+    }
+}
+
+/// Types of value extraction supported
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub enum ExtractionType {
+    /// Extract values using JSONPath expressions
+    JsonPath,
+    /// Extract values using regular expressions
+    Regex,
+    /// Extract header values
+    Header,
+    /// Extract HTTP status code
+    StatusCode,
+}
+
+impl ExtractionType {
+    /// Get a human-readable name for the extraction type
+    pub fn name(&self) -> &'static str {
+        match self {
+            ExtractionType::JsonPath => "JsonPath",
+            ExtractionType::Regex => "Regex",
+            ExtractionType::Header => "Header",
+            ExtractionType::StatusCode => "StatusCode",
+        }
+    }
+}
+
+/// Configuration for a value extraction rule
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ExtractionRule {
+    /// The key/name for the extracted value
+    pub key: String,
+    /// The extraction type
+    pub extraction_type: ExtractionType,
+    /// The extraction pattern/expression
+    pub pattern: String,
+    /// Optional default value if extraction fails
+    pub default_value: Option<String>,
+    /// Whether this extraction is required (fails if not found)
+    pub required: bool,
+}
+
+impl ExtractionRule {
+    /// Create a new extraction rule
+    pub fn new(
+        key: String,
+        extraction_type: ExtractionType,
+        pattern: String,
+    ) -> Self {
+        Self {
+            key,
+            extraction_type,
+            pattern,
+            default_value: None,
+            required: false,
+        }
+    }
+
+    /// Set the default value for this extraction rule
+    pub fn with_default_value(mut self, default_value: String) -> Self {
+        self.default_value = Some(default_value);
+        self
+    }
+
+    /// Mark this extraction rule as required
+    pub fn required(mut self) -> Self {
+        self.required = true;
+        self
+    }
+}
+
+/// Result of a value extraction operation
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ExtractionResult {
+    /// Successfully extracted values
+    pub extracted_values: Vec<ExtractedValue>,
+    /// Extraction errors that occurred
+    pub errors: Vec<ExtractionError>,
+    /// The context in which extraction was performed
+    pub context: ValueExtractionContext,
+}
+
+impl ExtractionResult {
+    /// Create a new extraction result
+    pub fn new(context: ValueExtractionContext) -> Self {
+        Self {
+            extracted_values: Vec::new(),
+            errors: Vec::new(),
+            context,
+        }
+    }
+
+    /// Add an extracted value
+    pub fn add_value(&mut self, value: ExtractedValue) {
+        self.extracted_values.push(value);
+    }
+
+    /// Add an extraction error
+    pub fn add_error(&mut self, error: ExtractionError) {
+        self.errors.push(error);
+    }
+
+    /// Check if extraction was successful (no errors)
+    pub fn is_successful(&self) -> bool {
+        self.errors.is_empty()
+    }
+
+    /// Check if extraction has any errors
+    pub fn has_errors(&self) -> bool {
+        !self.errors.is_empty()
+    }
+
+    /// Get extracted values by key
+    pub fn get_value_by_key(&self, key: &str) -> Option<&ExtractedValue> {
+        self.extracted_values.iter().find(|v| v.key == key)
+    }
+
+    /// Get all extracted values as a key-value map
+    pub fn to_key_value_map(&self) -> HashMap<String, String> {
+        self.extracted_values
+            .iter()
+            .map(|v| (v.key.clone(), v.value.clone()))
+            .collect()
+    }
+}
+
+/// Represents an error that occurred during value extraction
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ExtractionError {
+    /// The extraction rule that failed
+    pub rule: ExtractionRule,
+    /// Error message describing what went wrong
+    pub message: String,
+    /// The environment where the error occurred
+    pub environment: String,
+    /// The route name where the error occurred
+    pub route_name: String,
+    /// Timestamp when the error occurred
+    pub occurred_at: chrono::DateTime<chrono::Utc>,
+}
+
+impl ExtractionError {
+    /// Create a new extraction error
+    pub fn new(
+        rule: ExtractionRule,
+        message: String,
+        environment: String,
+        route_name: String,
+    ) -> Self {
+        Self {
+            rule,
+            message,
+            environment,
+            route_name,
+            occurred_at: chrono::Utc::now(),
+        }
+    }
+}
+
+/// Metadata about chain execution for analysis and debugging
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ChainExecutionMetadata {
+    /// Total number of execution batches
+    pub total_batches: usize,
+    /// Number of routes with dependencies
+    pub dependent_routes: usize,
+    /// Number of routes with extraction rules
+    pub extraction_routes: usize,
+    /// Total number of values extracted across all routes
+    pub total_extracted_values: usize,
+    /// Number of extraction errors that occurred
+    pub extraction_errors: usize,
+    /// Execution time per batch (in milliseconds)
+    pub batch_execution_times: Vec<u64>,
+    /// Whether any routes had to wait for dependency completion
+    pub had_dependency_waits: bool,
+}
+
+impl ChainExecutionMetadata {
+    /// Create new chain execution metadata
+    pub fn new(total_batches: usize) -> Self {
+        Self {
+            total_batches,
+            dependent_routes: 0,
+            extraction_routes: 0,
+            total_extracted_values: 0,
+            extraction_errors: 0,
+            batch_execution_times: Vec::with_capacity(total_batches),
+            had_dependency_waits: false,
+        }
+    }
+    
+    /// Record batch execution time
+    pub fn add_batch_time(&mut self, time_ms: u64) {
+        self.batch_execution_times.push(time_ms);
+    }
+    
+    /// Get average batch execution time
+    pub fn average_batch_time(&self) -> f64 {
+        if self.batch_execution_times.is_empty() {
+            0.0
+        } else {
+            self.batch_execution_times.iter().sum::<u64>() as f64 / self.batch_execution_times.len() as f64
+        }
+    }
+    
+    /// Get the longest batch execution time
+    pub fn max_batch_time(&self) -> u64 {
+        self.batch_execution_times.iter().copied().max().unwrap_or(0)
+    }
+    
+    /// Get the shortest batch execution time
+    pub fn min_batch_time(&self) -> u64 {
+        self.batch_execution_times.iter().copied().min().unwrap_or(0)
+    }
+    
+    /// Check if extraction was used
+    pub fn used_extraction(&self) -> bool {
+        self.total_extracted_values > 0 || self.extraction_routes > 0
+    }
+    
+    /// Get extraction success rate
+    pub fn extraction_success_rate(&self) -> f64 {
+        if self.extraction_routes == 0 {
+            100.0
+        } else {
+            let successful_extractions = if self.extraction_errors < self.total_extracted_values {
+                self.total_extracted_values - self.extraction_errors
+            } else {
+                0
+            };
+            (successful_extractions as f64 / self.total_extracted_values as f64) * 100.0
+        }
     }
 }
 
