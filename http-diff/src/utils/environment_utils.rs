@@ -77,7 +77,7 @@ impl EnvironmentOrderResolver {
     
     /// Check if an environment is the base environment
     pub fn is_base_environment(&self, env: &str) -> bool {
-        self.base_environment.as_ref().map_or(false, |base| base == env)
+        self.base_environment.as_ref().is_some_and(|base| base == env)
     }
 
     /// Get all configured environment names in order

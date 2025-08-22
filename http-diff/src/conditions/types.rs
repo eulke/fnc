@@ -95,7 +95,7 @@ impl ExecutionCondition {
             | ConditionOperator::NotContains
             | ConditionOperator::GreaterThan
             | ConditionOperator::LessThan => {
-                if self.value.is_none() || self.value.as_ref().map_or(true, |v| v.is_empty()) {
+                if self.value.is_none() || self.value.as_ref().is_none_or(|v| v.is_empty()) {
                     return Err(HttpDiffError::invalid_config(format!(
                         "Operator '{:?}' requires a non-empty value but none was provided for variable '{}'", 
                         self.operator, self.variable

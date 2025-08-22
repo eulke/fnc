@@ -154,7 +154,7 @@ impl DynamicContext {
         for value in &route_values {
             type_groups
                 .entry(value.extraction_type.clone())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(value);
         }
 
@@ -538,9 +538,7 @@ impl VariableResolver {
         } else {
             // Only add context values that don't exist in user data
             for (key, value) in context.to_key_value_map() {
-                if !available.contains_key(&key) {
-                    available.insert(key, value);
-                }
+                available.entry(key).or_insert(value);
             }
         }
 

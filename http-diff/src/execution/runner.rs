@@ -12,6 +12,32 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 
+// Simplify complex task result types for readability and to satisfy clippy::type_complexity
+type RequestTaskOutput = (
+    usize,
+    usize,
+    String,
+    String,
+    crate::config::types::Route,
+    Option<crate::types::HttpResponse>,
+    bool,
+    Option<ExecutionError>,
+);
+type RequestJoinHandle = tokio::task::JoinHandle<Result<RequestTaskOutput>>;
+
+// Alias for executable route-user combination
+type ExecutableCombination<'a> = (
+    usize,
+    usize,
+    &'a crate::config::Route,
+    &'a crate::config::UserData,
+);
+
+// Aliases for collected responses keyed by (route_name, user_idx)
+type RouteUserKey = (String, usize);
+type EnvHttpResponses = HashMap<String, crate::types::HttpResponse>;
+type RouteUserResponses = HashMap<RouteUserKey, EnvHttpResponses>;
+
 /// Type alias for the most common concrete TestRunner implementation
 pub type DefaultTestRunner = TestRunnerImpl<
     crate::http::HttpClientImpl,
@@ -91,7 +117,7 @@ where
         &self,
         user_data: &'a [crate::config::UserData],
         routes: &'a [&'a crate::config::Route],
-    ) -> Result<(Vec<(usize, usize, &'a crate::config::Route, &'a crate::config::UserData)>, usize)> {
+    ) -> Result<(Vec<ExecutableCombination<'a>>, usize)> {
         let mut executable_combinations = Vec::new();
         let mut skipped_count = 0;
 
@@ -146,28 +172,12 @@ where
         let semaphore = Arc::new(Semaphore::new(self.max_concurrent_requests));
 
         // Data structures to collect responses and create comparisons
-        let mut route_user_responses: HashMap<
-            (String, usize),
-            HashMap<String, crate::types::HttpResponse>,
-        > = HashMap::new();
+        let mut route_user_responses: RouteUserResponses = HashMap::new();
         let mut results = Vec::new();
         let mut all_errors = Vec::new();
 
         // Create individual request tasks (one per request, only for executable combinations)
-        let mut request_tasks: FuturesUnordered<
-            tokio::task::JoinHandle<
-                Result<(
-                    usize,
-                    usize,
-                    String,
-                    String,
-                    crate::config::types::Route,
-                    Option<crate::types::HttpResponse>,
-                    bool,
-                    Option<ExecutionError>,
-                )>,
-            >,
-        > = FuturesUnordered::new();
+        let mut request_tasks: FuturesUnordered<RequestJoinHandle> = FuturesUnordered::new();
 
         for (route_idx, user_idx, route, user) in executable_combinations {
             for env in environments {
@@ -223,7 +233,7 @@ where
                         let key = (route_name, user_idx);
                         route_user_responses
                             .entry(key)
-                            .or_insert_with(HashMap::new)
+                            .or_default()
                             .insert(env_name, response);
                     }
 
@@ -392,10 +402,7 @@ where
         }
 
         // Data structures to collect responses and create comparisons
-        let mut route_user_responses: HashMap<
-            (String, usize),
-            HashMap<String, crate::types::HttpResponse>,
-        > = HashMap::new();
+        let mut route_user_responses: RouteUserResponses = HashMap::new();
         let mut results = Vec::new();
         let mut all_errors = Vec::new();
         
@@ -518,20 +525,7 @@ where
         let mut extraction_results: HashMap<(String, usize, String), ExtractionResult> = HashMap::new();
         
         // Create request tasks for this batch
-        let mut request_tasks: FuturesUnordered<
-            tokio::task::JoinHandle<
-                Result<(
-                    usize,
-                    usize,
-                    String,
-                    String,
-                    crate::config::types::Route,
-                    Option<crate::types::HttpResponse>,
-                    bool,
-                    Option<ExecutionError>,
-                )>,
-            >,
-        > = FuturesUnordered::new();
+        let mut request_tasks: FuturesUnordered<RequestJoinHandle> = FuturesUnordered::new();
 
         for (route_idx, user_idx, route, user) in batch_combinations {
             for env in environments {
@@ -597,7 +591,7 @@ where
                         let key = (route_name.clone(), user_idx);
                         route_user_responses
                             .entry(key)
-                            .or_insert_with(HashMap::new)
+                            .or_default()
                             .insert(env_name.clone(), response.clone());
                         
                         // Perform value extraction if route has extraction rules
@@ -720,7 +714,7 @@ where
 
 /// Result of executing a batch of routes with extraction
 struct BatchExecutionResult {
-    route_user_responses: HashMap<(String, usize), HashMap<String, crate::types::HttpResponse>>,
+    route_user_responses: RouteUserResponses,
     errors: Vec<ExecutionError>,
 }
 

@@ -3,7 +3,9 @@ use super::msg::{ConfigMsg, DetailsMsg, ExecMsg, Msg, ResultsMsg};
 
 /// Side effects produced by the reducer. The main loop should execute them.
 #[derive(Debug, Clone)]
+#[derive(Default)]
 pub enum Effect {
+    #[default]
     None,
     StartExec {
         config_path: String,
@@ -17,11 +19,6 @@ pub enum Effect {
     Quit,
 }
 
-impl Default for Effect {
-    fn default() -> Self {
-        Effect::None
-    }
-}
 
 pub fn update(app: &mut TuiApp, msg: Msg) -> Effect {
     match msg {

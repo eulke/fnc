@@ -162,26 +162,19 @@ impl HtmlComponents {
         let diff_processor = DiffProcessor::new();
         let json_renderer = JsonDiffRenderer::new();
         let mut route_cards = String::new();
-        let mut processed_count = 0;
 
         // Categorize routes for better organization
         let (identical_routes, different_routes, failed_routes) = Self::categorize_routes(results);
 
         // Process all route types in order: failed first (highest priority), then different, then identical
         let all_routes_ordered = [failed_routes, different_routes, identical_routes].concat();
+        let limit = max_routes.unwrap_or(all_routes_ordered.len());
 
-        for result in all_routes_ordered {
-            if let Some(max) = max_routes {
-                if processed_count >= max {
-                    break;
-                }
-            }
-
+        for result in all_routes_ordered.into_iter().take(limit) {
             let route_card =
                 Self::render_route_card(result, &diff_processor, &json_renderer, show_unchanged);
 
             route_cards.push_str(&route_card);
-            processed_count += 1;
         }
 
         let header_note = if let Some(max) = max_routes {
@@ -260,8 +253,8 @@ impl HtmlComponents {
         
         let status_badge = Self::get_status_badge(result);
         let user_context = Self::format_user_context(result);
-        let status_codes = Self::format_status_codes_with_resolver(result, &resolver);
-        let curl_commands = Self::render_curl_commands_with_resolver(result, &resolver);
+        let status_codes = Self::format_status_codes(result, &resolver);
+        let curl_commands = Self::render_curl_commands(result, &resolver);
 
         // Generate content based on route type
         let expandable_content = if result.has_errors {
@@ -361,20 +354,14 @@ impl HtmlComponents {
         }
     }
 
-    /// Format status codes for display with deterministic environment ordering
-    fn format_status_codes(result: &ComparisonResult) -> String {
-        let resolver = result.create_environment_resolver();
-        Self::format_status_codes_with_resolver(result, &resolver)
-    }
-
-    /// Format status codes for display with shared resolver (performance optimized)
-    fn format_status_codes_with_resolver(result: &ComparisonResult, resolver: &EnvironmentOrderResolver) -> String {
+    /// Format status codes for display with shared resolver
+    fn format_status_codes(result: &ComparisonResult, resolver: &EnvironmentOrderResolver) -> String {
         let ordered_status_codes = result.get_ordered_status_codes(resolver);
         
         ordered_status_codes
             .iter()
             .map(|(env, code)| {
-                let class = if code >= 200 && code < 300 {
+                let class = if (200..300).contains(&code) {
                     "success"
                 } else if code >= 400 {
                     "error"
@@ -392,14 +379,8 @@ impl HtmlComponents {
             .join(" ")
     }
 
-    /// Render curl commands for a route with deterministic environment ordering
-    fn render_curl_commands(result: &ComparisonResult) -> String {
-        let resolver = result.create_environment_resolver();
-        Self::render_curl_commands_with_resolver(result, &resolver)
-    }
-
-    /// Render curl commands for a route with shared resolver (performance optimized)
-    fn render_curl_commands_with_resolver(result: &ComparisonResult, resolver: &EnvironmentOrderResolver) -> String {
+    /// Render curl commands for a route with shared resolver
+    fn render_curl_commands(result: &ComparisonResult, resolver: &EnvironmentOrderResolver) -> String {
         let mut curl_commands = String::new();
 
         let ordered_responses = result.get_ordered_responses(resolver);

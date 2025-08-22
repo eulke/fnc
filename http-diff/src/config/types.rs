@@ -461,7 +461,7 @@ impl HttpDiffConfig {
         // Build dependency graph
         let mut graph: HashMap<String, Vec<String>> = HashMap::new();
         for route in &self.routes {
-            let deps = route.depends_on.as_ref().map(|d| d.clone()).unwrap_or_default();
+            let deps = route.depends_on.clone().unwrap_or_default();
             graph.insert(route.name.clone(), deps);
         }
 
@@ -524,7 +524,7 @@ impl HttpDiffConfig {
         let mut route_map: HashMap<String, &Route> = HashMap::new();
         
         for route in &self.routes {
-            let deps = route.depends_on.as_ref().map(|d| d.clone()).unwrap_or_default();
+            let deps = route.depends_on.clone().unwrap_or_default();
             graph.insert(route.name.clone(), deps);
             route_map.insert(route.name.clone(), route);
         }

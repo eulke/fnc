@@ -13,8 +13,7 @@ pub fn draw_dashboard_progress_panel(f: &mut Frame, app: &mut TuiApp, area: Rect
     let has_content = !app.results.is_empty()
         || app
             .progress_tracker
-            .as_ref()
-            .map_or(false, |t| t.total_requests > 0);
+            .as_ref().is_some_and(|t| t.total_requests > 0);
     let has_activity = app.execution_running;
 
     let block = TuiTheme::panel_block(&title, is_focused, has_content, has_activity);

@@ -149,8 +149,8 @@ impl DependencyGraph {
     /// Add a route to the graph
     pub fn add_route(&mut self, route_name: String) {
         self.routes.insert(route_name.clone());
-        self.dependencies.entry(route_name.clone()).or_insert_with(HashSet::new);
-        self.dependents.entry(route_name).or_insert_with(HashSet::new);
+        self.dependencies.entry(route_name.clone()).or_default();
+        self.dependents.entry(route_name).or_default();
         self.invalidate_caches();
     }
 
@@ -173,13 +173,13 @@ impl DependencyGraph {
         // Add to dependencies: dependency_route -> dependent_route
         self.dependencies
             .entry(dependency_route.clone())
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(dependent_route.clone());
 
         // Add to dependents: dependent_route -> dependency_route  
         self.dependents
             .entry(dependent_route)
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(dependency_route);
 
         self.invalidate_caches();
@@ -244,9 +244,7 @@ impl DependencyGraph {
 
         for route in &self.routes {
             if !visited.contains(route) {
-                if let Err(cycle) = self.dfs_cycle_detection(route, &mut visited, &mut recursion_stack) {
-                    return Err(cycle);
-                }
+                self.dfs_cycle_detection(route, &mut visited, &mut recursion_stack)?
             }
         }
 
@@ -266,9 +264,7 @@ impl DependencyGraph {
         // Visit all routes that this route depends on
         for dependency in &self.get_dependencies(route) {
             if !visited.contains(dependency) {
-                if let Err(e) = self.dfs_cycle_detection(dependency, visited, recursion_stack) {
-                    return Err(e);
-                }
+                self.dfs_cycle_detection(dependency, visited, recursion_stack)?
             } else if recursion_stack.contains(dependency) {
                 // Found a back edge - circular dependency detected
                 return Err(HttpDiffError::invalid_config(format!(
@@ -829,7 +825,7 @@ impl DynamicExecutionState {
     pub fn add_dynamic_dependency(&mut self, dependency: DynamicDependency) {
         self.dynamic_dependencies
             .entry(dependency.dependent_route.clone())
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(dependency);
         self.invalidate_cache();
     }

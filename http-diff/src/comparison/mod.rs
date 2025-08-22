@@ -122,7 +122,7 @@ impl ResponseComparator {
                 status_codes: HashMap::new(),
                 has_errors: false,
                 error_bodies: None,
-                base_environment: base_environment,
+                base_environment,
             });
         }
 
