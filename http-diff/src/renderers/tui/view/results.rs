@@ -84,7 +84,7 @@ pub fn draw_dashboard_results_panel(f: &mut Frame, app: &mut TuiApp, area: Rect)
                 TuiTheme::primary_text_style()
             };
 
-            Row::new(vec![smart_truncate(&result.route_name, 15), status]).style(style)
+            Row::new(vec![smart_truncate(&result.route_name, 50), status]).style(style)
         })
         .collect();
 
