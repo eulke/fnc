@@ -436,7 +436,9 @@ impl HttpDiffConfig {
                     }
 
                     // Validate source is not empty
-                    if extraction.source.trim().is_empty() {
+                    if extraction.source.trim().is_empty()
+                        && !matches!(extraction.extractor_type, ExtractorType::StatusCode)
+                    {
                         return Err(HttpDiffError::invalid_config(
                             format!(
                                 "Route '{}' extraction rule '{}' has empty source",

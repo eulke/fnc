@@ -247,7 +247,7 @@ fn test_response_storage_efficiency() {
         
         // Access all responses multiple times
         for _ in 0..3 {
-            for (_, response) in &responses {
+            for response in responses.values() {
                 let _body_len = response.body.len();
                 let _status = response.status;
             }
@@ -359,32 +359,33 @@ method = "GET"
 path = "/api/route/{}"
 headers = {{ "Authorization" = "Bearer token", "Content-Type" = "application/json" }}
 params = {{ "limit" = "10", "offset" = "{}" }}
-
 "#, i, i, i * 10));
+
+        // Add dependencies to create chains BEFORE nested tables to keep TOML valid
+        if i > 0 && i % 5 != 0 {
+            config.push_str(&format!("depends_on = [\"route_{}\"]\nwait_for_extraction = true\n", i - 1));
+        }
 
         // Add extractions to some routes
         if i % 3 == 0 {
             config.push_str(&format!(r#"
 [[routes.extract]]
 name = "route_{}_id"
-type = "JsonPath"
+type = "json_path"
 source = "$.data.id"
 required = false
 default_value = "default_{}"
 
 [[routes.extract]]
 name = "route_{}_status"
-type = "StatusCode"
+type = "status_code"
 source = ""
 required = false
-
 "#, i, i, i));
         }
 
-        // Add dependencies to create chains
-        if i > 0 && i % 5 != 0 {
-            config.push_str(&format!("depends_on = [\"route_{}\"]\nwait_for_extraction = true\n\n", i - 1));
-        }
+        // Separate entries
+        config.push('\n');
     }
 
     config
@@ -462,7 +463,9 @@ fn create_complex_config_for_validation(route_count: usize) -> HttpDiffConfig {
             params: if i % 3 == 0 {
                 let mut params = HashMap::new();
                 params.insert("limit".to_string(), "10".to_string());
-                params.insert("id".to_string(), format!("{{{}}}", format!("value_{}_0", i - 1)));
+                if i > 0 {
+                    params.insert("id".to_string(), format!("{{{}}}", format!("value_{}_0", i - 1)));
+                }
                 Some(params)
             } else {
                 None

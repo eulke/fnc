@@ -143,7 +143,7 @@ mod workflow_integration_tests {
 
     #[tokio::test]
     async fn test_basic_http_request_response_workflow() {
-        let (config, client, comparator, evaluator, users) = TestScenarioBuilder::new()
+        let (config, client, _comparator, evaluator, users) = TestScenarioBuilder::new()
             .with_basic_responses()
             .with_users(2)
             .build();
@@ -319,12 +319,12 @@ mod chain_integration_tests {
 
     #[tokio::test]
     async fn test_basic_chain_execution_workflow() {
-        let (config, client, _comparator, _evaluator, users) = TestScenarioBuilder::new()
+        let (config, _client, _comparator, _evaluator, users) = TestScenarioBuilder::new()
             .with_basic_chain()
             .with_users(1)
             .build();
             
-        let user = &users[0];
+        let _user = &users[0];
         
         // Test complete chain execution workflow
         // 1. Login route (no dependencies)
@@ -375,11 +375,11 @@ mod chain_integration_tests {
                         match route.name.as_str() {
                             "login" => {
                                 assert!(extracted.contains_key("auth_token") || 
-                                       extractions.iter().find(|e| e.name == "auth_token").map_or(true, |e| !e.required));
+                                       extractions.iter().find(|e| e.name == "auth_token").is_none_or(|e| !e.required));
                             }
                             "user_list" => {
                                 assert!(extracted.contains_key("first_user_id") ||
-                                       extractions.iter().find(|e| e.name == "first_user_id").map_or(true, |e| !e.required));
+                                       extractions.iter().find(|e| e.name == "first_user_id").is_none_or(|e| !e.required));
                             }
                             "user_detail" => {
                                 // User detail may extract email and department
@@ -461,7 +461,7 @@ mod error_scenario_integration_tests {
             .with_extraction_failure("extraction_test", vec!["required_field", "optional_field"])
             .build();
             
-        let user = &users[0];
+        let _user = &users[0];
         
         // Create route with required and optional extractions
         let extraction_route = create_route_with_extraction(
@@ -478,7 +478,7 @@ mod error_scenario_integration_tests {
         
         // Test extraction failure workflow
         for env in config.environments.keys() {
-            let response_key = format!("{}:{}", extraction_route.name, env);
+            let _response_key = format!("{}:{}", extraction_route.name, env);
             
             // For this test, we'll create a mock response
             let mock_response = create_response(200, r#"{"working": "value"}"#, None);
@@ -586,7 +586,7 @@ mod performance_integration_tests {
 
     #[test]
     fn test_multiple_user_workflow_integration() {
-        let (config, _client, _comparator, _evaluator, _users) = TestScenarioBuilder::new()
+        let (_config, _client, _comparator, _evaluator, _users) = TestScenarioBuilder::new()
             .with_users(50) // Test with many users
             .build();
         

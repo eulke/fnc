@@ -82,19 +82,18 @@ mod common;
 
 use common::*;
 use http_diff::{
-    config::{Environment, HttpDiffConfig, Route, UserData, ValueExtractionRule, ExtractorType},
+    config::{Environment, HttpDiffConfig, Route, ValueExtractionRule, ExtractorType},
     execution::{
         context::ContextManager,
-        dependency::{DependencyGraph, DependencyResolver},
+        dependency::DependencyResolver,
     },
-    traits::{HttpClient, TestRunner, ConditionEvaluator},
-    types::{HttpResponse, ExecutionResult, ExtractedValue, ExtractionType},
-    error::{HttpDiffError, Result},
+    traits::{HttpClient, ConditionEvaluator},
+    types::{ExtractedValue, ExtractionType},
+    error::HttpDiffError,
     conditions::{ConditionOperator, ExecutionCondition},
 };
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
-use chrono;
 
 // =============================================================================
 // CHAIN CONFIGURATION TESTS
@@ -538,7 +537,7 @@ mod basic_chain_execution {
         let config = create_basic_chain_config();
         let responses = create_basic_chain_responses();
         let mock_client = TestMockHttpClient::new().with_responses(responses);
-        let user_data = vec![create_test_user_data("premium", "1001")];
+        let user_data = [create_test_user_data("premium", "1001")];
 
         // Test each route in the chain can be executed
         let login_route = &config.routes[0];
@@ -919,7 +918,7 @@ mod complex_chain_tests {
         assert!(environments.len() >= 2, "Should have multiple environments for testing");
 
         // Verify the chain works for all environments
-        for env in &environments {
+        for _env in &environments {
             let dependency_resolver = DependencyResolver::from_routes(&config.routes).unwrap();
             let execution_plan = dependency_resolver.compute_execution_plan().unwrap();
             
@@ -1248,8 +1247,8 @@ mod conditional_chain_tests {
         let config = create_conditional_chain_config();
         
         // Create user data with different conditions
-        let premium_user = create_test_user_data("premium", "1500"); // Should execute premium-api
-        let basic_user = create_test_user_data("basic", "500");       // Should not execute premium-api
+        let _premium_user = create_test_user_data("premium", "1500"); // Should execute premium-api
+        let _basic_user = create_test_user_data("basic", "500");       // Should not execute premium-api
 
         // Verify configuration is valid
         assert!(config.validate_chain_config().is_ok(), "Conditional config should be valid");
@@ -1414,19 +1413,19 @@ mod conditional_chain_tests {
         assert!(config.validate_chain_config().is_ok(), "Mixed conditional/unconditional config should be valid");
 
         // Create different user types for testing
-        let premium_user = create_user_data(vec![
+        let _premium_user = create_user_data(vec![
             ("user_type", "premium"),
             ("is_admin", "false"),
             ("user_id", "1001"),
         ]);
 
-        let admin_user = create_user_data(vec![
+        let _admin_user = create_user_data(vec![
             ("user_type", "basic"),
             ("is_admin", "true"),
             ("user_id", "2001"),
         ]);
 
-        let basic_user = create_user_data(vec![
+        let _basic_user = create_user_data(vec![
             ("user_type", "basic"),
             ("is_admin", "false"),
             ("user_id", "3001"),
@@ -1715,7 +1714,7 @@ mod chain_performance_tests {
                 let response = create_mock_response(200, r#"{"data": [{"value": "test"}]}"#);
 
                 let start = Instant::now();
-                let extracted = mock_client.extract_values(&route, &response).unwrap();
+                let _extracted = mock_client.extract_values(&route, &response).unwrap();
                 let extraction_time = start.elapsed();
 
                 assert!(extraction_time < Duration::from_millis(100),
@@ -1730,7 +1729,7 @@ mod chain_performance_tests {
         let route_count = 200; // Reasonable large number for testing
         let max_dependencies_per_route = 3;
 
-        let start = Instant::now();
+        let _start = Instant::now();
         
         let routes: Vec<Route> = (0..route_count).map(|i| {
             // Create some dependencies (avoiding circular deps)
@@ -1769,8 +1768,6 @@ mod chain_performance_tests {
                 wait_for_extraction: depends_on.as_ref().map(|_| true),
             }
         }).collect();
-
-        let route_creation_time = start.elapsed();
 
         // Test configuration validation
         let mut environments = HashMap::new();
@@ -1865,7 +1862,7 @@ mod integration_tests {
             .with_users(2)
             .build();
 
-        let (config, http_client, comparator, condition_evaluator, user_data) = scenario;
+        let (config, _http_client, _comparator, _condition_evaluator, user_data) = scenario;
 
         // Verify we can execute the full chain
         assert!(config.validate_chain_config().is_ok(), "Configuration should be valid");
@@ -1878,7 +1875,7 @@ mod integration_tests {
         
         // Test context management for all users
         let context_manager = ContextManager::new();
-        for (user_index, user) in user_data.iter().enumerate() {
+        for (user_index, _user) in user_data.iter().enumerate() {
             // Simulate extracted values for each user
             let extracted_values = create_extracted_values("login", "dev", vec![
                 ("auth_token", &format!("token_for_user_{}", user_index)),

@@ -8,11 +8,10 @@ use http_diff::{
     config::{Environment, HttpDiffConfig, Route, UserData, ValueExtractionRule, ExtractorType},
     conditions::{ConditionOperator, ExecutionCondition},
     traits::{HttpClient, ResponseComparator, ConditionEvaluator},
-    types::{DiffViewStyle, Difference, DifferenceCategory, ExtractedValue, ExtractionType},
+    types::{DiffViewStyle, ExtractedValue, ExtractionType},
     error::{HttpDiffError, Result},
 };
 use std::collections::HashMap;
-use chrono;
 
 /// Helper function to create HttpResponse with specific status and content
 pub fn create_response(status: u16, body: &str, url: Option<&str>) -> HttpResponse {
@@ -190,18 +189,20 @@ pub fn create_mock_response(status: u16, body: &str) -> http_diff::types::HttpRe
 #[derive(Clone)]
 pub struct TestMockHttpClient {
     pub responses: HashMap<String, HttpResponse>,
-    pub should_fail: bool,
-    pub failure_message: String,
     pub route_failures: HashMap<String, String>,
     pub extraction_failures: HashMap<String, Vec<String>>,
+}
+
+impl Default for TestMockHttpClient {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TestMockHttpClient {
     pub fn new() -> Self {
         Self {
             responses: HashMap::new(),
-            should_fail: false,
-            failure_message: "Mock failure".to_string(),
             route_failures: HashMap::new(),
             extraction_failures: HashMap::new(),
         }
@@ -209,12 +210,6 @@ impl TestMockHttpClient {
 
     pub fn with_responses(mut self, responses: HashMap<String, HttpResponse>) -> Self {
         self.responses = responses;
-        self
-    }
-
-    pub fn with_failure(mut self, message: String) -> Self {
-        self.should_fail = true;
-        self.failure_message = message;
         self
     }
 
@@ -303,10 +298,6 @@ impl HttpClient for TestMockHttpClient {
         environment: &str,
         _user_data: &UserData,
     ) -> Result<HttpResponse> {
-        if self.should_fail {
-            return Err(HttpDiffError::general(&self.failure_message));
-        }
-
         if let Some(error_message) = self.route_failures.get(&route.name) {
             return Err(HttpDiffError::general(error_message));
         }
@@ -323,38 +314,16 @@ impl HttpClient for TestMockHttpClient {
 
 /// Centralized MockResponseComparator for all test scenarios
 #[derive(Clone)]
-pub struct TestMockResponseComparator {
-    pub should_find_differences: bool,
-    pub mock_differences: Vec<Difference>,
-    pub headers_comparison_enabled: bool,
-    pub diff_view_style: DiffViewStyle,
+pub struct TestMockResponseComparator {}
+
+impl Default for TestMockResponseComparator {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TestMockResponseComparator {
-    pub fn new() -> Self {
-        Self {
-            should_find_differences: false,
-            mock_differences: Vec::new(),
-            headers_comparison_enabled: false,
-            diff_view_style: DiffViewStyle::SideBySide,
-        }
-    }
-
-    pub fn with_differences(mut self, differences: Vec<Difference>) -> Self {
-        self.should_find_differences = true;
-        self.mock_differences = differences;
-        self
-    }
-
-    pub fn with_headers_comparison(mut self) -> Self {
-        self.headers_comparison_enabled = true;
-        self
-    }
-
-    pub fn with_diff_style(mut self, style: DiffViewStyle) -> Self {
-        self.diff_view_style = style;
-        self
-    }
+    pub fn new() -> Self { Self {} }
 }
 
 impl ResponseComparator for TestMockResponseComparator {
@@ -369,22 +338,15 @@ impl ResponseComparator for TestMockResponseComparator {
             result.add_response(env, response);
         }
         
-        if self.should_find_differences {
-            result.is_identical = false;
-            for diff in &self.mock_differences {
-                result.differences.push(diff.clone());
-            }
-        }
-        
         Ok(result)
     }
 
     fn diff_view_style(&self) -> DiffViewStyle {
-        self.diff_view_style.clone()
+        DiffViewStyle::SideBySide
     }
 
     fn headers_comparison_enabled(&self) -> bool {
-        self.headers_comparison_enabled
+        false
     }
 }
 
@@ -393,8 +355,12 @@ impl ResponseComparator for TestMockResponseComparator {
 pub struct TestMockConditionEvaluator {
     pub should_execute_results: HashMap<String, bool>,
     pub default_result: bool,
-    pub should_fail: bool,
-    pub failure_message: String,
+}
+
+impl Default for TestMockConditionEvaluator {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TestMockConditionEvaluator {
@@ -402,8 +368,6 @@ impl TestMockConditionEvaluator {
         Self {
             should_execute_results: HashMap::new(),
             default_result: true,
-            should_fail: false,
-            failure_message: "Mock condition evaluation failure".to_string(),
         }
     }
 
@@ -416,20 +380,10 @@ impl TestMockConditionEvaluator {
         self.default_result = default_result;
         self
     }
-
-    pub fn with_failure(mut self, message: String) -> Self {
-        self.should_fail = true;
-        self.failure_message = message;
-        self
-    }
 }
 
 impl ConditionEvaluator for TestMockConditionEvaluator {
     fn should_execute_route(&self, route: &Route, _user_data: &UserData) -> Result<bool> {
-        if self.should_fail {
-            return Err(HttpDiffError::general(&self.failure_message));
-        }
-
         Ok(self
             .should_execute_results
             .get(&route.name)
@@ -442,10 +396,6 @@ impl ConditionEvaluator for TestMockConditionEvaluator {
         conditions: &[ExecutionCondition],
         _user_data: &UserData,
     ) -> Result<Vec<http_diff::conditions::ConditionResult>> {
-        if self.should_fail {
-            return Err(HttpDiffError::general(&self.failure_message));
-        }
-
         let results = conditions
             .iter()
             .map(|condition| http_diff::conditions::ConditionResult {
@@ -568,21 +518,7 @@ pub fn create_execution_condition(
     }
 }
 
-/// Helper to create an execution condition with string operator
-pub fn create_execution_condition_str(
-    variable: &str,
-    operator: &str, 
-    value: Option<&str>,
-) -> ExecutionCondition {
-    let op = match operator {
-        "equals" => ConditionOperator::Equals,
-        "greater_than" => ConditionOperator::GreaterThan,
-        "less_than" => ConditionOperator::LessThan,
-        "contains" => ConditionOperator::Contains,
-        _ => ConditionOperator::Equals,
-    };
-    create_execution_condition(variable, op, value)
-}
+//
 
 /// Create test user data with common patterns
 pub fn create_test_user_data(user_type: &str, user_id: &str) -> UserData {
@@ -873,36 +809,7 @@ pub fn create_conditional_responses() -> HashMap<String, HttpResponse> {
     responses
 }
 
-/// Create responses with various error scenarios
-pub fn create_error_scenario_responses() -> HashMap<String, HttpResponse> {
-    let mut responses = HashMap::new();
-    
-    // Success responses
-    responses.insert(
-        "success_route:dev".to_string(),
-        create_mock_response(200, r#"{"status": "ok"}"#)
-    );
-    responses.insert(
-        "another_success:dev".to_string(),
-        create_mock_response(200, r#"{"status": "ok"}"#)
-    );
-    
-    // Error responses
-    responses.insert(
-        "error_route:dev".to_string(),
-        create_mock_response(500, r#"{"error": "Internal server error"}"#)
-    );
-    responses.insert(
-        "unauthorized_route:dev".to_string(),
-        create_mock_response(401, r#"{"error": "Unauthorized"}"#)
-    );
-    responses.insert(
-        "not_found_route:dev".to_string(),
-        create_mock_response(404, r#"{"error": "Not found"}"#)
-    );
-    
-    responses
-}
+//
 
 // =============================================================================
 // PERFORMANCE TESTING UTILITIES
@@ -984,19 +891,7 @@ pub fn create_wide_dependency_routes(root_count: usize, dependent_count: usize) 
     routes
 }
 
-/// Create performance test responses
-pub fn create_performance_test_responses(route_count: usize) -> HashMap<String, HttpResponse> {
-    let mut responses = HashMap::new();
-    
-    for i in 0..route_count {
-        responses.insert(
-            format!("route_{}:dev", i),
-            create_mock_response(200, &format!(r#"{{"data": {{"value_{}": "extracted_{}", "id": {}}}}}"#, i, i, i))
-        );
-    }
-    
-    responses
-}
+//
 
 // =============================================================================
 // EXTRACTED VALUE UTILITIES
@@ -1017,34 +912,13 @@ pub fn create_extracted_values(route_name: &str, environment: &str, values: Vec<
     }).collect()
 }
 
-/// Create test extractions for context manager testing
-pub fn create_test_extractions(count: usize) -> HashMap<String, String> {
-    (0..count).map(|i| {
-        (format!("extracted_value_{}", i), format!("value_{}", i))
-    }).collect()
-}
+//
 
 // =============================================================================
 // DIFFERENCE FACTORIES
 // =============================================================================
 
-/// Create mock differences for comparison testing
-pub fn create_mock_differences() -> Vec<Difference> {
-    vec![
-        Difference::new(
-            DifferenceCategory::Body,
-            "Response bodies differ".to_string()
-        ),
-        Difference::new(
-            DifferenceCategory::Status,
-            "Status codes differ: 200 vs 404".to_string()
-        ),
-        Difference::new(
-            DifferenceCategory::Headers,
-            "Content-Type headers differ".to_string()
-        ),
-    ]
-}
+//
 
 // =============================================================================
 // INTEGRATION TEST BUILDERS
@@ -1055,11 +929,15 @@ pub struct TestScenarioBuilder {
     config: Option<HttpDiffConfig>,
     responses: HashMap<String, HttpResponse>,
     user_data: Vec<UserData>,
-    should_find_differences: bool,
-    mock_differences: Vec<Difference>,
     route_failures: HashMap<String, String>,
     extraction_failures: HashMap<String, Vec<String>>,
     condition_results: HashMap<String, bool>,
+}
+
+impl Default for TestScenarioBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TestScenarioBuilder {
@@ -1068,8 +946,6 @@ impl TestScenarioBuilder {
             config: None,
             responses: HashMap::new(),
             user_data: Vec::new(),
-            should_find_differences: false,
-            mock_differences: Vec::new(),
             route_failures: HashMap::new(),
             extraction_failures: HashMap::new(),
             condition_results: HashMap::new(),
@@ -1103,11 +979,7 @@ impl TestScenarioBuilder {
         self
     }
 
-    pub fn with_differences(mut self, differences: Vec<Difference>) -> Self {
-        self.should_find_differences = true;
-        self.mock_differences = differences;
-        self
-    }
+    //
 
     pub fn with_route_failure(mut self, route: &str, message: &str) -> Self {
         self.route_failures.insert(route.to_string(), message.to_string());
@@ -1179,10 +1051,7 @@ impl TestScenarioBuilder {
             http_client = http_client.with_extraction_failure(route, failures);
         }
         
-        let mut comparator = TestMockResponseComparator::new();
-        if self.should_find_differences {
-            comparator = comparator.with_differences(self.mock_differences);
-        }
+        let comparator = TestMockResponseComparator::new();
         
         let mut condition_evaluator = TestMockConditionEvaluator::new();
         for (route, result) in self.condition_results {

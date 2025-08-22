@@ -446,7 +446,7 @@ mod helper_function_tests {
 
     #[test]
     fn test_scenario_builder_basic() {
-        let (config, client, comparator, evaluator, users) = TestScenarioBuilder::new()
+        let (config, _client, _comparator, _evaluator, users) = TestScenarioBuilder::new()
             .with_users(2)
             .build();
 
@@ -473,7 +473,7 @@ mod helper_function_tests {
 
     #[test]
     fn test_scenario_builder_with_failures() {
-        let (config, client, _comparator, _evaluator, _users) = TestScenarioBuilder::new()
+        let (config, _client, _comparator, _evaluator, _users) = TestScenarioBuilder::new()
             .with_route_failure("test_route", "Test failure message")
             .build();
 
